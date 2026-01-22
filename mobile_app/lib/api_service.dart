@@ -1,0 +1,128 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+class ApiService {
+  // Default URLs for different environments
+  static String get _defaultBaseUrl {
+    if (kIsWeb) return 'http://127.0.0.1:8000';
+    // Default for Android Emulator
+    return 'http://10.0.2.2:8000';
+  }
+
+  static const Duration _timeout = Duration(seconds: 5);
+  final _storage = const FlutterSecureStorage();
+
+  Future<String> get baseUrl async {
+    final stored = await _storage.read(key: 'backend_url');
+    return stored ?? _defaultBaseUrl;
+  }
+
+  Future<void> setBaseUrl(String url) async {
+    // Validate URL format
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'http://$url';
+    }
+    if (!url.contains(':')) {
+      url = '$url:8000';
+    }
+    await _storage.write(key: 'backend_url', value: url);
+  }
+
+  Future<String?> login(String username, String password) async {
+    try {
+      final url = await baseUrl;
+      final response = await http
+          .post(
+            Uri.parse('$url/token'),
+            body: {'username': username, 'password': password},
+          )
+          .timeout(_timeout);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        await _storage.write(key: 'token', value: data['access_token']);
+        return null; // Success
+      } else {
+        return 'Login failed: ${response.body}';
+      }
+    } catch (e) {
+      if (kDebugMode) print("Login Error: $e");
+      return 'Connection Error: $e';
+    }
+  }
+
+  Future<Map<String, dynamic>?> getMe() async {
+    try {
+      final url = await baseUrl;
+      final token = await _storage.read(key: 'token');
+      if (token == null) return null;
+
+      final response = await http
+          .get(
+            Uri.parse('$url/users/me'),
+            headers: {'Authorization': 'Bearer $token'},
+          )
+          .timeout(_timeout);
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+    } catch (e) {
+      if (kDebugMode) print("GetMe Error: $e");
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>> createTransaction(
+    String receiverUpi,
+    double amount,
+  ) async {
+    try {
+      final url = await baseUrl;
+      final token = await _storage.read(key: 'token');
+      final response = await http
+          .post(
+            Uri.parse('$url/transactions/'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+            body: json.encode({
+              'receiver_upi_id': receiverUpi,
+              'amount': amount,
+            }),
+          )
+          .timeout(_timeout);
+      return json.decode(response.body);
+    } catch (e) {
+      if (kDebugMode) print("Transaction Error: $e");
+      return {'detail': 'Transaction Failed: $e'};
+    }
+  }
+
+  Future<List<dynamic>> getHistory() async {
+    try {
+      final url = await baseUrl;
+      final token = await _storage.read(key: 'token');
+      final response = await http
+          .get(
+            Uri.parse('$url/transactions/history'),
+            headers: {'Authorization': 'Bearer $token'},
+          )
+          .timeout(_timeout);
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+    } catch (e) {
+      if (kDebugMode) print("History Error: $e");
+    }
+    return [];
+  }
+
+  Future<void> logout() async {
+    await _storage.delete(key: 'token');
+  }
+}
