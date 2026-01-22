@@ -27,10 +27,11 @@ class _LoginScreenState extends State<LoginScreen> {
     if (error == null) {
       if (mounted) Navigator.pushReplacementNamed(context, '/home');
     } else {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(error)));
+      }
     }
   }
 

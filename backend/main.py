@@ -56,7 +56,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     return user
 
 @app.post("/token", response_model=schemas.Token)
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.username == form_data.username).first()
     if not user or not auth.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
@@ -71,11 +71,11 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.get("/users/me", response_model=schemas.UserResponse)
-async def read_users_me(current_user: models.User = Depends(get_current_user)):
+def read_users_me(current_user: models.User = Depends(get_current_user)):
     return current_user
 
 @app.post("/transactions/", response_model=schemas.TransactionResponse)
-async def create_transaction(
+def create_transaction(
     tx: schemas.TransactionCreate, 
     current_user: models.User = Depends(get_current_user), 
     db: Session = Depends(get_db)
@@ -157,7 +157,7 @@ async def create_transaction(
     )
 
 @app.get("/transactions/history", response_model=list[schemas.TransactionResponse])
-async def read_history(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+def read_history(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     # Get sent and received
     txs = db.query(models.Transaction).filter(
         (models.Transaction.sender_id == current_user.id) | 

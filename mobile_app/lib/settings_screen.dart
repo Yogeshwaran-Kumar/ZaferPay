@@ -102,84 +102,86 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(title: const Text('Backend Settings')),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Backend Server URL',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+          : SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Backend Server URL',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Enter the IP address and port of your backend server.\n'
-                    'Example: 192.168.1.100:8000',
-                    style: TextStyle(color: Colors.grey[600]),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _urlController,
-                    decoration: const InputDecoration(
-                      labelText: 'Backend URL',
-                      hintText: '192.168.1.100:8000',
-                      border: OutlineInputBorder(),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Enter the IP address and port of your backend server.\n'
+                      'Example: 192.168.1.100:8000',
+                      style: TextStyle(color: Colors.grey[600]),
                     ),
-                    keyboardType: TextInputType.url,
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: _saveUrl,
-                          child: const Text('Save URL'),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _urlController,
+                      decoration: const InputDecoration(
+                        labelText: 'Backend URL',
+                        hintText: '192.168.1.100:8000',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.url,
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: _saveUrl,
+                            child: const Text('Save URL'),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: _testConnection,
+                            child: const Text('Test Connection'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'How to find your computer\'s IP address:',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '1. Open Command Prompt or PowerShell\n'
+                              '2. Run: ipconfig\n'
+                              '3. Look for "IPv4 Address" under your network adapter\n'
+                              '4. Use that IP with port 8000\n\n'
+                              'Make sure your firewall allows connections on port 8000.',
+                              style: TextStyle(color: Colors.grey[700]),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _testConnection,
-                          child: const Text('Test Connection'),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'How to find your computer\'s IP address:',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '1. Open Command Prompt or PowerShell\n'
-                            '2. Run: ipconfig\n'
-                            '3. Look for "IPv4 Address" under your network adapter\n'
-                            '4. Use that IP with port 8000\n\n'
-                            'Make sure your firewall allows connections on port 8000.',
-                            style: TextStyle(color: Colors.grey[700]),
-                          ),
-                        ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Current URL: $_currentUrl',
+                      style: TextStyle(
+                        fontFamily: 'monospace',
+                        color: Colors.grey[600],
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Current URL: $_currentUrl',
-                    style: TextStyle(
-                      fontFamily: 'monospace',
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
     );

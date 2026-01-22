@@ -22,9 +22,14 @@ class ApiService {
   Future<void> setBaseUrl(String url) async {
     // Validate URL format
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      url = 'http://$url';
+      url = 'https://$url'; // Default to https for safety
     }
-    if (!url.contains(':')) {
+    // Force HTTPS for ngrok
+    if (url.contains('ngrok') && url.startsWith('http://')) {
+      url = url.replaceFirst('http://', 'https://');
+    }
+
+    if (!url.contains(':') && !url.contains('ngrok')) {
       url = '$url:8000';
     }
     await _storage.write(key: 'backend_url', value: url);
@@ -37,6 +42,7 @@ class ApiService {
           .post(
             Uri.parse('$url/token'),
             body: {'username': username, 'password': password},
+            headers: {'ngrok-skip-browser-warning': 'true'},
           )
           .timeout(_timeout);
 
@@ -45,7 +51,14 @@ class ApiService {
         await _storage.write(key: 'token', value: data['access_token']);
         return null; // Success
       } else {
-        return 'Login failed: ${response.body}';
+        if (kDebugMode) {
+          print('Login Failed Code: ${response.statusCode}');
+          print('Login Failed Body: ${response.body}');
+        }
+        final msg = response.body.isEmpty
+            ? 'Status ${response.statusCode}'
+            : response.body;
+        return 'Login failed: $msg';
       }
     } catch (e) {
       if (kDebugMode) print("Login Error: $e");
@@ -62,7 +75,10 @@ class ApiService {
       final response = await http
           .get(
             Uri.parse('$url/users/me'),
-            headers: {'Authorization': 'Bearer $token'},
+            headers: {
+              'Authorization': 'Bearer $token',
+              'ngrok-skip-browser-warning': 'true',
+            },
           )
           .timeout(_timeout);
 
@@ -88,6 +104,7 @@ class ApiService {
             headers: {
               'Authorization': 'Bearer $token',
               'Content-Type': 'application/json',
+              'ngrok-skip-browser-warning': 'true',
             },
             body: json.encode({
               'receiver_upi_id': receiverUpi,
@@ -109,7 +126,10 @@ class ApiService {
       final response = await http
           .get(
             Uri.parse('$url/transactions/history'),
-            headers: {'Authorization': 'Bearer $token'},
+            headers: {
+              'Authorization': 'Bearer $token',
+              'ngrok-skip-browser-warning': 'true',
+            },
           )
           .timeout(_timeout);
 

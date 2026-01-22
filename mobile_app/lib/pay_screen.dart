@@ -134,7 +134,7 @@ class _PayScreenState extends State<PayScreen> {
             ),
             onPressed: () {
               Navigator.pop(context); // Close Dialog
-              Navigator.pop(context); // Go back to Home
+              Navigator.pop(context, result); // Go back to Home with result
             },
             child: const Text("Done"),
           ),

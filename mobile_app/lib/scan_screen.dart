@@ -18,11 +18,8 @@ class _ScanScreenState extends State<ScanScreen> {
       if (barcode.rawValue != null) {
         setState(() => _found = true);
         // Navigate to payment with the scanned UPI ID
-        Navigator.pushReplacementNamed(
-          context,
-          '/pay',
-          arguments: {'upi': barcode.rawValue},
-        );
+        // Return the scanned UPI ID to the previous screen
+        Navigator.pop(context, barcode.rawValue);
         break;
       }
     }

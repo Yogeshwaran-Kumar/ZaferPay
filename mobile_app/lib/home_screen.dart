@@ -34,8 +34,10 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+  Future<void> _loadData({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() => _isLoading = true);
+    }
     final user = await _api.getMe();
     final history = await _api.getHistory();
     setState(() {
@@ -116,7 +118,17 @@ class _HomeScreenState extends State<HomeScreen> {
           );
           _upiController.clear();
           _amountController.clear();
-          _loadData(); // Refresh balance and history
+
+          // Optimistic Update: Add to history immediately
+          setState(() {
+            _history.insert(0, result);
+            // Optional: Update balance locally if possible, but API fetch will fix it in background
+            if (_user != null) {
+              _user!['balance'] -= amount;
+            }
+          });
+
+          _loadData(showLoading: false); // Refresh in background
         }
       }
     } catch (e) {
@@ -163,7 +175,8 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await _api.logout();
-              if (mounted) {
+              if (!mounted) return;
+              if (context.mounted) {
                 Navigator.pushReplacementNamed(context, '/login');
               }
             },
@@ -171,7 +184,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _loadData,
+        onRefresh: () => _loadData(showLoading: false),
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
@@ -369,7 +382,29 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          Navigator.pushNamed(context, '/scan').then((_) => _loadData());
+          Navigator.pushNamed(context, '/scan').then((scanResult) {
+            if (scanResult != null && scanResult is String) {
+              // Found UPI ID, proceed to Pay
+              Navigator.pushNamed(
+                context,
+                '/pay',
+                arguments: {'upi': scanResult},
+              ).then((payResult) {
+                if (payResult != null && payResult is Map<String, dynamic>) {
+                  setState(() {
+                    _history.insert(0, payResult);
+                    if (_user != null) {
+                      _user!['balance'] -= payResult['amount'];
+                    }
+                  });
+                }
+                _loadData(showLoading: false);
+              });
+            } else {
+              // User came back from scan without scanning (or just refresh)
+              _loadData(showLoading: false);
+            }
+          });
         },
         icon: const Icon(Icons.qr_code_scanner),
         label: const Text('Scan & Pay'),
