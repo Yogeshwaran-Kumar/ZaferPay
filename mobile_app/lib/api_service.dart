@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -20,29 +21,12 @@ class ApiService {
     return stored ?? _defaultBaseUrl;
   }
 
-  Future<void> setBaseUrl(String url) async {
-    // Validate URL format
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      url = 'https://$url'; // Default to https for safety
-    }
-    // Force HTTPS for ngrok
-    if (url.contains('ngrok') && url.startsWith('http://')) {
-      url = url.replaceFirst('http://', 'https://');
-    }
+  final _authStateController = StreamController<void>.broadcast();
+  Stream<void> get authStateChanges => _authStateController.stream;
 
-    if (!url.contains(':') && !url.contains('ngrok')) {
-      url = '$url:8000';
-    }
-    await _storage.write(key: 'backend_url', value: url);
-  }
-
-  Future<String> getDeviceId() async {
-    var deviceId = await _storage.read(key: 'device_id');
-    if (deviceId == null) {
-      deviceId = const Uuid().v4();
-      await _storage.write(key: 'device_id', value: deviceId);
-    }
-    return deviceId;
+  void _handleUnauthorized() {
+    _storage.delete(key: 'token');
+    _authStateController.add(null);
   }
 
   Future<String?> login(
@@ -104,6 +88,8 @@ class ApiService {
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
+      } else if (response.statusCode == 401) {
+        _handleUnauthorized(); // Trigger logout logic
       }
     } catch (e) {
       if (kDebugMode) print("GetMe Error: $e");
@@ -132,6 +118,11 @@ class ApiService {
             }),
           )
           .timeout(_timeout);
+
+      if (response.statusCode == 401) {
+        _handleUnauthorized();
+        return {'detail': 'Session expired'};
+      }
       return json.decode(response.body);
     } catch (e) {
       if (kDebugMode) print("Transaction Error: $e");
@@ -155,6 +146,8 @@ class ApiService {
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
+      } else if (response.statusCode == 401) {
+        _handleUnauthorized();
       }
     } catch (e) {
       if (kDebugMode) print("History Error: $e");
@@ -179,5 +172,33 @@ class ApiService {
       // Ignore
     }
     await _storage.delete(key: 'token');
+    // Note: We don't trigger _authStateController here because this is a deliberate logout,
+    // usually handled by the UI immediately anyway.
+    // But we COULD trigger it if we wanted "logout anywhere" to update generic listeners.
+  }
+
+  Future<void> setBaseUrl(String url) async {
+    // Validate URL format
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://$url'; // Default to https for safety
+    }
+    // Force HTTPS for ngrok
+    if (url.contains('ngrok') && url.startsWith('http://')) {
+      url = url.replaceFirst('http://', 'https://');
+    }
+
+    if (!url.contains(':') && !url.contains('ngrok')) {
+      url = '$url:8000';
+    }
+    await _storage.write(key: 'backend_url', value: url);
+  }
+
+  Future<String> getDeviceId() async {
+    var deviceId = await _storage.read(key: 'device_id');
+    if (deviceId == null) {
+      deviceId = const Uuid().v4();
+      await _storage.write(key: 'device_id', value: deviceId);
+    }
+    return deviceId;
   }
 }

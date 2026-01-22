@@ -23,6 +23,8 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isProcessingPayment = false;
   Timer? _timer;
 
+  StreamSubscription? _authSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -33,11 +35,21 @@ class _HomeScreenState extends State<HomeScreen> {
         _loadData(showLoading: false);
       }
     });
+
+    // Listen for forced logout
+    _authSubscription = _api.authStateChanges.listen((_) {
+      if (mounted) {
+        Navigator.of(
+          context,
+        ).pushNamedAndRemoveUntil('/login', (route) => false);
+      }
+    });
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _authSubscription?.cancel();
     _upiController.dispose();
     _amountController.dispose();
     super.dispose();
