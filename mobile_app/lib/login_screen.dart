@@ -16,16 +16,19 @@ class _LoginScreenState extends State<LoginScreen> {
   final _api = ApiService();
   bool _isLoading = false;
 
-  Future<void> _login() async {
+  Future<void> _login({bool force = false}) async {
     setState(() => _isLoading = true);
     final error = await _api.login(
       _usernameController.text,
       _passwordController.text,
+      forceLogin: force,
     );
     setState(() => _isLoading = false);
 
     if (error == null) {
       if (mounted) Navigator.pushReplacementNamed(context, '/home');
+    } else if (error == 'LOGGED_IN_ELSEWHERE') {
+      if (mounted) _showForceLoginDialog();
     } else {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -33,6 +36,31 @@ class _LoginScreenState extends State<LoginScreen> {
         ).showSnackBar(SnackBar(content: Text(error)));
       }
     }
+  }
+
+  void _showForceLoginDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Already Logged In'),
+        content: const Text(
+          'You are logged in on another device. Do you want to logout from that device and login here?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('No'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _login(force: true);
+            },
+            child: const Text('Yes'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -97,7 +125,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: _isLoading ? null : _login,
+                onPressed: _isLoading ? null : () => _login(),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF6200EE),
                   foregroundColor: Colors.white,

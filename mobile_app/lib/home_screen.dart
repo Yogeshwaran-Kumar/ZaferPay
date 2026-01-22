@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'api_service.dart';
@@ -20,15 +21,23 @@ class _HomeScreenState extends State<HomeScreen> {
   final _upiController = TextEditingController();
   final _amountController = TextEditingController();
   bool _isProcessingPayment = false;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    // Start polling every 2 seconds
+    _timer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      if (mounted) {
+        _loadData(showLoading: false);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _timer?.cancel();
     _upiController.dispose();
     _amountController.dispose();
     super.dispose();
@@ -128,7 +137,8 @@ class _HomeScreenState extends State<HomeScreen> {
             }
           });
 
-          _loadData(showLoading: false); // Refresh in background
+          // No need to manually call _loadData here, the poller will catch the confirmed state shortly.
+          // This prevents a race condition where the rapid fetch might return old data.
         }
       }
     } catch (e) {
@@ -398,7 +408,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     }
                   });
                 }
-                _loadData(showLoading: false);
+                // Poller will update eventually
               });
             } else {
               // User came back from scan without scanning (or just refresh)

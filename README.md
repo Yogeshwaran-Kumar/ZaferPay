@@ -1,90 +1,134 @@
-# MockBank - Multi-Device UPI Payment App
+# 2way - Mock Banking Application
 
-A Flutter mobile app with FastAPI backend for UPI-style payments with fraud detection.
+A secure, cross-platform mock banking system designed to demonstrate payment fraud detection, device binding, and real-time transactions. This project consists of a **FastAPI Backend** and a **Flutter Mobile App**.
 
-## Features
+## 🚀 Features
 
-- User authentication and registration
-- UPI ID based payments
-- QR code payments (scan & pay)
-- Manual UPI ID payments
-- Transaction history
-- Fraud detection and risk assessment
-- Multi-device support (works across different networks)
+-   **Secure Authentication**:
+    -   **Device Binding**: Locks a user account to a specific device ID. Login attempts from unauthorized devices are blocked.
+    -   **JWT Authentication**: Secure session management.
+-   **Fraud Detection Engine**:
+    -   Analyzes transactions in real-time.
+    -   **Risk Factors**: High transaction amounts, late-night activity (12 AM - 5 AM), and high-frequency transfers.
+    -   **Actions**: Flags transactions as `SAFE`, `WARN`, or `HIGH` risk. High-risk transactions are automatically blocked.
+-   **Real-time Transactions**:
+    -   Send and receive money simulates instant UPI transfers.
+    -   View transaction history with risk scores.
+-   **Cross-Platform Mobile App**:
+    -   Built with Flutter for iOS and Android.
+    -   QR Code scanning for easy payments (simulated).
 
-## Setup Instructions
+---
 
-### Backend Setup
+## 🛠️ Technology Stack
 
-1. **Install Dependencies:**
-   ```bash
-   cd backend
-   pip install fastapi uvicorn sqlalchemy pydantic python-multipart
-   ```
+-   **Backend**: Python, FastAPI, SQLAlchemy, SQLite
+-   **Mobile App**: Flutter (Dart)
+-   **Tools**: Ngrok (for remote access/tunneling)
 
-2. **Start Backend Server:**
-   - For local development: `python -m uvicorn main:app --reload`
-   - For network access (multi-device): Run `start_backend.bat` or:
-     ```bash
-     python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-     ```
+---
 
-3. **Find Your IP Address:**
-   - Open Command Prompt/PowerShell
-   - Run: `ipconfig`
-   - Look for "IPv4 Address" (e.g., 192.168.1.100)
+## 📋 Prerequisites
 
-### Mobile App Setup
+Before running the project, ensure you have the following installed:
 
-1. **Install Flutter dependencies:**
-   ```bash
-   cd mobile_app
-   flutter pub get
-   ```
+1.  **Python 3.9+**: [Download Python](https://www.python.org/downloads/)
+2.  **Flutter SDK**: [Download Flutter](https://docs.flutter.dev/get-started/install)
+3.  **Git**: [Download Git](https://git-scm.com/downloads)
 
-2. **Configure Backend URL:**
-   - Open the app
-   - Go to Settings (gear icon in home screen)
-   - Enter your computer's IP address with port 8000
-   - Example: `192.168.1.100:8000`
-   - Test the connection
+---
 
-3. **Run the app:**
-   ```bash
-   flutter run
-   ```
+## ⚡ How to Run
 
-## Test Users
+You can run the application in two ways: **Locally** (same WiFi network) or **Remotely** (over the internet using Ngrok).
 
-| Username | UPI ID | Password | Balance |
-|----------|--------|----------|---------|
-| userA | userA@mockbank | password123 | ₹50,000 |
-| userB | userB@mockbank | password123 | ₹25,000 |
-| shopC | shopC@mockbank | password123 | ₹10,000 |
-| trustD | trustD@mockbank | password123 | ₹500,000 |
+### Option 1: Quick Start (Windows) - **RECOMMENDED**
 
-## Multi-Device Usage
+We have provided batch scripts to make running the backend easy.
 
-1. Start the backend on your computer using `start_backend.bat`
-2. Note your computer's IP address (from ipconfig)
-3. On each device/phone:
-   - Install and open the app
-   - Go to Settings and enter your computer's IP:8000
-   - Login with any test user credentials
-   - Use the app normally - all features work across devices!
+#### 1. Run the Backend
+*   **For Local Use (Same WiFi):**
+    Double-click `start_backend.bat`.
+    *   This starts the server on `0.0.0.0:8000`.
+    *   It will display your local IP address (e.g., `192.168.1.5`). **Note this IP.**
 
-## Network Requirements
+*   **For Remote Use (Different Networks):**
+    Double-click `start_remote.bat`.
+    *   This starts the server and provides an **Ngrok URL** (e.g., `https://xyz.ngrok-free.app`).
+    *   **Copy this URL.**
 
-- All devices must be on the same WiFi network
-- Firewall should allow port 8000
-- Backend computer should not sleep/go to standby
+#### 2. Configure & Run the Mobile App
+1.  Open the `mobile_app` folder in your terminal or VS Code.
+2.  Connect your physical Android/iOS device or start an emulator.
+3.  Run the app:
+    ```bash
+    cd mobile_app
+    flutter run
+    ```
+4.  **In the App**:
+    *   Go to **Settings**.
+    *   Enter the **Base URL**:
+        *   If using Local: `http://<YOUR_IP_ADDRESS>:8000` (e.g., `http://192.168.1.5:8000`)
+        *   If using Remote: Paste the **Ngrok URL** (e.g., `https://xyz.ngrok-free.app`)
+    *   Save and Login.
 
-## Troubleshooting
+---
 
-- **Connection failed**: Check IP address and port, ensure backend is running
-- **Payment failed**: Verify UPI ID exists and you have sufficient balance
-- **Can't access from other devices**: Make sure backend is running on 0.0.0.0 not 127.0.0.1
+### Option 2: Manual Setup (Terminal)
 
-## Security Note
+If you prefer using the terminal directly:
 
-This is a demo application. In production, use HTTPS, proper authentication, and secure network configurations.
+#### Backend Setup
+1.  Navigate to the backend directory:
+    ```bash
+    cd backend
+    ```
+2.  (Optional) Create and activate a virtual environment:
+    ```bash
+    python -m venv venv
+    .\venv\Scripts\activate
+    ```
+3.  Install dependencies:
+    ```bash
+    pip install fastapi uvicorn sqlalchemy python-jose[cryptography] passlib[bcrypt] python-multipart
+    ```
+4.  Start the server:
+    ```bash
+    uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    ```
+    *   **Note**: To use Ngrok manually, run `ngrok http 8000` in a separate terminal.
+
+#### Mobile App Setup
+1.  Navigate to the mobile app directory:
+    ```bash
+    cd mobile_app
+    ```
+2.  Get dependencies:
+    ```bash
+    flutter pub get
+    ```
+3.  Run the app:
+    ```bash
+    flutter run
+    ```
+
+---
+
+## 📚 API Documentation
+
+Once the backend is running, you can explore the full API documentation (Swagger UI):
+
+-   **Local URL**: [http://localhost:8000/docs](http://localhost:8000/docs)
+-   **Key Endpoints**:
+    -   `POST /token`: Login and receive access bearer token.
+    -   `POST /transactions/`: Create a new transaction (triggers fraud engine).
+    -   `GET /transactions/history`: Fetch user transaction history.
+    -   `GET /users/me`: Get current user profile details.
+
+---
+
+## 🧪 Testing Fraud Detection
+To test the fraud engine, try these scenarios in the app:
+1.  **High Amount**: Send a transaction significantly larger than your history (e.g., > 3x average). -> *May trigger WARN/HIGH*.
+2.  **Late Night**: Send money between 12 AM and 5 AM. -> *Increases Risk Score*.
+3.  **Rapid Fire**: Send multiple transactions within 1 minute. -> *Increases Risk Score*.

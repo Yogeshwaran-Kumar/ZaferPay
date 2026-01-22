@@ -11,6 +11,7 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
     upi_id = Column(String, unique=True, index=True)  # e.g., user@mockbank
+    device_id = Column(String, nullable=True)
     balance = Column(Float, default=0.0)
 
     # Profiles for Rule-Based Fraud Detection

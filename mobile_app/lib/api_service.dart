@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:uuid/uuid.dart';
 
 class ApiService {
   // Default URLs for different environments
@@ -35,14 +36,31 @@ class ApiService {
     await _storage.write(key: 'backend_url', value: url);
   }
 
-  Future<String?> login(String username, String password) async {
+  Future<String> getDeviceId() async {
+    var deviceId = await _storage.read(key: 'device_id');
+    if (deviceId == null) {
+      deviceId = const Uuid().v4();
+      await _storage.write(key: 'device_id', value: deviceId);
+    }
+    return deviceId;
+  }
+
+  Future<String?> login(
+    String username,
+    String password, {
+    bool forceLogin = false,
+  }) async {
     try {
       final url = await baseUrl;
+      final deviceId = await getDeviceId();
       final response = await http
           .post(
-            Uri.parse('$url/token'),
+            Uri.parse('$url/token${forceLogin ? "?force_logout=true" : ""}'),
             body: {'username': username, 'password': password},
-            headers: {'ngrok-skip-browser-warning': 'true'},
+            headers: {
+              'ngrok-skip-browser-warning': 'true',
+              'X-Device-ID': deviceId,
+            },
           )
           .timeout(_timeout);
 
@@ -50,6 +68,8 @@ class ApiService {
         final data = json.decode(response.body);
         await _storage.write(key: 'token', value: data['access_token']);
         return null; // Success
+      } else if (response.statusCode == 409) {
+        return 'LOGGED_IN_ELSEWHERE';
       } else {
         if (kDebugMode) {
           print('Login Failed Code: ${response.statusCode}');
@@ -143,6 +163,21 @@ class ApiService {
   }
 
   Future<void> logout() async {
+    try {
+      final url = await baseUrl;
+      final token = await _storage.read(key: 'token');
+      if (token != null) {
+        await http.post(
+          Uri.parse('$url/logout'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'ngrok-skip-browser-warning': 'true',
+          },
+        );
+      }
+    } catch (e) {
+      // Ignore
+    }
     await _storage.delete(key: 'token');
   }
 }

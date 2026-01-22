@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Header
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -53,10 +53,26 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     user = db.query(models.User).filter(models.User.username == username).first()
     if user is None:
         raise credentials_exception
+        
+    # Check device_id match
+    token_device_id = payload.get("device_id")
+    # If the user has a device_id set in DB, the token must match it.
+    if user.device_id and token_device_id != user.device_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Logged in on another device",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
     return user
 
 @app.post("/token", response_model=schemas.Token)
-def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(), 
+    db: Session = Depends(get_db),
+    x_device_id: str = Header(None),
+    force_logout: bool = False
+):
     user = db.query(models.User).filter(models.User.username == form_data.username).first()
     if not user or not auth.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
@@ -64,11 +80,30 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    # Check Single Device Login
+    if x_device_id:
+        if user.device_id and user.device_id != x_device_id:
+            if not force_logout:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="User already logged in on another device",
+                )
+        # Update device_id
+        user.device_id = x_device_id
+        db.commit()
+    
     access_token_expires = timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = auth.create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
+        data={"sub": user.username, "device_id": x_device_id}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
+
+@app.post("/logout")
+def logout(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    current_user.device_id = None
+    db.commit()
+    return {"msg": "Successfully logged out"}
 
 @app.get("/users/me", response_model=schemas.UserResponse)
 def read_users_me(current_user: models.User = Depends(get_current_user)):
