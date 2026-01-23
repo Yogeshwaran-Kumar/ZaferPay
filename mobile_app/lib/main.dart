@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
 import 'dart:io'; // Import dart:io for HttpOverrides
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'login_screen.dart';
 import 'home_screen.dart';
 import 'scan_screen.dart';
 import 'pay_screen.dart';
 import 'settings_screen.dart';
 import 'change_pin_screen.dart';
+// Note: PaymentPinScreen is usually pushed with arguments, so simpler to use named route or onGenerateRoute.
+// But we can add it here if we want named route navigation.
+// Actually, it takes arguments in constructor, so passing arguments via settings.arguments is key.
 import 'payment_pin_screen.dart';
-import 'lock_screen.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+// Global Key to access Navigator without Context
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() {
   HttpOverrides.global = MyHttpOverrides(); // Bypass SSL verification
@@ -33,9 +38,9 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
-  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  // We need to know if we are already showing the lock screen to avoid stacking it
+  bool _isLockScreenShown = false;
   final _storage = const FlutterSecureStorage();
-  bool _isBackground = false;
 
   @override
   void initState() {
@@ -50,49 +55,44 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) async {
-    super.didChangeAppLifecycleState(state);
-
-    if (state == AppLifecycleState.paused) {
-      _isBackground = true;
-    } else if (state == AppLifecycleState.resumed) {
-      if (_isBackground) {
-        _isBackground = false;
-        await _checkAndLock();
-      }
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkAndLockApp();
     }
   }
 
-  Future<void> _checkAndLock() async {
-    // Check if user is logged in
-    final token = await _storage.read(key: 'token');
-    if (token != null) {
-      // User is logged in, show lock screen
-      // Use navigator key to push lock screen
-      if (_navigatorKey.currentState != null) {
-        // Avoid stacking multiple lock screens
-        // A simple way is to push it.
-        // Note: We might be on any screen. Just push LockScreen on top.
-        // It prevents back navigation inside itself.
+  Future<void> _checkAndLockApp() async {
+    // Check if user is "logged in" (has a token or saved mobile)
+    // We only want to lock if the user has actually set up the app.
+    final savedMobile = await _storage.read(key: 'saved_mobile');
 
-        // Optional: Check if top route is already LockScreen
-        // but Navigator doesn't easily expose "top route".
-        // We will just push it.
-        _navigatorKey.currentState!.push(
-          MaterialPageRoute(
-            builder: (context) => const LockScreen(),
-            fullscreenDialog:
-                true, // Makes it slide up like a model usually, looks distinct
-          ),
-        );
-      }
+    if (savedMobile != null && !_isLockScreenShown) {
+      // Check if we are currently on the Login Screen (to avoid double locking on startup/logout)
+      // This is a bit tricky with Navigator, but usually if we have savedMobile, we might be in Home.
+      // A simple heuristic: If we are resumed, and have a user, show lock.
+
+      // However, we don't want to show it if the user just opened the app and is AT the login screen.
+      // But typically, if they have savedMobile, we might auto-login or show login.
+      // To be safe and simple: Always show unlock screen if savedMobile exists.
+
+      _isLockScreenShown = true;
+      navigatorKey.currentState
+          ?.push(
+            MaterialPageRoute(
+              builder: (context) => const LoginScreen(isUnlockMode: true),
+              fullscreenDialog: true,
+            ),
+          )
+          .then((_) {
+            _isLockScreenShown = false;
+          });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      navigatorKey: _navigatorKey,
+      navigatorKey: navigatorKey,
       title: 'MockBank',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

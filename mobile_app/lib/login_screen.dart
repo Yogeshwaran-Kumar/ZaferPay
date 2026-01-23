@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'api_service.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final bool isUnlockMode;
+  const LoginScreen({super.key, this.isUnlockMode = false});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -27,6 +28,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // Status text for the PIN screen title
   String get _pinTitle {
+    if (widget.isUnlockMode) return 'Unlock App';
     switch (_currentStep) {
       case 1:
         return 'Set New PIN';
@@ -42,7 +44,31 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    _checkSavedLogin();
+    if (widget.isUnlockMode) {
+      _loadUserForUnlock();
+    } else {
+      _checkSavedLogin();
+    }
+  }
+
+  Future<void> _loadUserForUnlock() async {
+    // In unlock mode, we assume user is already logged in (locally)
+    // We just need to load their mobile number to verify PIN against.
+    final savedMobile = await _api.getSavedMobile();
+    if (savedMobile != null) {
+      setState(() {
+        _mobileController.text = savedMobile;
+        _currentStep = 3; // Direct to PIN
+      });
+      // Optionally fetch UPI ID for display, but not strictly required for lock screen
+      // _api.checkMobile(savedMobile)...
+    } else {
+      // If no saved mobile, we can't unlock. Force full login.
+      setState(() {
+        // Should probably just be Step 0, but as "Unlock", maybe we should force them to login.
+        _currentStep = 0;
+      });
+    }
   }
 
   Future<void> _checkSavedLogin() async {
@@ -211,7 +237,13 @@ class _LoginScreenState extends State<LoginScreen> {
     if (error == null) {
       // Success
       await _api.saveMobile(_mobileController.text);
-      if (mounted) Navigator.pushReplacementNamed(context, '/home');
+      if (mounted) {
+        if (widget.isUnlockMode) {
+          Navigator.pop(context); // Unlock successful
+        } else {
+          Navigator.pushReplacementNamed(context, '/home');
+        }
+      }
     } else if (error == 'INCORRECT_PIN') {
       // Incorrect PIN
       if (mounted) {
@@ -534,7 +566,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 20),
                 // Only show "Change Number" if in Login Mode (Step 3) or if manually backing out
-                if (_currentStep == 3)
+                if (_currentStep == 3 && !widget.isUnlockMode)
                   TextButton(
                     onPressed: () {
                       // Clear state to go back
@@ -580,13 +612,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: _currentStep == 0
-          ? AppBar(title: const Text('MockBank Login'))
-          : null, // No AppBar for PIN screen
-      body: SafeArea(
-        child: _currentStep == 0 ? _buildStep1Mobile() : _buildStepPin(),
+    // If in unlock mode, prevent back button from closing the screen
+    return PopScope(
+      canPop: !widget.isUnlockMode,
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        appBar: _currentStep == 0
+            ? AppBar(title: const Text('MockBank Login'))
+            : null, // No AppBar for PIN screen
+        body: SafeArea(
+          child: _currentStep == 0 ? _buildStep1Mobile() : _buildStepPin(),
+        ),
       ),
     );
   }
