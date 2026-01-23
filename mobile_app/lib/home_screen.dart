@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'api_service.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'mcc_helper.dart';
+import 'contacts_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,7 +22,6 @@ class _HomeScreenState extends State<HomeScreen> {
   // New fields for UPI payment
   final _upiController = TextEditingController();
   Timer? _timer;
-  bool _isSelfTransfer = false; // Track if entered UPI is user's own
 
   StreamSubscription? _authSubscription;
 
@@ -35,9 +35,6 @@ class _HomeScreenState extends State<HomeScreen> {
         _loadData(showLoading: false);
       }
     });
-
-    // Listen for UPI input changes to check self-transfer
-    _upiController.addListener(_checkSelfTransfer);
 
     // Listen for forced logout
     _authSubscription = _api.authStateChanges.listen((_) {
@@ -53,18 +50,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _timer?.cancel();
     _authSubscription?.cancel();
-    _upiController.removeListener(_checkSelfTransfer);
     _upiController.dispose();
     super.dispose();
-  }
-
-  void _checkSelfTransfer() {
-    final enteredUpi = _upiController.text.trim();
-    final myUpi = _user?['upi_id'];
-    setState(() {
-      _isSelfTransfer =
-          myUpi != null && myUpi == enteredUpi && enteredUpi.isNotEmpty;
-    });
   }
 
   Future<void> _loadData({bool showLoading = true}) async {
@@ -156,340 +143,490 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Welcome back,', style: TextStyle(fontSize: 14)),
-            Text(
-              _user!['username'],
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(icon: const Icon(Icons.qr_code), onPressed: _showMyQr),
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () => Navigator.pushNamed(context, '/settings'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await _api.logout();
-              if (!mounted) return;
-              if (context.mounted) {
-                Navigator.pushReplacementNamed(context, '/login');
-              }
-            },
-          ),
-        ],
-      ),
+      backgroundColor: Colors.white,
       body: RefreshIndicator(
         onRefresh: () => _loadData(showLoading: false),
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Balance Card
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF6200EE), Color(0xFF3700B3)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF6200EE).withValues(alpha: 0.3),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 10),
+                // 1. Large Scan QR Button (Top)
+                GestureDetector(
+                  onTap: () async {
+                    final scanResult = await Navigator.pushNamed(
+                      context,
+                      '/scan',
+                    );
+                    if (scanResult != null) {
+                      String scannedUpi = "";
+                      String? scannedMcc;
+                      String? scannedName;
+
+                      if (scanResult is Map) {
+                        scannedUpi = scanResult['upi'];
+                        scannedMcc = scanResult['mcc'];
+                        scannedName = scanResult['name'];
+                      } else if (scanResult is String) {
+                        scannedUpi = scanResult;
+                      }
+
+                      final myUpi = _user?['upi_id'];
+                      if (myUpi != null && myUpi == scannedUpi) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Cannot send money to self'),
+                          ),
+                        );
+                        return;
+                      }
+
+                      if (!mounted) return;
+                      String? category;
+                      if (scannedMcc != null && scannedMcc.isNotEmpty) {
+                        category = MccHelper.getDomain(scannedMcc);
+                      }
+
+                      if (!mounted) return;
+                      final nav = Navigator.of(context);
+
+                      final payResult = await nav.pushNamed(
+                        '/pay',
+                        arguments: {
+                          'upi': scannedUpi,
+                          'name': scannedName,
+                          'category': category,
+                        },
+                      );
+
+                      if (payResult != null &&
+                          payResult is Map<String, dynamic>) {
+                        setState(() {
+                          _history.insert(0, payResult);
+                          if (_user != null) {
+                            _user!['balance'] -= payResult['amount'];
+                          }
+                        });
+                      }
+                    }
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 40),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFFE3F2FD),
+                          const Color(0xFFF3E5F5),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.blue.withOpacity(0.1)),
                     ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    child: Column(
                       children: [
-                        Text(
-                          'Available Balance',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.8),
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.blue.withOpacity(0.1),
+                                blurRadius: 10,
+                                spreadRadius: 2,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.qr_code_scanner,
+                            size: 48,
+                            color: Color(0xFF00B9F1),
                           ),
                         ),
-                        const Icon(
-                          Icons.account_balance_wallet,
-                          color: Colors.white,
-                          size: 20,
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Scan any QR Code',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF00B9F1),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Pay to any UPI app',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      '₹ ${_user!['balance'].toStringAsFixed(2)}',
-                      style: GoogleFonts.outfit(
-                        fontSize: 36,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(50),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.qr_code,
-                            color: Colors.white,
-                            size: 14,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            _user!['upi_id'],
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              // UPI Payment Section
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      TextField(
-                        controller: _upiController,
-                        decoration: const InputDecoration(
-                          labelText: 'Recipient UPI ID',
-                          hintText: 'e.g., user@bank',
-                          border: OutlineInputBorder(),
-                        ),
-                        keyboardType: TextInputType.text,
+
+                const SizedBox(height: 32),
+
+                // 2. Search Bar Section
+                Text(
+                  'Or pay to contact',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade700,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(30),
+                    border: Border.all(color: Colors.grey.shade300),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.shade100,
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
                       ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _isSelfTransfer ? null : _sendPayment,
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            backgroundColor:
-                                Colors.black, // Dark button for proceed
-                            foregroundColor: Colors.white,
-                            disabledBackgroundColor: Colors.grey,
-                            disabledForegroundColor: Colors.white70,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.search, color: Colors.grey),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: _upiController,
+                          decoration: InputDecoration(
+                            hintText: 'Pay by name or phone number',
+                            hintStyle: TextStyle(color: Colors.grey.shade500),
+                            border: InputBorder.none,
                           ),
-                          child: Text(
-                            _isSelfTransfer ? 'Cannot send to self' : 'Proceed',
+                          onSubmitted: (_) => _sendPayment(),
+                        ),
+                      ),
+                      CircleAvatar(
+                        radius: 14,
+                        backgroundColor: const Color(0xFF00B9F1),
+                        child: Text(
+                          _user!['username'][0].toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
                           ),
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'Recent Transactions',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 16),
-              if (_history.isEmpty)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(32.0),
-                    child: Text("No transactions yet"),
+
+                const SizedBox(height: 32),
+
+                // 3. Quick Actions
+                Text(
+                  'Quick Actions',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade800,
                   ),
-                )
-              else
-                ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _history.length,
-                  itemBuilder: (context, index) {
-                    final tx = _history[index];
-                    final isDebit = tx['sender_upi_id'] == _user!['upi_id'];
-                    Color color;
-                    IconData icon;
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildQuickActionItem(
+                      icon: Icons.phone_android,
+                      label: 'Recharge',
+                      color: Colors.blue.shade600,
+                      onTap: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Coming soon!')),
+                        );
+                      },
+                    ),
+                    _buildQuickActionItem(
+                      icon: Icons.lightbulb_outline,
+                      label: 'Electricity',
+                      color: Colors.orange.shade600,
+                      onTap: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Coming soon!')),
+                        );
+                      },
+                    ),
+                    _buildQuickActionItem(
+                      icon: Icons.tv,
+                      label: 'DTH',
+                      color: Colors.purple.shade600,
+                      onTap: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Coming soon!')),
+                        );
+                      },
+                    ),
+                    _buildQuickActionItem(
+                      icon: Icons.receipt_long,
+                      label: 'Bills',
+                      color: Colors.green.shade600,
+                      onTap: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Coming soon!')),
+                        );
+                      },
+                    ),
+                  ],
+                ),
 
-                    if (tx['status'] == 'BLOCKED') {
-                      color = Colors.grey;
-                      icon = Icons.block;
-                    } else if (tx['status'] == 'FAILED') {
-                      color = Colors.red;
-                      icon = Icons.error_outline;
-                    } else {
-                      color = isDebit ? Colors.red : Colors.green;
-                      icon = isDebit
-                          ? Icons.arrow_outward
-                          : Icons.arrow_downward;
-                    }
+                const SizedBox(height: 32),
 
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: color.withValues(alpha: 0.1),
-                          child: Icon(icon, color: color),
-                        ),
-                        title: Text(
-                          isDebit
-                              ? 'To: ${tx['receiver_upi_id']}'
-                              : 'From: ${tx['sender_upi_id']}',
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(tx['timestamp']),
-                            if (tx['risk_score'] != 'SAFE')
-                              Container(
-                                margin: const EdgeInsets.only(top: 4),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: tx['risk_score'] == 'HIGH'
-                                      ? Colors.red.shade100
-                                      : Colors.orange.shade100,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  'Risk: ${tx['risk_score']}',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: tx['risk_score'] == 'HIGH'
-                                        ? Colors.red
-                                        : Colors.orange.shade800,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '${isDebit ? '-' : '+'} ₹${tx['amount']}',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: color,
-                              ),
+                // 4. People Section
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'People',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey.shade800,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        final result = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const ContactsScreen(),
+                          ),
+                        );
+                        if (result != null && result is Map) {
+                          final upi = result['upi'];
+                          final name = result['name'];
+                          if (!mounted) return;
+                          Navigator.pushNamed(
+                            context,
+                            '/pay',
+                            arguments: {'upi': upi, 'name': name},
+                          );
+                        }
+                      },
+                      child: const Text('View all'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 100,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      // Contact selector
+                      _buildPersonAvatar(
+                        icon: Icons.person_add,
+                        label: 'Select\nContact',
+                        color: Colors.grey.shade300,
+                        onTap: () async {
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const ContactsScreen(),
                             ),
-                            Text(
-                              tx['status'],
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ],
+                          );
+                          if (result != null && result is Map) {
+                            final upi = result['upi'];
+                            final name = result['name'];
+                            if (!mounted) return;
+                            Navigator.pushNamed(
+                              context,
+                              '/pay',
+                              arguments: {'upi': upi, 'name': name},
+                            );
+                          }
+                        },
+                      ),
+                      // Recent contacts from history
+                      ..._getRecentContacts().map(
+                        (contact) => _buildPersonAvatar(
+                          label: contact['name'] ?? 'Unknown',
+                          color: _getColorFromName(
+                            contact['name'] ?? 'Unknown',
+                          ),
+                          onTap: () {
+                            Navigator.pushNamed(
+                              context,
+                              '/pay',
+                              arguments: {
+                                'upi': contact['upi'],
+                                'name': contact['name'],
+                              },
+                            );
+                          },
                         ),
                       ),
-                    );
-                  },
+                    ],
+                  ),
                 ),
-            ],
+
+                const SizedBox(height: 24),
+
+                // See Your Transactions Button
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      // Navigate to money tab via logic or just show message
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Go to Money tab for transactions'),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.history),
+                    label: const Text('See Your Transactions'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF00B9F1), // Blue
+                      side: const BorderSide(color: Color(0xFF00B9F1)),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 80), // Bottom padding
+              ],
+            ),
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final scanResult = await Navigator.pushNamed(context, '/scan');
-          if (scanResult != null) {
-            String scannedUpi = "";
-            String? scannedMcc;
-            String? scannedName;
-
-            if (scanResult is Map) {
-              scannedUpi = scanResult['upi'];
-              scannedMcc = scanResult['mcc'];
-              scannedName = scanResult['name'];
-            } else if (scanResult is String) {
-              scannedUpi = scanResult;
-            }
-
-            // Check for self-transfer
-            final myUpi = _user?['upi_id'];
-            if (myUpi != null && myUpi == scannedUpi) {
-              if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Cannot send money to self')),
-              );
-              return;
-            }
-
-            // Show MCC if present
-
-            // Found UPI ID, proceed to Pay
-            if (!mounted) return;
-
-            String? category;
-            if (scannedMcc != null && scannedMcc.isNotEmpty) {
-              category = MccHelper.getDomain(scannedMcc);
-            }
-
-            if (!mounted) return;
-            final nav = Navigator.of(context);
-
-            final payResult = await nav.pushNamed(
-              '/pay',
-              arguments: {
-                'upi': scannedUpi,
-                'name': scannedName,
-                'category': category,
-              },
-            );
-
-            if (payResult != null && payResult is Map<String, dynamic>) {
-              setState(() {
-                _history.insert(0, payResult);
-                if (_user != null) {
-                  _user!['balance'] -= payResult['amount'];
-                }
-              });
-            }
-          } else {
-            // Refresh if came back empty
-            if (mounted) _loadData(showLoading: false);
-          }
-        },
-        icon: const Icon(Icons.qr_code_scanner),
-        label: const Text('Scan & Pay'),
-        backgroundColor: Colors.black, // Dark accent
-        foregroundColor: Colors.white,
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
+  }
+
+  // Local helper for quick actions circles
+  Widget _buildQuickActionItem({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 28),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Helper widget builders
+
+  Widget _buildPersonAvatar({
+    IconData? icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 80,
+        margin: const EdgeInsets.only(right: 12),
+        child: Column(
+          children: [
+            CircleAvatar(
+              radius: 30,
+              backgroundColor: color,
+              child: icon != null
+                  ? Icon(icon, color: Colors.white)
+                  : Text(
+                      label.isNotEmpty ? label[0].toUpperCase() : '?',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              maxLines: 2,
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Map<String, String>> _getRecentContacts() {
+    // Get unique contacts from history
+    final Set<String> seenUpi = {};
+    final List<Map<String, String>> contacts = [];
+
+    for (var tx in _history) {
+      final myUpi = _user?['upi_id'];
+      final bool isDebit = tx['sender_upi_id'] == myUpi;
+      final String otherUpi = isDebit
+          ? tx['receiver_upi_id']
+          : tx['sender_upi_id'];
+
+      if (!seenUpi.contains(otherUpi) && contacts.length < 10) {
+        seenUpi.add(otherUpi);
+        contacts.add({
+          'upi': otherUpi,
+          'name': otherUpi.split('@')[0], // Extract name from UPI
+        });
+      }
+    }
+
+    return contacts;
+  }
+
+  Color _getColorFromName(String name) {
+    // Generate a color based on the name's hash code
+    final hash = name.hashCode;
+    final colors = [
+      const Color(0xFF5F259F),
+      const Color(0xFFE91E63),
+      const Color(0xFF00BCD4),
+      const Color(0xFF4CAF50),
+      const Color(0xFFFF9800),
+      const Color(0xFF9C27B0),
+      const Color(0xFF3F51B5),
+      const Color(0xFF009688),
+    ];
+    return colors[hash % colors.length];
   }
 }

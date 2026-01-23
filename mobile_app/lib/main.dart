@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'login_screen.dart';
 import 'home_screen.dart';
+import 'main_navigation_screen.dart';
 import 'scan_screen.dart';
 import 'pay_screen.dart';
 import 'settings_screen.dart';
@@ -97,13 +98,28 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
+        scaffoldBackgroundColor: Colors.white,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6200EE),
+          seedColor: const Color(0xFF5F259F),
           brightness: Brightness.light,
-          primary: const Color(0xFF6200EE),
-          secondary: const Color(0xFF03DAC6),
+          primary: const Color(0xFF5F259F),
+          secondary: const Color(0xFF00B9F1),
+          surface: Colors.white,
         ),
-        textTheme: GoogleFonts.interTextTheme(),
+        appBarTheme: AppBarTheme(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          iconTheme: const IconThemeData(color: Colors.black87),
+          titleTextStyle: GoogleFonts.inter(
+            color: Colors.black87,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        textTheme: GoogleFonts.interTextTheme().apply(
+          bodyColor: Colors.black87,
+          displayColor: Colors.black87,
+        ),
         cardTheme: CardThemeData(
           elevation: 0,
           shape: RoundedRectangleBorder(
@@ -116,7 +132,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       initialRoute: '/login',
       routes: {
         '/login': (context) => const LoginScreen(),
-        '/home': (context) => const HomeScreen(),
+        '/home': (context) => const MainNavigationScreen(),
         '/scan': (context) => const ScanScreen(),
         '/pay': (context) => const PayScreen(),
         '/settings': (context) => const SettingsScreen(),

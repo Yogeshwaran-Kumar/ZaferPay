@@ -290,7 +290,7 @@ class _LoginScreenState extends State<LoginScreen> {
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        icon: const Icon(Icons.devices, color: Color(0xFF6200EE), size: 48),
+        icon: const Icon(Icons.devices, color: Color(0xFF5F259F), size: 48),
         title: const Text(
           'Already Logged In',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
@@ -366,7 +366,7 @@ class _LoginScreenState extends State<LoginScreen> {
             icon: const Icon(Icons.login, size: 18),
             label: const Text('Yes, Login Here'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6200EE),
+              backgroundColor: const Color(0xFF5F259F),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               elevation: 2,
@@ -405,69 +405,198 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildStep1Mobile() {
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.symmetric(horizontal: 24.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(
-              Icons.phonelink_lock,
-              size: 64,
-              color: Color(0xFF6200EE),
+            const SizedBox(height: 40),
+            // App Logo/Branding
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF5F259F).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.account_balance_wallet,
+                    color: Color(0xFF5F259F),
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '2Way',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 60),
+
+            // Welcome Text
             Text(
-              'Welcome',
+              'Welcome to 2Way',
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w600,
                 color: Colors.black87,
+                fontSize: 28,
               ),
-              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              'Enter your mobile number or email to continue',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 48),
-            TextField(
-              controller: _mobileController,
-              keyboardType:
-                  TextInputType.emailAddress, // Changed to allow email
-              // maxLength: 10, // Removed length restriction
-              decoration: const InputDecoration(
-                labelText: 'Mobile Number or Email',
-                hintText: 'Phone or Email',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.phone_android),
-                counterText: "",
+              'Enter your phone number',
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: Colors.grey.shade600,
+                fontSize: 16,
               ),
             ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _isLoading ? null : _handleMobileSubmit,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6200EE),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+
+            const SizedBox(height: 40),
+
+            // Phone Number Input
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Country Code Container
+                Container(
+                  height: 56,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Text('🇮🇳', style: const TextStyle(fontSize: 24)),
+                      const SizedBox(width: 8),
+                      Text(
+                        '+91',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey.shade700,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+
+                // Phone Number Field
+                Expanded(
+                  child: TextField(
+                    controller: _mobileController,
+                    keyboardType: TextInputType.phone,
+                    maxLength: 10,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 1.2,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: '9876543210',
+                      hintStyle: TextStyle(
+                        color: Colors.grey.shade400,
+                        fontWeight: FontWeight.normal,
+                        letterSpacing: 0.5,
+                      ),
+                      counterText: '',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF5F259F),
+                          width: 2,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 16,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 8),
+
+            // Helper Text
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Text(
+                'We\'ll send an OTP to verify your number',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+            ),
+
+            const SizedBox(height: 100),
+
+            // Continue Button
+            SizedBox(
+              width: double.infinity,
+              height: 54,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _handleMobileSubmit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF5F259F),
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: Colors.grey.shade300,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(27),
+                  ),
+                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2.5,
+                        ),
+                      )
+                    : const Text(
+                        'Continue',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+              ),
+            ),
+
+            const SizedBox(height: 40),
+
+            // Terms and Privacy
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  'By continuing, you agree to 2Way\'s Terms of Service and Privacy Policy',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey.shade600,
+                    height: 1.4,
+                  ),
                 ),
               ),
-              child: _isLoading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : const Text('Proceed Next', style: TextStyle(fontSize: 16)),
             ),
+
+            const SizedBox(height: 40),
           ],
         ),
       ),
@@ -485,7 +614,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const Icon(
                 Icons.lock_outline,
                 size: 48,
-                color: Color(0xFF6200EE),
+                color: Color(0xFF5F259F),
               ),
               const SizedBox(height: 24),
               Text(_pinTitle, style: Theme.of(context).textTheme.headlineSmall),
@@ -515,10 +644,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: filled
-                          ? const Color(0xFF6200EE)
+                          ? const Color(0xFF5F259F)
                           : Colors.transparent,
                       border: Border.all(
-                        color: const Color(0xFF6200EE),
+                        color: const Color(0xFF5F259F),
                         width: 2,
                       ),
                     ),
@@ -618,7 +747,7 @@ class _LoginScreenState extends State<LoginScreen> {
       child: Scaffold(
         backgroundColor: Colors.white,
         appBar: _currentStep == 0
-            ? AppBar(title: const Text('MockBank Login'))
+            ? AppBar(elevation: 0, backgroundColor: Colors.white)
             : null, // No AppBar for PIN screen
         body: SafeArea(
           child: _currentStep == 0 ? _buildStep1Mobile() : _buildStepPin(),
