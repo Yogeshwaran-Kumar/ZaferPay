@@ -255,6 +255,31 @@ class ApiService {
     return null;
   }
 
+  Future<Map<String, dynamic>?> lookupUserByPhone(String phoneNumber) async {
+    try {
+      final url = await baseUrl;
+      final token = await _storage.read(key: 'token');
+      final response = await _client
+          .get(
+            Uri.parse(
+              '$url/users/lookup-phone/${Uri.encodeComponent(phoneNumber)}',
+            ),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'ngrok-skip-browser-warning': 'true',
+            },
+          )
+          .timeout(_timeout);
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+    } catch (e) {
+      if (kDebugMode) print("Phone Lookup Error: $e");
+    }
+    return null;
+  }
+
   Future<void> setBaseUrl(String url) async {
     // Validate URL format
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
