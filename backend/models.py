@@ -8,6 +8,7 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True)
+    mobile_number = Column(String, unique=True, index=True, nullable=True)
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
     upi_id = Column(String, unique=True, index=True)  # e.g., user@mockbank

@@ -10,18 +10,21 @@ class ApiService {
   static String get _defaultBaseUrl {
     if (kIsWeb) return 'http://127.0.0.1:8000';
     // Default for Android Emulator
-    return 'http://10.0.2.2:8000';
+    return 'https://collen-horrent-allison.ngrok-free.dev';
   }
 
-  static const Duration _timeout = Duration(seconds: 5);
+  static const Duration _timeout = Duration(seconds: 15);
+  static final http.Client _client = http.Client();
   final _storage = const FlutterSecureStorage();
+  final _authStateController = StreamController<void>.broadcast();
 
   Future<String> get baseUrl async {
-    final stored = await _storage.read(key: 'backend_url');
-    return stored ?? _defaultBaseUrl;
+    // For debugging: Force use of default URL and clear any stale cache
+    // final stored = await _storage.read(key: 'backend_url');
+    // return stored ?? _defaultBaseUrl;
+    return _defaultBaseUrl;
   }
 
-  final _authStateController = StreamController<void>.broadcast();
   Stream<void> get authStateChanges => _authStateController.stream;
 
   void _handleUnauthorized() {
@@ -37,7 +40,7 @@ class ApiService {
     try {
       final url = await baseUrl;
       final deviceId = await getDeviceId();
-      final response = await http
+      final response = await _client
           .post(
             Uri.parse('$url/token${forceLogin ? "?force_logout=true" : ""}'),
             body: {'username': username, 'password': password},
@@ -54,19 +57,34 @@ class ApiService {
         return null; // Success
       } else if (response.statusCode == 409) {
         return 'LOGGED_IN_ELSEWHERE';
+      } else if (response.statusCode == 401) {
+        // Unauthorized - Incorrect credentials
+        return 'INCORRECT_PIN';
       } else {
-        if (kDebugMode) {
-          print('Login Failed Code: ${response.statusCode}');
-          print('Login Failed Body: ${response.body}');
+        // Try to parse JSON error response
+        try {
+          final errorData = json.decode(response.body);
+          if (errorData['detail'] != null) {
+            String detail = errorData['detail'].toString().toLowerCase();
+            if (detail.contains('incorrect') ||
+                detail.contains('password') ||
+                detail.contains('credential')) {
+              return 'INCORRECT_PIN';
+            }
+          }
+        } catch (_) {
+          // If JSON parsing fails, log but don't show HTML to user
+          if (kDebugMode) {
+            print('Login Failed Code: ${response.statusCode}');
+            print('Login Failed Body: ${response.body}');
+          }
         }
-        final msg = response.body.isEmpty
-            ? 'Status ${response.statusCode}'
-            : response.body;
-        return 'Login failed: $msg';
+        // Return clean error code instead of raw message
+        return 'INCORRECT_PIN';
       }
     } catch (e) {
       if (kDebugMode) print("Login Error: $e");
-      return 'Connection Error: $e';
+      return 'CONNECTION_ERROR';
     }
   }
 
@@ -76,7 +94,7 @@ class ApiService {
       final token = await _storage.read(key: 'token');
       if (token == null) return null;
 
-      final response = await http
+      final response = await _client
           .get(
             Uri.parse('$url/users/me'),
             headers: {
@@ -97,27 +115,56 @@ class ApiService {
     return null;
   }
 
+  Future<dynamic> _retryRequest(
+    Future<http.Response> Function() requestFunc, {
+    int retries = 3,
+  }) async {
+    for (int i = 0; i < retries; i++) {
+      try {
+        return await requestFunc();
+      } catch (e) {
+        final isNetworkError =
+            e.toString().contains('HandshakeException') ||
+            e.toString().contains('SocketException') ||
+            e.toString().contains('Connection closed');
+
+        if (isNetworkError && i < retries - 1) {
+          await Future.delayed(
+            Duration(milliseconds: 500 * (i + 1)),
+          ); // Exponential backoff
+          continue;
+        }
+        rethrow;
+      }
+    }
+  }
+
   Future<Map<String, dynamic>> createTransaction(
     String receiverUpi,
     double amount,
+    String pin,
   ) async {
     try {
       final url = await baseUrl;
       final token = await _storage.read(key: 'token');
-      final response = await http
-          .post(
-            Uri.parse('$url/transactions/'),
-            headers: {
-              'Authorization': 'Bearer $token',
-              'Content-Type': 'application/json',
-              'ngrok-skip-browser-warning': 'true',
-            },
-            body: json.encode({
-              'receiver_upi_id': receiverUpi,
-              'amount': amount,
-            }),
-          )
-          .timeout(_timeout);
+
+      final response = await _retryRequest(
+        () => _client
+            .post(
+              Uri.parse('$url/transactions/'),
+              headers: {
+                'Authorization': 'Bearer $token',
+                'Content-Type': 'application/json',
+                'ngrok-skip-browser-warning': 'true',
+              },
+              body: json.encode({
+                'receiver_upi_id': receiverUpi,
+                'amount': amount,
+                'pin': pin,
+              }),
+            )
+            .timeout(_timeout),
+      );
 
       if (response.statusCode == 401) {
         _handleUnauthorized();
@@ -126,23 +173,32 @@ class ApiService {
       return json.decode(response.body);
     } catch (e) {
       if (kDebugMode) print("Transaction Error: $e");
-      return {'detail': 'Transaction Failed: $e'};
+
+      String errorMsg = 'Transaction Failed: $e';
+      if (e.toString().contains('HandshakeException') ||
+          e.toString().contains('Connection closed')) {
+        errorMsg = 'Network Error: $e';
+      }
+      return {'detail': errorMsg};
     }
   }
 
-  Future<List<dynamic>> getHistory() async {
+  Future<List<dynamic>?> getHistory() async {
     try {
       final url = await baseUrl;
       final token = await _storage.read(key: 'token');
-      final response = await http
-          .get(
-            Uri.parse('$url/transactions/history'),
-            headers: {
-              'Authorization': 'Bearer $token',
-              'ngrok-skip-browser-warning': 'true',
-            },
-          )
-          .timeout(_timeout);
+
+      final response = await _retryRequest(
+        () => _client
+            .get(
+              Uri.parse('$url/transactions/history'),
+              headers: {
+                'Authorization': 'Bearer $token',
+                'ngrok-skip-browser-warning': 'true',
+              },
+            )
+            .timeout(_timeout),
+      );
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
@@ -152,7 +208,7 @@ class ApiService {
     } catch (e) {
       if (kDebugMode) print("History Error: $e");
     }
-    return [];
+    return null;
   }
 
   Future<void> logout() async {
@@ -160,7 +216,7 @@ class ApiService {
       final url = await baseUrl;
       final token = await _storage.read(key: 'token');
       if (token != null) {
-        await http.post(
+        await _client.post(
           Uri.parse('$url/logout'),
           headers: {
             'Authorization': 'Bearer $token',
@@ -172,9 +228,31 @@ class ApiService {
       // Ignore
     }
     await _storage.delete(key: 'token');
-    // Note: We don't trigger _authStateController here because this is a deliberate logout,
-    // usually handled by the UI immediately anyway.
-    // But we COULD trigger it if we wanted "logout anywhere" to update generic listeners.
+    await removeSavedMobile(); // Clear saved mobile on logout
+  }
+
+  Future<Map<String, dynamic>?> lookupUser(String upiId) async {
+    try {
+      final url = await baseUrl;
+      final token = await _storage.read(key: 'token');
+      // Token usually required for secured endpoints
+      final response = await _client
+          .get(
+            Uri.parse('$url/users/lookup/${Uri.encodeComponent(upiId)}'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'ngrok-skip-browser-warning': 'true',
+            },
+          )
+          .timeout(_timeout);
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+    } catch (e) {
+      if (kDebugMode) print("Lookup Error: $e");
+    }
+    return null;
   }
 
   Future<void> setBaseUrl(String url) async {
@@ -200,5 +278,95 @@ class ApiService {
       await _storage.write(key: 'device_id', value: deviceId);
     }
     return deviceId;
+  }
+
+  // --- Mobile Number Persistence ---
+  Future<String?> getSavedMobile() async {
+    return await _storage.read(key: 'saved_mobile');
+  }
+
+  Future<void> saveMobile(String mobile) async {
+    await _storage.write(key: 'saved_mobile', value: mobile);
+  }
+
+  Future<void> removeSavedMobile() async {
+    await _storage.delete(key: 'saved_mobile');
+  }
+
+  // --- Auth Flow Methods ---
+  Future<Map<String, dynamic>> checkMobile(String mobile) async {
+    try {
+      final url = await baseUrl;
+      final deviceId = await getDeviceId();
+      final response = await _client
+          .post(
+            Uri.parse('$url/auth/check-mobile'),
+            headers: {
+              'Content-Type': 'application/json',
+              'ngrok-skip-browser-warning': 'true',
+              'X-Device-ID': deviceId,
+            },
+            body: json.encode({'mobile_number': mobile}),
+          )
+          .timeout(_timeout);
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+      return {'exists': false, 'status': 'error', 'detail': 'Server error'};
+    } catch (e) {
+      if (kDebugMode) print("Check Mobile Error: $e");
+      return {
+        'exists': false,
+        'status': 'error',
+        'detail': 'Connection failed: ${e.toString()}', // Show actual error
+      };
+    }
+  }
+
+  Future<bool> setPin(String mobile, String pin) async {
+    try {
+      final url = await baseUrl;
+      final response = await _client
+          .post(
+            Uri.parse('$url/auth/set-pin'),
+            headers: {
+              'Content-Type': 'application/json',
+              'ngrok-skip-browser-warning': 'true',
+            },
+            body: json.encode({'mobile_number': mobile, 'pin': pin}),
+          )
+          .timeout(_timeout);
+
+      return response.statusCode == 200;
+    } catch (e) {
+      if (kDebugMode) print("Set PIN Error: $e");
+      return false;
+    }
+  }
+
+  Future<bool> changePin(String newPin) async {
+    try {
+      final url = await baseUrl;
+      final token = await _storage.read(key: 'token');
+      if (token == null) return false;
+
+      final response = await _client
+          .put(
+            Uri.parse('$url/users/me/change-pin'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'ngrok-skip-browser-warning': 'true',
+            },
+            body: json.encode({'new_pin': newPin}),
+          )
+          .timeout(_timeout);
+
+      return response.statusCode == 200;
+    } catch (e) {
+      if (kDebugMode) print("Change PIN Error: $e");
+      return false;
+    }
   }
 }

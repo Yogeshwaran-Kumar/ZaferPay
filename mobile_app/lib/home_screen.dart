@@ -19,9 +19,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // New fields for UPI payment
   final _upiController = TextEditingController();
-  final _amountController = TextEditingController();
-  bool _isProcessingPayment = false;
   Timer? _timer;
+  bool _isSelfTransfer = false; // Track if entered UPI is user's own
 
   StreamSubscription? _authSubscription;
 
@@ -35,6 +34,9 @@ class _HomeScreenState extends State<HomeScreen> {
         _loadData(showLoading: false);
       }
     });
+
+    // Listen for UPI input changes to check self-transfer
+    _upiController.addListener(_checkSelfTransfer);
 
     // Listen for forced logout
     _authSubscription = _api.authStateChanges.listen((_) {
@@ -50,9 +52,18 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _timer?.cancel();
     _authSubscription?.cancel();
+    _upiController.removeListener(_checkSelfTransfer);
     _upiController.dispose();
-    _amountController.dispose();
     super.dispose();
+  }
+
+  void _checkSelfTransfer() {
+    final enteredUpi = _upiController.text.trim();
+    final myUpi = _user?['upi_id'];
+    setState(() {
+      _isSelfTransfer =
+          myUpi != null && myUpi == enteredUpi && enteredUpi.isNotEmpty;
+    });
   }
 
   Future<void> _loadData({bool showLoading = true}) async {
@@ -62,8 +73,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final user = await _api.getMe();
     final history = await _api.getHistory();
     setState(() {
-      _user = user;
-      _history = history;
+      if (user != null) {
+        _user = user;
+      }
+      if (history != null) {
+        _history = history;
+      }
       _isLoading = false;
     });
   }
@@ -99,9 +114,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _sendPayment() async {
+  void _sendPayment() {
     final upiId = _upiController.text.trim();
-    final amountText = _amountController.text.trim();
 
     if (upiId.isEmpty) {
       if (mounted) {
@@ -112,58 +126,20 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    final amount = double.tryParse(amountText);
-    if (amount == null || amount <= 0) {
+    // Check for self-transfer
+    final myUpi = _user?['upi_id'];
+    if (myUpi != null && myUpi == upiId) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter a valid amount')),
+          const SnackBar(content: Text('Cannot send money to self')),
         );
       }
       return;
     }
 
-    if (mounted) {
-      setState(() => _isProcessingPayment = true);
-    }
-
-    try {
-      final result = await _api.createTransaction(upiId, amount);
-      if (mounted) {
-        if (result.containsKey('detail')) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Payment failed: ${result['detail']}')),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Payment sent successfully!')),
-          );
-          _upiController.clear();
-          _amountController.clear();
-
-          // Optimistic Update: Add to history immediately
-          setState(() {
-            _history.insert(0, result);
-            // Optional: Update balance locally if possible, but API fetch will fix it in background
-            if (_user != null) {
-              _user!['balance'] -= amount;
-            }
-          });
-
-          // No need to manually call _loadData here, the poller will catch the confirmed state shortly.
-          // This prevents a race condition where the rapid fetch might return old data.
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isProcessingPayment = false);
-      }
-    }
+    // Navigate to PayScreen with pre-filled UPI
+    Navigator.pushNamed(context, '/pay', arguments: {'upi': upiId});
+    _upiController.clear();
   }
 
   @override
@@ -214,34 +190,85 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Balance Card
-              Card(
-                color: Theme.of(context).primaryColor,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Available Balance',
-                        style: TextStyle(color: Colors.white70),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '₹ ${_user!['balance'].toStringAsFixed(2)}',
-                        style: GoogleFonts.outfit(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'UPI ID: ${_user!['upi_id']}',
-                        style: TextStyle(color: Colors.white70),
-                      ),
-                    ],
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF6200EE), Color(0xFF3700B3)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF6200EE).withValues(alpha: 0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Available Balance',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.8),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const Icon(
+                          Icons.account_balance_wallet,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      '₹ ${_user!['balance'].toStringAsFixed(2)}',
+                      style: GoogleFonts.outfit(
+                        fontSize: 36,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(50),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.qr_code,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _user!['upi_id'],
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 24),
@@ -250,14 +277,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Send Money',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 16),
                       TextField(
                         controller: _upiController,
                         decoration: const InputDecoration(
@@ -267,35 +287,25 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         keyboardType: TextInputType.text,
                       ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _amountController,
-                        decoration: const InputDecoration(
-                          labelText: 'Amount (₹)',
-                          hintText: '0.00',
-                          border: OutlineInputBorder(),
-                        ),
-                        keyboardType: TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                      ),
                       const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: _isProcessingPayment ? null : _sendPayment,
+                          onPressed: _isSelfTransfer ? null : _sendPayment,
                           style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            backgroundColor:
+                                Colors.black, // Dark button for proceed
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor: Colors.grey,
+                            disabledForegroundColor: Colors.white70,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
-                          child: _isProcessingPayment
-                              ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Text('Send Payment'),
+                          child: Text(
+                            _isSelfTransfer ? 'Cannot send to self' : 'Proceed',
+                          ),
                         ),
                       ),
                     ],
@@ -323,14 +333,21 @@ class _HomeScreenState extends State<HomeScreen> {
                   itemBuilder: (context, index) {
                     final tx = _history[index];
                     final isDebit = tx['sender_upi_id'] == _user!['upi_id'];
-                    final color = tx['status'] == 'BLOCKED'
-                        ? Colors.grey
-                        : (isDebit ? Colors.red : Colors.green);
-                    final icon = tx['status'] == 'BLOCKED'
-                        ? Icons.block
-                        : (isDebit
-                              ? Icons.arrow_outward
-                              : Icons.arrow_downward);
+                    Color color;
+                    IconData icon;
+
+                    if (tx['status'] == 'BLOCKED') {
+                      color = Colors.grey;
+                      icon = Icons.block;
+                    } else if (tx['status'] == 'FAILED') {
+                      color = Colors.red;
+                      icon = Icons.error_outline;
+                    } else {
+                      color = isDebit ? Colors.red : Colors.green;
+                      icon = isDebit
+                          ? Icons.arrow_outward
+                          : Icons.arrow_downward;
+                    }
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -403,30 +420,41 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.pushNamed(context, '/scan').then((scanResult) {
-            if (scanResult != null && scanResult is String) {
-              // Found UPI ID, proceed to Pay
-              Navigator.pushNamed(
-                context,
-                '/pay',
-                arguments: {'upi': scanResult},
-              ).then((payResult) {
-                if (payResult != null && payResult is Map<String, dynamic>) {
-                  setState(() {
-                    _history.insert(0, payResult);
-                    if (_user != null) {
-                      _user!['balance'] -= payResult['amount'];
-                    }
-                  });
-                }
-                // Poller will update eventually
-              });
-            } else {
-              // User came back from scan without scanning (or just refresh)
-              _loadData(showLoading: false);
+        onPressed: () async {
+          final scanResult = await Navigator.pushNamed(context, '/scan');
+          if (scanResult != null && scanResult is String) {
+            // Check for self-transfer
+            final myUpi = _user?['upi_id'];
+            if (myUpi != null && myUpi == scanResult) {
+              if (mounted) {
+                final messenger = ScaffoldMessenger.of(context);
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('Cannot send money to self')),
+                );
+              }
+              return;
             }
-          });
+
+            // Found UPI ID, proceed to Pay
+            if (!mounted) return;
+            final nav = Navigator.of(context);
+            final payResult = await nav.pushNamed(
+              '/pay',
+              arguments: {'upi': scanResult},
+            );
+
+            if (payResult != null && payResult is Map<String, dynamic>) {
+              setState(() {
+                _history.insert(0, payResult);
+                if (_user != null) {
+                  _user!['balance'] -= payResult['amount'];
+                }
+              });
+            }
+          } else {
+            // Refresh if came back empty
+            if (mounted) _loadData(showLoading: false);
+          }
         },
         icon: const Icon(Icons.qr_code_scanner),
         label: const Text('Scan & Pay'),

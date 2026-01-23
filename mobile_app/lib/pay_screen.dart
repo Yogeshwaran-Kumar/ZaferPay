@@ -10,41 +10,51 @@ class PayScreen extends StatefulWidget {
 
 class _PayScreenState extends State<PayScreen> {
   late String _receiverUpi;
+  String? _receiverName;
+  final ApiService _api = ApiService();
   final _amountController = TextEditingController();
-  final _api = ApiService();
-  bool _isLoading = false;
+  bool _isLoadingName = true;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final args = ModalRoute.of(context)?.settings.arguments as Map?;
-    _receiverUpi = args?['upi'] ?? 'shopC@mockbank'; // Default for testing
+    _receiverUpi = args?['upi'] ?? '';
+    if (_isLoadingName) {
+      _fetchReceiverName();
+    }
   }
 
-  Future<void> _pay() async {
+  Future<void> _fetchReceiverName() async {
+    final info = await _api.lookupUser(_receiverUpi);
+    if (mounted) {
+      setState(() {
+        if (info != null) {
+          _receiverName = info['username'];
+        }
+        _isLoadingName = false;
+      });
+    }
+  }
+
+  Future<void> _onPayPressed() async {
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text("Enter valid amount")));
+      ).showSnackBar(const SnackBar(content: Text("Enter valid amount")));
       return;
     }
 
-    setState(() => _isLoading = true);
+    final result = await Navigator.pushNamed(
+      context,
+      '/payment-pin',
+      arguments: {'receiverUpi': _receiverUpi, 'amount': amount},
+    );
 
-    try {
-      final result = await _api.createTransaction(_receiverUpi, amount);
-      setState(() => _isLoading = false);
-
+    if (result != null && result is Map<String, dynamic>) {
       if (mounted) {
         _showResultDialog(result);
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Error: $e")));
       }
     }
   }
@@ -70,6 +80,10 @@ class _PayScreenState extends State<PayScreen> {
       color = Colors.red;
       icon = Icons.block;
       title = "Transaction Blocked";
+    } else if (status == "FAILED") {
+      color = Colors.red;
+      icon = Icons.error_outline;
+      title = "Insufficient Balance";
     } else if (risk == "WARN") {
       color = Colors.orange;
       icon = Icons.warning;
@@ -155,16 +169,25 @@ class _PayScreenState extends State<PayScreen> {
               radius: 40,
               backgroundColor: Colors.grey.shade200,
               child: Text(
-                _receiverUpi[0].toUpperCase(),
+                _receiverName != null && _receiverName!.isNotEmpty
+                    ? _receiverName![0].toUpperCase()
+                    : (_receiverUpi.isNotEmpty
+                          ? _receiverUpi[0].toUpperCase()
+                          : '?'),
                 style: const TextStyle(fontSize: 32),
               ),
             ),
             const SizedBox(height: 16),
-            Text("Paying to", style: TextStyle(color: Colors.grey)),
+            const Text("Paying to", style: TextStyle(color: Colors.grey)),
             Text(
-              _receiverUpi,
+              _receiverName ?? _receiverUpi,
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
+            if (_receiverName != null)
+              Text(
+                _receiverUpi,
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+              ),
             const SizedBox(height: 40),
             TextField(
               controller: _amountController,
@@ -178,22 +201,20 @@ class _PayScreenState extends State<PayScreen> {
               ),
             ),
             const SizedBox(height: 40),
-            if (_isLoading)
-              const CircularProgressIndicator()
-            else
-              ElevatedButton.icon(
-                onPressed: _pay,
-                icon: const Icon(Icons.send),
-                label: const Text("Pay Now"),
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 56),
-                  backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+            const SizedBox(height: 40),
+            ElevatedButton.icon(
+              onPressed: _onPayPressed,
+              icon: const Icon(Icons.send),
+              label: const Text("Pay Now"),
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 56),
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
+            ),
           ],
         ),
       ),

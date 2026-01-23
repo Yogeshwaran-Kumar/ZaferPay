@@ -73,11 +73,21 @@ def login_for_access_token(
     x_device_id: str = Header(None),
     force_logout: bool = False
 ):
-    user = db.query(models.User).filter(models.User.username == form_data.username).first()
+    # Authenticate by Mobile Number OR Email (passed in form_data.username)
+    identifier = form_data.username
+    user = db.query(models.User).filter(
+        (models.User.mobile_number == identifier) | 
+        (models.User.email == identifier)
+    ).first()
+    
+    # If not found, try username as fallback
+    if not user:
+         user = db.query(models.User).filter(models.User.username == identifier).first()
+
     if not user or not auth.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect valid Mobile/Email or PIN",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -85,11 +95,19 @@ def login_for_access_token(
     if x_device_id:
         if user.device_id and user.device_id != x_device_id:
             if not force_logout:
+                # User is already logged in on another device
+                # Return detailed error for better UX
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail="User already logged in on another device",
+                    detail={
+                        "message": "already_logged_in",
+                        "info": "You are currently logged in on another device. To continue on this device, you must logout from the other device."
+                    },
                 )
-        # Update device_id
+            # Force logout from other device - update device_id
+            print(f"Force logout: User {user.username} logging out from device {user.device_id} and logging into {x_device_id}")
+        
+        # Update device_id (either first login or force logout)
         user.device_id = x_device_id
         db.commit()
     
@@ -99,15 +117,178 @@ def login_for_access_token(
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
+@app.post("/auth/check-mobile", response_model=schemas.MobileCheckResponse)
+def check_mobile(
+    check: schemas.MobileCheckRequest,
+    db: Session = Depends(get_db),
+    x_device_id: str = Header(None)
+):
+    # Search by mobile number OR email
+    identifier = check.mobile_number # We reuse this field name from frontend but it can be email
+    print(f"DEBUG: Checking mobile/email for identifier: '{identifier}'")
+    
+    user = db.query(models.User).filter(
+        (models.User.mobile_number == identifier) | 
+        (models.User.email == identifier)
+    ).first()
+    
+    if not user:
+        # Check username just in case
+        user = db.query(models.User).filter(models.User.username == identifier).first()
+    
+    if not user:
+        # User not found -> treat as NEW user (Registration Flow)
+        # However, for import scenario, we expect them to exist. 
+        # If not existing, frontend handles 'new' status
+        return {
+            "exists": False, 
+            "status": "new",
+            "upi_id": None,
+            "has_device_conflict": False
+        }
+    
+    # Check if PIN is set
+    # We assume empty password hash or specifically "NULL" string means not set
+    if not user.hashed_password or user.hashed_password == "NULL":
+        return {
+            "exists": True, 
+            "status": "new", # User exists but needs PIN set (unlikely for imported data with PINs)
+            "upi_id": user.upi_id,
+            "has_device_conflict": False
+        }
+    
+    # Existing user with PIN - Check for device conflict
+    has_device_conflict = False
+    if x_device_id and user.device_id and user.device_id != x_device_id:
+        # User is logged in on a different device
+        has_device_conflict = True
+        print(f"Device conflict detected for user {user.username}: DB device={user.device_id}, Request device={x_device_id}")
+    
+    return {
+        "exists": True, 
+        "status": "existing",
+        "upi_id": user.upi_id,
+        "has_device_conflict": has_device_conflict
+    }
+
+@app.post("/auth/register", response_model=schemas.UserResponse)
+def register_user(
+    user: schemas.UserRegister,
+    db: Session = Depends(get_db)
+):
+    # Check if user exists
+    db_user = db.query(models.User).filter(
+        (models.User.username == user.username) | 
+        (models.User.mobile_number == user.mobile_number)
+    ).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Username or Mobile already registered")
+    
+    # Generate default UPI ID if not provided
+    # Fallback to username instead of specific suffix
+    new_upi = user.username
+    
+    new_user = models.User(
+        username=user.username,
+        mobile_number=user.mobile_number,
+        email=user.email,
+        upi_id=new_upi,
+        balance=1000.0, # Sign up bonus?
+        hashed_password=None # No PIN set yet
+    )
+    
+    # Initialize profiles
+    db.add(new_user)
+    db.commit() # Commit to get ID
+    db.refresh(new_user)
+    
+    s_prof = models.SenderProfile(user_id=new_user.id)
+    r_prof = models.ReceiverProfile(user_id=new_user.id)
+    db.add(s_prof)
+    db.add(r_prof)
+    db.commit()
+    
+    return new_user
+
+@app.post("/auth/set-pin")
+def set_pin(
+    req: schemas.PinSetRequest,
+    db: Session = Depends(get_db)
+):
+    user = db.query(models.User).filter(models.User.mobile_number == req.mobile_number).first()
+    if not user:
+        # Check by username just in case
+        user = db.query(models.User).filter(models.User.username == req.mobile_number).first()
+        
+    if not user:
+        # NEW USER REGISTRATION via Set PIN
+        # Create a new user since they passed the mobile check and set a PIN
+        print(f"Creating new user for mobile: {req.mobile_number}")
+        
+        # Generate defaults
+        username = f"User{req.mobile_number}"
+        # Use provided UPI ID or fallback to mobile_number
+        upi_id = req.upi_id if req.upi_id else req.mobile_number
+        
+        new_user = models.User(
+            username=username,
+            mobile_number=req.mobile_number,
+            email=f"{req.mobile_number}@example.com", # Placeholder
+            upi_id=upi_id,
+            balance=1000.0, # Welcome Bonus
+            hashed_password=auth.get_password_hash(req.pin)
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        
+        # Initialize profiles
+        s_prof = models.SenderProfile(user_id=new_user.id)
+        r_prof = models.ReceiverProfile(user_id=new_user.id)
+        db.add(s_prof)
+        db.add(r_prof)
+        db.commit()
+        
+        return {"msg": "User created and PIN set successfully"}
+        
+    # Existing user -> Update PIN
+    user.hashed_password = auth.get_password_hash(req.pin)
+    db.commit()
+    return {"msg": "PIN set successfully"}
+
 @app.post("/logout")
 def logout(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Clear device_id to allow login from another device
+    device_id = current_user.device_id
     current_user.device_id = None
     db.commit()
-    return {"msg": "Successfully logged out"}
+    print(f"User {current_user.username} logged out from device {device_id}")
+    return {
+        "msg": "Successfully logged out",
+        "username": current_user.username,
+        "device_cleared": True
+    }
 
 @app.get("/users/me", response_model=schemas.UserResponse)
 def read_users_me(current_user: models.User = Depends(get_current_user)):
     return current_user
+
+@app.get("/users/lookup/{upi_id}", response_model=schemas.UserLookupResponse)
+def lookup_user_by_upi(upi_id: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.upi_id == upi_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="UPI ID not found")
+    return user
+
+@app.put("/users/me/change-pin")
+def change_pin(
+    req: schemas.ChangePinRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    current_user.hashed_password = auth.get_password_hash(req.new_pin)
+    db.commit()
+    return {"msg": "PIN updated successfully"}
 
 @app.post("/transactions/", response_model=schemas.TransactionResponse)
 def create_transaction(
@@ -115,6 +296,10 @@ def create_transaction(
     current_user: models.User = Depends(get_current_user), 
     db: Session = Depends(get_db)
 ):
+    # 0. Verify PIN
+    if not auth.verify_password(tx.pin, current_user.hashed_password):
+        raise HTTPException(status_code=401, detail="Incorrect PIN")
+
     # 1. Validate Receiver
     receiver = db.query(models.User).filter(models.User.upi_id == tx.receiver_upi_id).first()
     if not receiver:
@@ -123,30 +308,21 @@ def create_transaction(
     if receiver.id == current_user.id:
         raise HTTPException(status_code=400, detail="Cannot send money to self")
 
-    # 2. Check Balance
-    if current_user.balance < tx.amount:
-        raise HTTPException(status_code=400, detail="Insufficient balance")
-
-    # 3. Fraud Check
-    risk_result = fraud_engine.evaluate_fraud(db, current_user, receiver, tx.amount)
-    
-    # 4. Process Status (For this mock, HIGH risk blocked?)
-    # Requirement says "Risk result returned... User proceeds or cancels". 
-    # But for API, let's say "BLOCKED" if user forces it? 
-    # Actually, usually the API returns the check first OR we just process it.
-    # Let's assume this endpoint EXECUTES the transaction.
-    # If Risk is HIGH, maybe we block it automatically?
-    # "Backend evaluates... Risk result returned... User proceeds" -> implies 2-step flow or 1-step with confirmation.
-    # To keep it simple: 
-    # If WARN/HIGH, we mark it but might still allow or we can reject. 
-    # Let's BLOCK on HIGH for safety demonstration.
+    # 2. Check Balance & 3. Fraud Check
+    # We evaluate fraud regardless, but balance check determines immediate failure
     
     tx_status = "SUCCESS"
-    if risk_result == "HIGH":
+    risk_result = fraud_engine.evaluate_fraud(db, current_user, receiver, tx.amount)
+    
+    if current_user.balance < tx.amount:
+        tx_status = "FAILED"
+        # We can use a special indicator for risk or just rely on status
+        # Let's append to risk_result or use a standard code if compatible
+        # For simplicity, we just save status=FAILED
+    elif risk_result == "HIGH":
         tx_status = "BLOCKED"
-        # Don't deduct money
     elif risk_result == "WARN":
-        tx_status = "SUCCESS" # Allow with warning logged
+        tx_status = "SUCCESS" 
     
     # 5. Execute Transfer if SUCCESS
     if tx_status == "SUCCESS":
@@ -158,7 +334,6 @@ def create_transaction(
         s_prof.total_transactions_count += 1
         s_prof.monthly_volume += tx.amount
         # Re-calculate average
-        # (New Total / New Count) approximately
         s_prof.avg_transaction_amount = ( (s_prof.avg_transaction_amount * (s_prof.total_transactions_count-1)) + tx.amount ) / s_prof.total_transactions_count
         s_prof.last_transaction_time = datetime.utcnow()
         
@@ -196,7 +371,10 @@ def read_history(current_user: models.User = Depends(get_current_user), db: Sess
     # Get sent and received
     txs = db.query(models.Transaction).filter(
         (models.Transaction.sender_id == current_user.id) | 
-        (models.Transaction.receiver_id == current_user.id)
+        (
+            (models.Transaction.receiver_id == current_user.id) & 
+            (models.Transaction.status != "FAILED")
+        )
     ).order_by(models.Transaction.timestamp.desc()).all()
     
     # Map to schema manually or rely on ORM if relation is eager loaded. 

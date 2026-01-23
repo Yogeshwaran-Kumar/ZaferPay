@@ -9,18 +9,20 @@ def seed_data(db: Session):
     print("Seeding mock data...")
     
     # Create Users
-    users = [
-        {"username": "userA", "email": "usera@example.com", "password": "password123", "upi": "userA@mockbank", "balance": 50000.0},
-        {"username": "userB", "email": "userb@example.com", "password": "password123", "upi": "userB@mockbank", "balance": 25000.0},
-        {"username": "shopC", "email": "shopc@example.com", "password": "password123", "upi": "shopC@mockbank", "balance": 10000.0},
-        {"username": "trustD", "email": "trustd@example.com", "password": "password123", "upi": "trustD@mockbank", "balance": 500000.0},
-    ]
+    # SECURITY UPDATE: Hardcoded users removed. 
+    # Use /auth/register endpoint to create users.
+    users = [] 
 
     for u in users:
+        hashed = None
+        if "password" in u:
+            hashed = auth.get_password_hash(u["password"])
+            
         db_user = models.User(
             username=u["username"],
+            mobile_number=u["mobile"],
             email=u["email"],
-            hashed_password=auth.get_password_hash(u["password"]),
+            hashed_password=hashed,
             upi_id=u["upi"],
             balance=u["balance"]
         )
