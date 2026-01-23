@@ -17,9 +17,30 @@ class _ScanScreenState extends State<ScanScreen> {
     for (final barcode in barcodes) {
       if (barcode.rawValue != null) {
         setState(() => _found = true);
-        // Navigate to payment with the scanned UPI ID
-        // Return the scanned UPI ID to the previous screen
-        Navigator.pop(context, barcode.rawValue);
+
+        String raw = barcode.rawValue!;
+        Map<String, String> result = {'upi': raw};
+
+        if (raw.startsWith('upi://')) {
+          try {
+            final uri = Uri.parse(raw);
+            final params = uri.queryParameters;
+            if (params.containsKey('pa')) {
+              result['upi'] = params['pa']!;
+            }
+            if (params.containsKey('mc')) {
+              result['mcc'] = params['mc']!;
+            }
+            if (params.containsKey('pn')) {
+              result['name'] = params['pn']!;
+            }
+          } catch (e) {
+            // Fallback to raw string if parsing fails
+            debugPrint("Error parsing URI: $e");
+          }
+        }
+
+        Navigator.pop(context, result);
         break;
       }
     }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'api_service.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'mcc_helper.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -95,7 +96,10 @@ class _HomeScreenState extends State<HomeScreen> {
               SizedBox(
                 height: 200,
                 width: 200,
-                child: QrImageView(data: _user!['upi_id']),
+                child: QrImageView(
+                  data:
+                      'upi://pay?pa=${_user!['upi_id']}&pn=${Uri.encodeComponent(_user!['username'])}&mc=${_user!['mcc'] ?? ""}',
+                ),
               ),
             const SizedBox(height: 16),
             Text(
@@ -422,25 +426,49 @@ class _HomeScreenState extends State<HomeScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           final scanResult = await Navigator.pushNamed(context, '/scan');
-          if (scanResult != null && scanResult is String) {
+          if (scanResult != null) {
+            String scannedUpi = "";
+            String? scannedMcc;
+            String? scannedName;
+
+            if (scanResult is Map) {
+              scannedUpi = scanResult['upi'];
+              scannedMcc = scanResult['mcc'];
+              scannedName = scanResult['name'];
+            } else if (scanResult is String) {
+              scannedUpi = scanResult;
+            }
+
             // Check for self-transfer
             final myUpi = _user?['upi_id'];
-            if (myUpi != null && myUpi == scanResult) {
-              if (mounted) {
-                final messenger = ScaffoldMessenger.of(context);
-                messenger.showSnackBar(
-                  const SnackBar(content: Text('Cannot send money to self')),
-                );
-              }
+            if (myUpi != null && myUpi == scannedUpi) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Cannot send money to self')),
+              );
               return;
             }
 
+            // Show MCC if present
+
             // Found UPI ID, proceed to Pay
             if (!mounted) return;
+
+            String? category;
+            if (scannedMcc != null && scannedMcc.isNotEmpty) {
+              category = MccHelper.getDomain(scannedMcc);
+            }
+
+            if (!mounted) return;
             final nav = Navigator.of(context);
+
             final payResult = await nav.pushNamed(
               '/pay',
-              arguments: {'upi': scanResult},
+              arguments: {
+                'upi': scannedUpi,
+                'name': scannedName,
+                'category': category,
+              },
             );
 
             if (payResult != null && payResult is Map<String, dynamic>) {

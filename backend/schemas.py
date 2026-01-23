@@ -18,6 +18,7 @@ class UserRegister(BaseModel):
 class UserResponse(UserBase):
     id: int
     upi_id: str
+    mcc: Optional[str] = None
     balance: float
 
     class Config:
@@ -28,6 +29,7 @@ class UserResponse(UserBase):
 class UserLookupResponse(BaseModel):
     username: str
     upi_id: str
+    mcc: Optional[str] = None
 
 class TransactionCreate(BaseModel):
     receiver_upi_id: str

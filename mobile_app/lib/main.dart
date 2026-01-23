@@ -128,6 +128,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           return PaymentPinScreen(
             receiverUpi: args['receiverUpi'],
             amount: args['amount'],
+            receiverName: args['name'], // Pass name
           );
         },
       },

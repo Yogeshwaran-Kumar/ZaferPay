@@ -4,11 +4,13 @@ import 'api_service.dart';
 class PaymentPinScreen extends StatefulWidget {
   final String receiverUpi;
   final double amount;
+  final String receiverName; // Add this
 
   const PaymentPinScreen({
     super.key,
     required this.receiverUpi,
     required this.amount,
+    required this.receiverName, // Add this
   });
 
   @override
@@ -140,7 +142,7 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      widget.receiverUpi,
+                      widget.receiverName, // Show Name instead of UPI
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,

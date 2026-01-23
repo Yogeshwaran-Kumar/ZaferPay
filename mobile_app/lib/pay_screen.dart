@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'api_service.dart';
+import 'mcc_helper.dart';
 
 class PayScreen extends StatefulWidget {
   const PayScreen({super.key});
@@ -11,6 +12,8 @@ class PayScreen extends StatefulWidget {
 class _PayScreenState extends State<PayScreen> {
   late String _receiverUpi;
   String? _receiverName;
+  String? _category; // Domain/Category for merchants
+
   final ApiService _api = ApiService();
   final _amountController = TextEditingController();
   bool _isLoadingName = true;
@@ -20,8 +23,13 @@ class _PayScreenState extends State<PayScreen> {
     super.didChangeDependencies();
     final args = ModalRoute.of(context)?.settings.arguments as Map?;
     _receiverUpi = args?['upi'] ?? '';
-    if (_isLoadingName) {
+    _receiverName = args?['name']; // Can be passed directly
+    _category = args?['category'];
+
+    if (_receiverName == null && _isLoadingName) {
       _fetchReceiverName();
+    } else {
+      _isLoadingName = false;
     }
   }
 
@@ -31,6 +39,9 @@ class _PayScreenState extends State<PayScreen> {
       setState(() {
         if (info != null) {
           _receiverName = info['username'];
+          if (info['mcc'] != null) {
+            _category = MccHelper.getDomain(info['mcc']);
+          }
         }
         _isLoadingName = false;
       });
@@ -49,7 +60,11 @@ class _PayScreenState extends State<PayScreen> {
     final result = await Navigator.pushNamed(
       context,
       '/payment-pin',
-      arguments: {'receiverUpi': _receiverUpi, 'amount': amount},
+      arguments: {
+        'receiverUpi': _receiverUpi,
+        'amount': amount,
+        'name': _receiverName ?? _receiverUpi, // Pass name or fallback to UPI
+      },
     );
 
     if (result != null && result is Map<String, dynamic>) {
@@ -183,7 +198,28 @@ class _PayScreenState extends State<PayScreen> {
               _receiverName ?? _receiverUpi,
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            if (_receiverName != null)
+            if (_category != null)
+              Container(
+                margin: const EdgeInsets.only(top: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Text(
+                  _category!,
+                  style: TextStyle(
+                    color: Colors.blue.shade800,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              )
+            else if (_receiverName != null)
               Text(
                 _receiverUpi,
                 style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
