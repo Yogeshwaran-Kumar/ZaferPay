@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'main.dart'; // import for themeNotifier
+import 'api_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -8,10 +11,58 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  final _storage = const FlutterSecureStorage();
+  final _api = ApiService();
+
+  Future<void> _handleLogout() async {
+    // Show confirmation dialog
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldLogout == true) {
+      // Call backend logout to clear device_id on server
+      await _api.logout();
+      // Clear all local storage
+      await _storage.deleteAll();
+      if (mounted) {
+        // Navigate to login screen and remove all previous routes
+        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: AppBar(
+        title: Text(
+          'Settings',
+          style: TextStyle(
+            color: Theme.of(context).textTheme.titleLarge?.color,
+          ),
+        ),
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+        iconTheme: Theme.of(context).iconTheme,
+      ),
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -22,22 +73,158 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'Security',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: Colors.grey[700],
+                  color: isDark ? Colors.grey[400] : Colors.grey[700],
                 ),
               ),
               const SizedBox(height: 16),
               ListTile(
                 leading: const Icon(Icons.lock_reset, color: Color(0xFF6200EE)),
-                title: const Text('Change PIN'),
-                subtitle: const Text('Update your account security PIN'),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                title: Text(
+                  'Change PIN',
+                  style: TextStyle(
+                    color: Theme.of(context).textTheme.bodyLarge?.color,
+                  ),
+                ),
+                subtitle: Text(
+                  'Update your account security PIN',
+                  style: TextStyle(
+                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                  ),
+                ),
+                trailing: Icon(
+                  Icons.arrow_forward_ios,
+                  size: 16,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                ),
                 onTap: () {
                   Navigator.pushNamed(context, '/change-pin');
                 },
-                tileColor: Colors.grey[50],
+                tileColor: Theme.of(context).cardColor,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.grey.shade200),
+                  side: BorderSide(
+                    color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
+
+              // Appearance Section
+              Text(
+                'Appearance',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.grey[400] : Colors.grey[700],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                elevation: 0,
+                color: Theme.of(context).cardColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(
+                    color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+                  ),
+                ),
+                child: ExpansionTile(
+                  leading: const Icon(
+                    Icons.brightness_6,
+                    color: Color(0xFF00B9F1),
+                  ),
+                  title: Text(
+                    'Theme',
+                    style: TextStyle(
+                      color: Theme.of(context).textTheme.bodyLarge?.color,
+                    ),
+                  ),
+                  subtitle: ValueListenableBuilder<ThemeMode>(
+                    valueListenable: themeNotifier,
+                    builder: (context, mode, _) {
+                      return Text(
+                        mode == ThemeMode.light ? 'Light Mode' : 'Dark Mode',
+                        style: TextStyle(
+                          color: isDark
+                              ? Colors.grey.shade400
+                              : Colors.grey.shade600,
+                          fontSize: 13,
+                        ),
+                      );
+                    },
+                  ),
+                  iconColor: isDark ? Colors.white70 : Colors.black54,
+                  collapsedIconColor: isDark ? Colors.white70 : Colors.black54,
+                  children: [
+                    ValueListenableBuilder<ThemeMode>(
+                      valueListenable: themeNotifier,
+                      builder: (context, mode, _) {
+                        return Column(
+                          children: [
+                            RadioListTile<ThemeMode>(
+                              title: Text(
+                                'Light Mode',
+                                style: TextStyle(
+                                  color: Theme.of(
+                                    context,
+                                  ).textTheme.bodyLarge?.color,
+                                ),
+                              ),
+                              value: ThemeMode.light,
+                              // ignore: deprecated_member_use
+                              groupValue: mode,
+                              // ignore: deprecated_member_use
+                              onChanged: (val) {
+                                if (val != null) {
+                                  themeNotifier.value = val;
+                                }
+                              },
+                              activeColor: const Color(0xFF5F259F),
+                            ),
+                            RadioListTile<ThemeMode>(
+                              title: Text(
+                                'Dark Mode',
+                                style: TextStyle(
+                                  color: Theme.of(
+                                    context,
+                                  ).textTheme.bodyLarge?.color,
+                                ),
+                              ),
+                              value: ThemeMode.dark,
+                              // ignore: deprecated_member_use
+                              groupValue: mode,
+                              // ignore: deprecated_member_use
+                              onChanged: (val) {
+                                if (val != null) {
+                                  themeNotifier.value = val;
+                                }
+                              },
+                              activeColor: const Color(0xFF5F259F),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // Account Section (Logout)
+              ListTile(
+                leading: const Icon(Icons.logout, color: Colors.red),
+                title: const Text(
+                  'Logout',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                onTap: _handleLogout,
+                tileColor: Colors.red.withValues(alpha: 0.05),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.red.withValues(alpha: 0.1)),
                 ),
               ),
             ],

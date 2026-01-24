@@ -182,21 +182,36 @@ class _ContactsScreenState extends State<ContactsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Select Contact'),
+        title: Text(
+          'Select Contact',
+          style: TextStyle(
+            color: Theme.of(context).textTheme.titleLarge?.color,
+          ),
+        ),
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+        iconTheme: Theme.of(context).iconTheme,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
           child: Padding(
             padding: const EdgeInsets.all(12.0),
             child: TextField(
               controller: _searchController,
+              style: TextStyle(color: isDark ? Colors.white : Colors.black),
               decoration: InputDecoration(
                 hintText: 'Search contacts',
-                prefixIcon: const Icon(Icons.search),
+                hintStyle: TextStyle(
+                  color: isDark ? Colors.grey.shade400 : Colors.grey,
+                ),
+                prefixIcon: Icon(
+                  Icons.search,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey,
+                ),
                 filled: true,
-                fillColor: Colors.grey.shade100,
+                fillColor: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(30),
                   borderSide: BorderSide.none,
@@ -210,11 +225,11 @@ class _ContactsScreenState extends State<ContactsScreen> {
           ),
         ),
       ),
-      body: _buildBody(),
+      body: _buildBody(isDark),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(bool isDark) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -230,9 +245,13 @@ class _ContactsScreenState extends State<ContactsScreen> {
               color: Colors.grey.shade400,
             ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'Contact Permission Required',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).textTheme.bodyLarge?.color,
+              ),
             ),
             const SizedBox(height: 8),
             const Padding(
@@ -269,9 +288,13 @@ class _ContactsScreenState extends State<ContactsScreen> {
           children: [
             Icon(Icons.search_off, size: 64, color: Colors.grey.shade400),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'No contacts found',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.grey.shade400 : Colors.black54,
+              ),
             ),
           ],
         ),
@@ -286,7 +309,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
 
         return ListTile(
           leading: CircleAvatar(
-            backgroundColor: const Color(0xFF5F259F).withOpacity(0.1),
+            backgroundColor: const Color(0xFF5F259F).withValues(alpha: 0.1),
             child: Text(
               contact.displayName.isNotEmpty
                   ? contact.displayName[0].toUpperCase()
@@ -299,19 +322,27 @@ class _ContactsScreenState extends State<ContactsScreen> {
           ),
           title: Text(
             contact.displayName,
-            style: const TextStyle(fontWeight: FontWeight.w500),
+            style: TextStyle(
+              fontWeight: FontWeight.w500,
+              color: Theme.of(context).textTheme.bodyLarge?.color,
+            ),
           ),
           subtitle: hasPhone
-              ? Text(contact.phones.first.number)
+              ? Text(
+                  contact.phones.first.number,
+                  style: TextStyle(
+                    color: isDark ? Colors.grey.shade400 : Colors.black54,
+                  ),
+                )
               : const Text(
                   'No phone number',
                   style: TextStyle(color: Colors.grey),
                 ),
           trailing: hasPhone
-              ? const Icon(
+              ? Icon(
                   Icons.arrow_forward_ios,
                   size: 16,
-                  color: Colors.grey,
+                  color: isDark ? Colors.grey.shade600 : Colors.grey,
                 )
               : null,
           enabled: hasPhone,

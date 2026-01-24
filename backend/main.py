@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Header
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from datetime import timedelta, datetime
 import models, schemas, auth, database, fraud_engine
 import seed
@@ -63,6 +64,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
             detail="Logged in on another device",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    # Update last_active_at on every authenticated request
+    user.last_active_at = datetime.utcnow()
+    db.commit()
         
     return user
 
@@ -96,7 +101,6 @@ def login_for_access_token(
         if user.device_id and user.device_id != x_device_id:
             if not force_logout:
                 # User is already logged in on another device
-                # Return detailed error for better UX
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail={
@@ -105,10 +109,11 @@ def login_for_access_token(
                     },
                 )
             # Force logout from other device - update device_id
-            print(f"Force logout: User {user.username} logging out from device {user.device_id} and logging into {x_device_id}")
+            print(f"Force logout: User {user.username} logging out from {user.device_id} and logging into {x_device_id}")
         
         # Update device_id (either first login or force logout)
         user.device_id = x_device_id
+        user.last_active_at = datetime.utcnow()  # Mark as active now
         db.commit()
     
     access_token_expires = timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -158,11 +163,11 @@ def check_mobile(
         }
     
     # Existing user with PIN - Check for device conflict
+    # Show conflict if a different device is currently logged in (device_id exists and differs)
     has_device_conflict = False
     if x_device_id and user.device_id and user.device_id != x_device_id:
-        # User is logged in on a different device
         has_device_conflict = True
-        print(f"Device conflict detected for user {user.username}: DB device={user.device_id}, Request device={x_device_id}")
+        print(f"Device conflict: {user.username} logged in on {user.device_id}, request from {x_device_id}")
     
     return {
         "exists": True, 
@@ -258,9 +263,10 @@ def set_pin(
 
 @app.post("/logout")
 def logout(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # Clear device_id to allow login from another device
+    # Clear device_id and last_active_at to allow login from another device
     device_id = current_user.device_id
     current_user.device_id = None
+    current_user.last_active_at = None
     db.commit()
     print(f"User {current_user.username} logged out from device {device_id}")
     return {
@@ -275,9 +281,79 @@ def read_users_me(current_user: models.User = Depends(get_current_user)):
 
 @app.get("/users/lookup/{upi_id}", response_model=schemas.UserLookupResponse)
 def lookup_user_by_upi(upi_id: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Case insensitive search using ILIKE (or equivalent in SQLite/PG)
+    # Note: SQLite LIKE is case-insensitive for ASCII by default usually, but we implement robust check
     user = db.query(models.User).filter(models.User.upi_id == upi_id).first()
+    
     if not user:
-        raise HTTPException(status_code=404, detail="UPI ID not found")
+        # Try finding via case-insensitive matching if exact match failed
+        # In SQLite, generic 'col LIKE val' is often case insensitive
+        user = db.query(models.User).filter(models.User.upi_id.like(upi_id)).first()
+
+    if not user:
+        # AUTO-CREATE External User
+        # This fixes issues where scanning a real QR code fails because the user isn't in our local DB
+        print(f"DEBUG: Auto-Creating user for UPI: {upi_id}")
+        
+        # Generate username from UPI
+        base_name = upi_id.split('@')[0] if '@' in upi_id else upi_id
+        new_username = base_name
+        
+        # Ensure username uniqueness
+        counter = 1
+        while db.query(models.User).filter(models.User.username == new_username).first():
+            new_username = f"{base_name}_{counter}"
+            counter += 1
+            
+        # Create User
+        user = models.User(
+            username=new_username,
+            mobile_number=None, # External user
+            email=None,
+            upi_id=upi_id,
+            balance=0.0,
+            hashed_password=None
+        )
+        db.add(user)
+        try:
+            db.commit()
+            db.refresh(user)
+            
+            # Create Profiles
+            s_prof = models.SenderProfile(user_id=user.id)
+            r_prof = models.ReceiverProfile(user_id=user.id)
+            db.add(s_prof)
+            db.add(r_prof)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            print(f"Error auto-creating user: {e}")
+            raise HTTPException(status_code=500, detail="Failed to register external user")
+            
+    return user
+
+@app.get("/users/lookup-phone/{phone_number}", response_model=schemas.UserLookupResponse)
+def lookup_user_by_phone(phone_number: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Normalize phone number - remove all non-digit characters
+    normalized_phone = ''.join(filter(str.isdigit, phone_number))
+    
+    # Try to find by mobile_number field
+    user = db.query(models.User).filter(models.User.mobile_number == normalized_phone).first()
+    
+    # Optimized: SEARCH STRATEGY CHANGED
+    # We remove the leading wildcard search (LIKE %...) because it causes full table scans.
+    # Instead, we rely on exact matches or simple variations.
+    
+    if not user:
+        # If the user typed 1234567890, but we store +911234567890, let's try adding country code.
+        # This is O(log N) because it hits the index directly.
+        if len(normalized_phone) == 10:
+             user = db.query(models.User).filter(models.User.mobile_number == f"91{normalized_phone}").first()
+             if not user:
+                 user = db.query(models.User).filter(models.User.mobile_number == f"+91{normalized_phone}").first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="Phone number not found")
     return user
 
 @app.put("/users/me/change-pin")
@@ -360,6 +436,8 @@ def create_transaction(
         transaction_id=new_tx.transaction_id,
         sender_upi_id=current_user.upi_id,
         receiver_upi_id=receiver.upi_id,
+        sender_name=current_user.username,
+        receiver_name=receiver.username,
         amount=new_tx.amount,
         status=new_tx.status,
         risk_score=new_tx.risk_score,
@@ -386,9 +464,202 @@ def read_history(current_user: models.User = Depends(get_current_user), db: Sess
             transaction_id=t.transaction_id,
             sender_upi_id=t.sender.upi_id,
             receiver_upi_id=t.receiver.upi_id,
+            sender_name=t.sender.username,
+            receiver_name=t.receiver.username,
             amount=t.amount,
             status=t.status,
             risk_score=t.risk_score,
             timestamp=t.timestamp
         ))
     return results
+
+@app.get("/transactions/recent-people", response_model=list[schemas.UserResponse])
+def get_recent_people(
+    limit: int = 16,
+    current_user: models.User = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
+    # FAST SQL QUERY
+    # We use raw SQL to efficiently find distinct counterparties sorted by most recent transaction.
+    # This avoids fetching all history into Python memory.
+    
+    query = text("""
+        SELECT u.id, u.username, u.mobile_number, u.email, u.upi_id, u.mcc, u.device_id, u.balance, u.hashed_password
+        FROM users u
+        JOIN (
+            SELECT 
+                CASE WHEN sender_id = :uid THEN receiver_id ELSE sender_id END as other_id,
+                MAX(timestamp) as last_tx
+            FROM transactions 
+            WHERE sender_id = :uid OR receiver_id = :uid
+            GROUP BY other_id
+        ) t ON u.id = t.other_id
+        WHERE u.mcc IS NULL AND u.id != :uid
+        ORDER BY t.last_tx DESC
+        LIMIT :limit
+    """)
+    
+    result = db.execute(query, {"uid": current_user.id, "limit": limit}).fetchall()
+    
+    # Map raw results back to Pydantic models (or dicts suitable for response)
+    # Since we selected columns matching the User model, we can reconstruct them.
+    users = []
+    for row in result:
+        # row is a Row object (tuple-like)
+        # We need to match the UserResponse schema
+        users.append(models.User(
+            id=row.id,
+            username=row.username,
+            mobile_number=row.mobile_number,
+            email=row.email,
+            upi_id=row.upi_id,
+            mcc=row.mcc,
+            device_id=row.device_id,
+            balance=row.balance,
+            hashed_password=row.hashed_password # Needed for internal logic, though response model filters it
+        ))
+        
+    return users
+
+@app.get("/transactions/recent-merchants", response_model=list[schemas.UserResponse])
+def get_recent_merchants(
+    limit: int = 16,
+    current_user: models.User = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
+    # FAST SQL QUERY
+    query = text("""
+        SELECT u.id, u.username, u.mobile_number, u.email, u.upi_id, u.mcc, u.device_id, u.balance, u.hashed_password
+        FROM users u
+        JOIN (
+            SELECT 
+                CASE WHEN sender_id = :uid THEN receiver_id ELSE sender_id END as other_id,
+                MAX(timestamp) as last_tx
+            FROM transactions 
+            WHERE sender_id = :uid OR receiver_id = :uid
+            GROUP BY other_id
+        ) t ON u.id = t.other_id
+        WHERE u.mcc IS NOT NULL AND u.id != :uid
+        ORDER BY t.last_tx DESC
+        LIMIT :limit
+    """)
+    
+    result = db.execute(query, {"uid": current_user.id, "limit": limit}).fetchall()
+    
+    users = []
+    for row in result:
+        users.append(models.User(
+            id=row.id,
+            username=row.username,
+            mobile_number=row.mobile_number,
+            email=row.email,
+            upi_id=row.upi_id,
+            mcc=row.mcc,
+            device_id=row.device_id,
+            balance=row.balance,
+            hashed_password=row.hashed_password
+        ))
+        
+    return users
+
+@app.post("/messages", response_model=schemas.MessageResponse)
+def send_message(
+    msg: schemas.MessageCreate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    receiver = db.query(models.User).filter(models.User.upi_id == msg.receiver_upi_id).first()
+    if not receiver:
+        raise HTTPException(status_code=404, detail="Receiver not found")
+        
+    new_msg = models.Message(
+        sender_id=current_user.id,
+        receiver_id=receiver.id,
+        content=msg.content,
+        timestamp=datetime.utcnow()
+    )
+    db.add(new_msg)
+    db.commit()
+    db.refresh(new_msg)
+    
+    return schemas.MessageResponse(
+        id=new_msg.id,
+        sender_upi_id=current_user.upi_id,
+        receiver_upi_id=receiver.upi_id,
+        content=new_msg.content,
+        timestamp=new_msg.timestamp
+    )
+
+@app.get("/transactions/conversation/{target_upi_id}")
+def get_conversation(
+    target_upi_id: str,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Find target user
+    target_user = db.query(models.User).filter(models.User.upi_id == target_upi_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Target user not found")
+
+    # 1. Fetch Transactions
+    txs = db.query(models.Transaction).filter(
+        (
+            (models.Transaction.sender_id == current_user.id) & 
+            (models.Transaction.receiver_id == target_user.id)
+        ) | 
+        (
+            (models.Transaction.sender_id == target_user.id) & 
+            (models.Transaction.receiver_id == current_user.id)
+        )
+    ).order_by(models.Transaction.timestamp.desc()).limit(50).all()
+    
+    # 2. Fetch Messages
+    msgs = db.query(models.Message).filter(
+        (
+            (models.Message.sender_id == current_user.id) & 
+            (models.Message.receiver_id == target_user.id)
+        ) | 
+        (
+            (models.Message.sender_id == target_user.id) & 
+            (models.Message.receiver_id == current_user.id)
+        )
+    ).order_by(models.Message.timestamp.desc()).limit(50).all()
+    
+    combined = []
+    
+    # Process Transactions
+    # Filter visibility logic: Only show if SUCCESS or (FAILED and I am SENDER)
+    for t in txs:
+        should_show = False
+        if t.status == "SUCCESS":
+            should_show = True
+        elif t.sender_id == current_user.id:
+            should_show = True
+            
+        if should_show:
+            combined.append({
+                "type": "transaction",
+                "transaction_id": t.transaction_id,
+                "sender_upi_id": t.sender.upi_id,
+                "receiver_upi_id": t.receiver.upi_id,
+                "amount": t.amount,
+                "status": t.status,
+                "risk_score": t.risk_score,
+                "timestamp": t.timestamp
+            })
+            
+    # Process Messages
+    for m in msgs:
+        combined.append({
+            "type": "message",
+            "id": m.id,
+            "sender_upi_id": m.sender.upi_id,
+            "receiver_upi_id": m.receiver.upi_id,
+            "content": m.content,
+            "timestamp": m.timestamp
+        })
+        
+    # Sort combined list by timestamp DESC (Newest first)
+    combined.sort(key=lambda x: x['timestamp'], reverse=True)
+        
+    return combined

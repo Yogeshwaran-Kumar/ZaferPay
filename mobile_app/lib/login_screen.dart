@@ -23,12 +23,13 @@ class _LoginScreenState extends State<LoginScreen> {
   String _firstPin = ''; // Used during creation
   String _enteredPin = ''; // Current buffer
   String _upiId = ''; // User's UPI ID
+  bool _isCheckingAuth = true;
   bool _isLoading = false;
   bool _forceLogoutApproved = false; // Track if user approved force logout
 
   // Status text for the PIN screen title
   String get _pinTitle {
-    if (widget.isUnlockMode) return 'Unlock App';
+    // if (widget.isUnlockMode) return 'Unlock App';
     switch (_currentStep) {
       case 1:
         return 'Set New PIN';
@@ -44,50 +45,70 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
+    // In unlock mode, start directly at PIN screen (Step 3) to avoid flash of mobile entry
     if (widget.isUnlockMode) {
-      _loadUserForUnlock();
+      _currentStep = 3;
+      _isCheckingAuth = false; // Already "checked" implicitly by mode
     } else {
-      _checkSavedLogin();
+      _isCheckingAuth = true;
     }
-  }
-
-  Future<void> _loadUserForUnlock() async {
-    // In unlock mode, we assume user is already logged in (locally)
-    // We just need to load their mobile number to verify PIN against.
-    final savedMobile = await _api.getSavedMobile();
-    if (savedMobile != null) {
-      setState(() {
-        _mobileController.text = savedMobile;
-        _currentStep = 3; // Direct to PIN
-      });
-      // Optionally fetch UPI ID for display, but not strictly required for lock screen
-      // _api.checkMobile(savedMobile)...
-    } else {
-      // If no saved mobile, we can't unlock. Force full login.
-      setState(() {
-        // Should probably just be Step 0, but as "Unlock", maybe we should force them to login.
-        _currentStep = 0;
-      });
-    }
+    // Always check for saved login to populate UPI ID and correct state
+    _checkSavedLogin();
   }
 
   Future<void> _checkSavedLogin() async {
     final savedMobile = await _api.getSavedMobile();
     if (savedMobile != null && savedMobile.isNotEmpty) {
       if (mounted) {
-        setState(() => _isLoading = true);
+        // We found a user, ensure we are on step 3
+        setState(() {
+          _isLoading = true;
+          _isCheckingAuth = false; // Auth check done, transitioning to PIN
+          _currentStep = 3;
+        });
+
         try {
           // Fetch user details to get real UPI ID
           final result = await _api.checkMobile(savedMobile);
 
           if (mounted) {
-            setState(() {
-              _mobileController.text = savedMobile;
-              // Use real UPI ID from DB
-              _upiId = result['upi_id'] ?? '';
-              _currentStep = 3;
-              _isLoading = false;
-            });
+            // Check for device conflict (Logged in elsewhere)
+            if (result['has_device_conflict'] == true) {
+              await _api.removeSavedMobile(); // Clear local session
+              setState(() {
+                // Return to Step 0 (Mobile Entry)
+                // We keep the mobile number filled for convenience, but user must "Continue" to re-login
+                _mobileController.text = savedMobile;
+                _currentStep = 0;
+                _isLoading = false;
+                _isCheckingAuth = false;
+              });
+              // Optional: Show snackbar to explain why
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Logged out because your account was used on another device',
+                  ),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+            } else {
+              // No conflict - Proceed to PIN (Step 3)
+              setState(() {
+                _mobileController.text = savedMobile;
+                _upiId = result['upi_id'] ?? '';
+                // Check if user actually has a PIN set (status 'existing')?
+                // Usually checkMobile returns 'existing' if PIN is set.
+                // We assume 'existing' status here if we had a savedMobile, but let's be safe.
+                if (result['status'] == 'new') {
+                  // Should technically not happen if we had saved session, but possible if DB wiped
+                  _currentStep = 1;
+                } else {
+                  _currentStep = 3;
+                }
+                _isLoading = false;
+              });
+            }
           }
         } catch (e) {
           // Fallback if offline/error
@@ -100,6 +121,14 @@ class _LoginScreenState extends State<LoginScreen> {
             });
           }
         }
+      }
+    } else {
+      // No saved user, show login (Step 0)
+      if (mounted) {
+        setState(() {
+          _isCheckingAuth = false;
+          _currentStep = 0;
+        });
       }
     }
   }
@@ -283,33 +312,39 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // New dialog shown BEFORE PIN entry (after mobile number check)
+  // Dialog shown BEFORE PIN entry (after mobile number check) when device conflict detected
   void _showForceLoginDialogEarly() {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: Theme.of(context).cardColor,
         icon: const Icon(Icons.devices, color: Color(0xFF5F259F), size: 48),
-        title: const Text(
+        title: Text(
           'Already Logged In',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
         ),
-        content: const Column(
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'You are currently logged in on another device.',
-              style: TextStyle(fontSize: 15),
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
-            SizedBox(height: 12),
+            const SizedBox(height: 12),
             Text(
               'What would you like to do?',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
             ),
-            SizedBox(height: 8),
-            Row(
+            const SizedBox(height: 8),
+            const Row(
               children: [
                 Icon(Icons.check_circle_outline, size: 20, color: Colors.green),
                 SizedBox(width: 8),
@@ -321,8 +356,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ],
             ),
-            SizedBox(height: 6),
-            Row(
+            const SizedBox(height: 6),
+            const Row(
               children: [
                 Icon(Icons.cancel_outlined, size: 20, color: Colors.orange),
                 SizedBox(width: 8),
@@ -348,7 +383,9 @@ class _LoginScreenState extends State<LoginScreen> {
             icon: const Icon(Icons.close, size: 18),
             label: const Text('No, Keep Other Device'),
             style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.grey[700],
+              foregroundColor: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.grey[300]
+                  : Colors.grey[700],
               side: BorderSide(color: Colors.grey[400]!),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
@@ -403,6 +440,7 @@ class _LoginScreenState extends State<LoginScreen> {
   // --- UI Components ---
 
   Widget _buildStep1Mobile() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -416,7 +454,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF5F259F).withOpacity(0.1),
+                    color: const Color(0xFF5F259F).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(
@@ -430,7 +468,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   '2Way',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: Colors.black87,
                   ),
                 ),
               ],
@@ -442,7 +479,6 @@ class _LoginScreenState extends State<LoginScreen> {
               'Welcome to 2Way',
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                 fontWeight: FontWeight.w600,
-                color: Colors.black87,
                 fontSize: 28,
               ),
             ),
@@ -450,7 +486,7 @@ class _LoginScreenState extends State<LoginScreen> {
             Text(
               'Enter your phone number',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: Colors.grey.shade600,
+                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                 fontSize: 16,
               ),
             ),
@@ -468,16 +504,19 @@ class _LoginScreenState extends State<LoginScreen> {
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey.shade300),
                     borderRadius: BorderRadius.circular(8),
+                    color: Theme.of(context).cardColor,
                   ),
                   child: Row(
                     children: [
-                      Text('🇮🇳', style: const TextStyle(fontSize: 24)),
+                      const Text('🇮🇳', style: TextStyle(fontSize: 24)),
                       const SizedBox(width: 8),
                       Text(
                         '+91',
                         style: TextStyle(
                           fontSize: 16,
-                          color: Colors.grey.shade700,
+                          color: isDark
+                              ? Colors.grey.shade300
+                              : Colors.grey.shade700,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -498,6 +537,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       letterSpacing: 1.2,
                     ),
                     decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Theme.of(context).cardColor,
                       hintText: '9876543210',
                       hintStyle: TextStyle(
                         color: Colors.grey.shade400,
@@ -537,7 +578,10 @@ class _LoginScreenState extends State<LoginScreen> {
               padding: const EdgeInsets.only(left: 4),
               child: Text(
                 'We\'ll send an OTP to verify your number',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                ),
               ),
             ),
 
@@ -589,7 +633,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 11,
-                    color: Colors.grey.shade600,
+                    color: isDark ? Colors.grey.shade500 : Colors.grey.shade600,
                     height: 1.4,
                   ),
                 ),
@@ -604,6 +648,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildStepPin() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       children: [
         Expanded(
@@ -626,9 +671,9 @@ class _LoginScreenState extends State<LoginScreen> {
               else if (_upiId.isNotEmpty)
                 Text(
                   _upiId,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleMedium?.copyWith(color: Colors.grey[700]),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: isDark ? Colors.grey.shade400 : Colors.grey[700],
+                  ),
                 ),
 
               const SizedBox(height: 48),
@@ -665,7 +710,9 @@ class _LoginScreenState extends State<LoginScreen> {
         Expanded(
           flex: 3,
           child: Container(
-            color: Colors.grey[50],
+            color: isDark
+                ? Colors.grey[900]
+                : Colors.grey[50], // Dark mode safe
             child: Column(
               children: [
                 const SizedBox(height: 20),
@@ -695,7 +742,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 20),
                 // Only show "Change Number" if in Login Mode (Step 3) or if manually backing out
-                if (_currentStep == 3 && !widget.isUnlockMode)
+                if (_currentStep == 3)
                   TextButton(
                     onPressed: () {
                       // Clear state to go back
@@ -723,7 +770,11 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Center(
           child: Text(
             value,
-            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w500),
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w500,
+              color: Theme.of(context).textTheme.bodyLarge?.color,
+            ),
           ),
         ),
       ),
@@ -734,20 +785,39 @@ class _LoginScreenState extends State<LoginScreen> {
     return Expanded(
       child: InkWell(
         onTap: () => _onKeypadTap('BACK'),
-        child: const Center(child: Icon(Icons.backspace_outlined, size: 28)),
+        child: Center(
+          child: Icon(
+            Icons.backspace_outlined,
+            size: 28,
+            color: Theme.of(context).iconTheme.color,
+          ),
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    // Show splash/loading while checking auth status (avoids flash of Mobile Entry)
+    if (_isCheckingAuth) {
+      return Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: const Center(
+          child: CircularProgressIndicator(color: Color(0xFF5F259F)),
+        ),
+      );
+    }
+
     // If in unlock mode, prevent back button from closing the screen
     return PopScope(
       canPop: !widget.isUnlockMode,
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: _currentStep == 0
-            ? AppBar(elevation: 0, backgroundColor: Colors.white)
+            ? AppBar(
+                elevation: 0,
+                backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+              )
             : null, // No AppBar for PIN screen
         body: SafeArea(
           child: _currentStep == 0 ? _buildStep1Mobile() : _buildStepPin(),

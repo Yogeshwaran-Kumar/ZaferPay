@@ -1,9 +1,16 @@
+import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:path_provider/path_provider.dart'; // Add path_provider
+import 'package:share_plus/share_plus.dart' as fp; // Add share_plus with prefix
 import 'api_service.dart';
+import 'main.dart'; // Import main.dart to access MyApp.shouldSkipLock
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  final VoidCallback? onBack;
+
+  const ProfileScreen({super.key, this.onBack});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -32,100 +39,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(child: CircularProgressIndicator(color: Colors.white)),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     if (_user == null) {
       return const Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(
-          child: Text(
-            'Failed to load profile',
-            style: TextStyle(color: Colors.white),
-          ),
-        ),
+        body: Center(child: Text('Failed to load profile')),
       );
     }
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.share, color: Colors.white),
-            onPressed: () {
-              // Share QR functionality
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Share functionality coming soon!'),
-                ),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.more_vert, color: Colors.white),
-            onPressed: () async {
-              // Show options menu
-              showModalBottomSheet(
-                context: context,
-                backgroundColor: Colors.grey.shade900,
-                builder: (context) => SafeArea(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ListTile(
-                        leading: const Icon(
-                          Icons.settings,
-                          color: Colors.white,
-                        ),
-                        title: const Text(
-                          'Settings',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.pushNamed(context, '/settings');
-                        },
-                      ),
-                      ListTile(
-                        leading: const Icon(Icons.lock, color: Colors.white),
-                        title: const Text(
-                          'Change PIN',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                        onTap: () {
-                          Navigator.pop(context);
-                          Navigator.pushNamed(context, '/change-pin');
-                        },
-                      ),
-                      ListTile(
-                        leading: const Icon(Icons.logout, color: Colors.red),
-                        title: const Text(
-                          'Logout',
-                          style: TextStyle(color: Colors.red),
-                        ),
-                        onTap: () async {
-                          await _api.logout();
-                          if (!mounted) return;
-                          Navigator.pushReplacementNamed(context, '/login');
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
+        leading: widget.onBack != null
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: widget.onBack,
+              )
+            : null,
       ),
       body: Column(
         children: [
@@ -152,20 +87,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 12),
                     Text(
                       _user!['username'],
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: Theme.of(context).textTheme.bodyLarge?.color,
                       ),
                     ),
                     const SizedBox(height: 40),
 
                     // QR Code
+                    // We Wrap in RepaintBoundary if we were using screenshot,
+                    // but here we just display it. We'll regenerate for sharing.
                     Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: Colors
+                            .white, // Keep QR background white for scannability
                         borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.grey.shade700
+                              : Colors.grey.shade200,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
                       child: QrImageView(
                         data: _user!['upi_id'],
@@ -173,18 +123,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         size: 250.0,
                         backgroundColor: Colors.white,
                         errorCorrectionLevel: QrErrorCorrectLevel.M,
-                        embeddedImage: const AssetImage('assets/gpay_icon.png'),
-                        embeddedImageStyle: const QrEmbeddedImageStyle(
-                          size: Size(40, 40),
-                        ),
                       ),
                     ),
                     const SizedBox(height: 24),
 
                     // Scan to pay text
-                    const Text(
+                    Text(
                       'Scan to pay with any UPI app',
-                      style: TextStyle(color: Colors.white70, fontSize: 14),
+                      style: TextStyle(
+                        color: isDark ? Colors.grey.shade400 : Colors.black54,
+                        fontSize: 14,
+                      ),
                     ),
                     const SizedBox(height: 24),
 
@@ -226,37 +175,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         Text(
                           'UPI ID: ${_user!['upi_id']}',
-                          style: const TextStyle(
-                            color: Colors.white70,
+                          style: TextStyle(
+                            color: Theme.of(context).textTheme.bodyLarge?.color,
                             fontSize: 14,
                           ),
                         ),
                         const SizedBox(width: 8),
                         IconButton(
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.copy,
-                            color: Colors.white70,
+                            color: isDark
+                                ? Colors.grey.shade400
+                                : Colors.black54,
                             size: 16,
                           ),
                           onPressed: () {
+                            // Copy to clipboard logic would go here
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(content: Text('UPI ID copied!')),
                             );
                           },
                         ),
                       ],
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Want to join UPI Circle text
-                    const Text(
-                      'Want to join UPI Circle? Switch QR',
-                      style: TextStyle(
-                        color: Colors.blue,
-                        fontSize: 12,
-                        decoration: TextDecoration.underline,
-                      ),
                     ),
                   ],
                 ),
@@ -268,11 +208,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.grey.shade900,
+              color: Theme.of(context).cardColor,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(20),
                 topRight: Radius.circular(20),
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: isDark ? Colors.black26 : Colors.grey.shade200,
+                  blurRadius: 10,
+                  offset: const Offset(0, -5),
+                ),
+              ],
             ),
             child: SafeArea(
               child: Row(
@@ -280,13 +227,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () {
+                        // Simple navigate for scanner
                         Navigator.pushNamed(context, '/scan');
                       },
                       icon: const Icon(Icons.qr_code_scanner, size: 20),
                       label: const Text('Open scanner'),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(color: Colors.white30),
+                        foregroundColor: Theme.of(
+                          context,
+                        ).textTheme.bodyLarge?.color,
+                        side: BorderSide(
+                          color: isDark
+                              ? Colors.grey.shade600
+                              : Colors.grey.shade400,
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(30),
@@ -297,13 +251,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Share functionality coming soon!'),
-                          ),
-                        );
-                      },
+                      onPressed: _shareQrCode,
                       icon: const Icon(Icons.share, size: 20),
                       label: const Text('Share QR code'),
                       style: ElevatedButton.styleFrom(
@@ -324,5 +272,70 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _shareQrCode() async {
+    if (_user == null) return;
+
+    final upiId = _user!['upi_id'];
+    final name = _user!['username'];
+    final link = "upi://pay?pa=$upiId&pn=$name&mc=0000&mode=02&purpose=00";
+    final shareText = "Use my UPI ID to pay me: $upiId\n\nLink: $link";
+
+    try {
+      // 1. Generate QR Image
+      final painter = QrPainter(
+        data: upiId,
+        version: QrVersions.auto,
+        gapless: true,
+        eyeStyle: const QrEyeStyle(
+          eyeShape: QrEyeShape.square,
+          color: Colors.black,
+        ),
+        dataModuleStyle: const QrDataModuleStyle(
+          dataModuleShape: QrDataModuleShape.square,
+          color: Colors.black,
+        ),
+      );
+
+      // 2. Save to temporary file
+      final tempDir = await getTemporaryDirectory();
+      final ts = DateTime.now().millisecondsSinceEpoch;
+      final path = '${tempDir.path}/qr_$ts.png';
+      final file = File(path);
+
+      final picData = await painter.toImageData(
+        2048,
+        format: ImageByteFormat.png,
+      );
+      if (picData != null) {
+        await file.writeAsBytes(picData.buffer.asUint8List());
+
+        // 3. Share
+        MyApp.isSharing = true;
+        // ignore: deprecated_member_use
+        await fp.Share.shareXFiles(
+          [fp.XFile(path)],
+          text: shareText,
+          subject: "Payment QR Code",
+        );
+        MyApp.isSharing = false;
+        MyApp.lastShareTime = DateTime.now(); // Mark completion time
+      } else {
+        // Fallback if image generation fails
+        MyApp.isSharing = true;
+        // ignore: deprecated_member_use
+        await fp.Share.share(shareText);
+        MyApp.isSharing = false;
+        MyApp.lastShareTime = DateTime.now();
+      }
+    } catch (e) {
+      debugPrint("Error sharing QR: $e");
+      MyApp.isSharing = false;
+      MyApp.lastShareTime = DateTime.now();
+      // Fallback
+      // ignore: deprecated_member_use
+      await fp.Share.share(shareText);
+    }
   }
 }

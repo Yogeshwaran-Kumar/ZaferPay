@@ -113,14 +113,18 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
   @override
   Widget build(BuildContext context) {
     final title = _step == 0 ? "Enter New PIN" : "Confirm New PIN";
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(
+            Icons.arrow_back,
+            color: Theme.of(context).iconTheme.color,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -144,18 +148,19 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
                     const SizedBox(height: 24),
                     Text(
                       title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
+                        color: Theme.of(context).textTheme.titleLarge?.color,
                       ),
                     ),
                     const SizedBox(height: 8),
                     if (_upiId.isNotEmpty)
                       Text(
                         _upiId,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
-                          color: Colors.black54, // "based on that page" style
+                          color: isDark ? Colors.grey[400] : Colors.black54,
                         ),
                       ),
                     const SizedBox(height: 48),
@@ -195,7 +200,7 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
             Expanded(
               flex: 3,
               child: Container(
-                color: Colors.grey[50],
+                color: isDark ? Colors.grey[900] : Colors.grey[50],
                 child: Column(
                   children: [
                     const SizedBox(height: 20),
@@ -253,7 +258,11 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
         child: Center(
           child: Text(
             value,
-            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w500),
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w500,
+              color: Theme.of(context).textTheme.bodyLarge?.color,
+            ),
           ),
         ),
       ),
@@ -264,7 +273,13 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
     return Expanded(
       child: InkWell(
         onTap: () => _onKeypadTap('BACK'),
-        child: const Center(child: Icon(Icons.backspace_outlined, size: 28)),
+        child: Center(
+          child: Icon(
+            Icons.backspace_outlined,
+            size: 28,
+            color: Theme.of(context).iconTheme.color,
+          ),
+        ),
       ),
     );
   }

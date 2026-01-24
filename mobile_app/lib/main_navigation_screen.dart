@@ -13,22 +13,30 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
 
-  final List<Widget> _screens = [
-    const HomeScreen(),
-    const MoneyScreen(),
-    const ProfileScreen(),
-  ];
+  void _switchToTab(int index) {
+    setState(() {
+      _currentIndex = index;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final List<Widget> screens = [
+      HomeScreen(onSwitchTab: _switchToTab),
+      MoneyScreen(onBack: () => _switchToTab(0)),
+      ProfileScreen(onBack: () => _switchToTab(0)),
+    ];
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      body: _screens[_currentIndex],
+      body: screens[_currentIndex],
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).cardColor,
           boxShadow: [
             BoxShadow(
-              color: Colors.grey.shade300,
+              color: isDark ? Colors.black26 : Colors.grey.shade300,
               blurRadius: 10,
               offset: const Offset(0, -2),
             ),
@@ -73,15 +81,25 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     required int index,
   }) {
     final bool isActive = _currentIndex == index;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Theme-aware colors
+    final activeBgColor = isDark
+        ? const Color(0xFF5F259F).withValues(alpha: 0.2)
+        : const Color(0xFF5F259F).withValues(alpha: 0.1);
+    final activeIconColor = isDark
+        ? const Color(0xFF9E65E6)
+        : const Color(0xFF5F259F);
+    final inactiveIconColor = isDark
+        ? Colors.grey.shade400
+        : Colors.grey.shade600;
 
     return GestureDetector(
       onTap: () => setState(() => _currentIndex = index),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isActive
-              ? const Color(0xFF5F259F).withOpacity(0.1)
-              : Colors.transparent,
+          color: isActive ? activeBgColor : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Column(
@@ -89,7 +107,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           children: [
             Icon(
               isActive ? activeIcon : icon,
-              color: isActive ? const Color(0xFF5F259F) : Colors.grey.shade600,
+              color: isActive ? activeIconColor : inactiveIconColor,
               size: 26,
             ),
             const SizedBox(height: 4),
@@ -97,9 +115,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               label,
               style: TextStyle(
                 fontSize: 12,
-                color: isActive
-                    ? const Color(0xFF5F259F)
-                    : Colors.grey.shade600,
+                color: isActive ? activeIconColor : inactiveIconColor,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
               ),
             ),

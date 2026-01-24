@@ -4,13 +4,15 @@ import 'api_service.dart';
 class PaymentPinScreen extends StatefulWidget {
   final String receiverUpi;
   final double amount;
-  final String receiverName; // Add this
+  final String receiverName;
+  final String? category; // Add category
 
   const PaymentPinScreen({
     super.key,
     required this.receiverUpi,
     required this.amount,
-    required this.receiverName, // Add this
+    required this.receiverName,
+    this.category,
   });
 
   @override
@@ -34,9 +36,7 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
       } else {
         if (_enteredPin.length < 4) {
           _enteredPin += value;
-          if (_enteredPin.length == 4) {
-            _verifyPin();
-          }
+          // Removed auto-verify to allow Pay button usage
         }
       }
     });
@@ -108,135 +108,295 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Determine icon based on category (Merchant/Store vs Personal)
+    // If category is present, it's likely a merchant.
+    final bool isMerchant =
+        widget.category != null && widget.category!.isNotEmpty;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           children: [
-            // Top Section: Info
-            Expanded(
-              flex: 2,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.lock_outline,
-                      size: 48,
-                      color: Color(0xFF6200EE),
-                    ),
-                    const SizedBox(height: 24),
-                    const Text(
-                      'Enter PIN to Pay',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Paying ₹${widget.amount} to',
-                      style: TextStyle(color: Colors.grey[600], fontSize: 16),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      widget.receiverName, // Show Name instead of UPI
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 48),
-
-                    // Dots
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(4, (index) {
-                        final filled = index < _enteredPin.length;
-                        return Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 12),
-                          width: 16,
-                          height: 16,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: filled
-                                ? const Color(0xFF6200EE)
-                                : Colors.transparent,
-                            border: Border.all(
-                              color: const Color(0xFF6200EE),
-                              width: 2,
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
-                    if (_isLoading) ...[
-                      const SizedBox(height: 32),
-                      const CircularProgressIndicator(),
-                    ],
-                  ],
+            // Top Section: Close Button
+            Align(
+              alignment: Alignment.centerRight,
+              child: IconButton(
+                icon: Icon(
+                  Icons.close,
+                  color: Theme.of(context).iconTheme.color,
+                  size: 28,
                 ),
+                onPressed: () => Navigator.pop(context),
               ),
             ),
 
-            // Bottom Section: Keypad
-            Expanded(
-              flex: 3,
-              child: Container(
-                color: Colors.grey[50],
-                child: Column(
-                  children: [
-                    const SizedBox(height: 20),
-                    Expanded(
-                      child: Row(
+            // Top Section: Payment Details Card
+            Container(
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Theme.of(context).cardColor
+                    : const Color(0xFFF8F5F2),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
                         children: [
-                          _buildKey('1'),
-                          _buildKey('2'),
-                          _buildKey('3'),
+                          Text(
+                            "Pay ",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.white70 : Colors.black87,
+                            ),
+                          ),
+                          Text(
+                            "₹${widget.amount}",
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
+                          ),
                         ],
                       ),
-                    ),
-                    Expanded(
-                      child: Row(
+                      const SizedBox(height: 8),
+                      Row(
                         children: [
-                          _buildKey('4'),
-                          _buildKey('5'),
-                          _buildKey('6'),
+                          const Text(
+                            "To ",
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          Text(
+                            widget.receiverName.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white70 : Colors.black87,
+                            ),
+                          ),
                         ],
                       ),
-                    ),
-                    Expanded(
-                      child: Row(
-                        children: [
-                          _buildKey('7'),
-                          _buildKey('8'),
-                          _buildKey('9'),
-                        ],
+                    ],
+                  ),
+                  // Right side icon
+                  Row(
+                    children: [
+                      Text(
+                        "₹ ",
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.grey[400],
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                    Expanded(
-                      child: Row(
-                        children: [
-                          const Expanded(child: SizedBox()),
-                          _buildKey('0'),
-                          _buildBackspaceKey(),
-                        ],
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        size: 12,
+                        color: Colors.grey[400],
                       ),
-                    ),
-                    const SizedBox(height: 20),
-                    TextButton(
-                      onPressed: () => Navigator.pop(context), // Cancel
-                      child: const Text(
-                        "Cancel Payment",
-                        style: TextStyle(color: Colors.red),
+                      const SizedBox(width: 8),
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: isMerchant
+                              ? (isDark
+                                    ? const Color(0xFF1B5E20)
+                                    : const Color(0xFFE8F5E9))
+                              : (isDark
+                                    ? const Color(0xFF0D47A1)
+                                    : const Color(0xFFE3F2FD)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          isMerchant ? Icons.store : Icons.person,
+                          color: isMerchant
+                              ? (isDark ? Colors.green[200] : Colors.green)
+                              : (isDark ? Colors.blue[200] : Colors.blue),
+                        ),
                       ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            const Expanded(flex: 1, child: SizedBox()),
+
+            // PIN Entry Section
+            Text(
+              'Enter your PIN',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Dots
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(4, (index) {
+                final filled = index < _enteredPin.length;
+                return Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 12),
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: filled
+                        ? (isDark ? Colors.white : Colors.black)
+                        : Colors.transparent, // Solid black for filled
+                    border: Border.all(
+                      color: filled
+                          ? (isDark ? Colors.white : Colors.black)
+                          : Colors.grey.shade400,
+                      width: 1.5,
                     ),
-                    const SizedBox(height: 20),
-                  ],
-                ),
+                  ),
+                );
+              }),
+            ),
+
+            if (_isLoading) ...[
+              const SizedBox(height: 24),
+              const CircularProgressIndicator(strokeWidth: 2),
+            ],
+
+            const Expanded(flex: 2, child: SizedBox()),
+
+            // Warning Message
+            Padding(
+              padding: const EdgeInsets.only(bottom: 24.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: Color(0xFFD97706),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Never enter your UPI PIN to receive money',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ),
+
+            // Keypad Section
+            Container(
+              padding: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
+              child: Column(
+                children: [
+                  _buildKeyRow(['1', '2', '3']),
+                  const SizedBox(height: 16),
+                  _buildKeyRow(['4', '5', '6']),
+                  const SizedBox(height: 16),
+                  _buildKeyRow(['7', '8', '9']),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      // Backspace Button (Left)
+                      Expanded(
+                        child: InkWell(
+                          onTap: () => _onKeypadTap('BACK'),
+                          borderRadius: BorderRadius.circular(24),
+                          child: Container(
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? Colors.grey[800]
+                                  : Colors.grey.shade200,
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: Center(
+                              child: Icon(
+                                Icons.backspace_outlined,
+                                color: isDark ? Colors.white : Colors.black87,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      // '0' Key (Center)
+                      Expanded(
+                        child: InkWell(
+                          onTap: () => _onKeypadTap('0'),
+                          borderRadius: BorderRadius.circular(24),
+                          child: Container(
+                            height: 56,
+                            decoration: BoxDecoration(
+                              // Using transparent to match typical keypad look
+                              color: Colors.transparent,
+                            ),
+                            child: Center(
+                              child: Text(
+                                "0",
+                                style: TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.normal,
+                                  color: isDark ? Colors.white : Colors.black,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      // Pay Button (Right)
+                      Expanded(
+                        child: InkWell(
+                          onTap: _enteredPin.length == 4 ? _verifyPin : null,
+                          borderRadius: BorderRadius.circular(24),
+                          child: Container(
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1A237E), // Dark Blue
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: Center(
+                              child: _isLoading
+                                  ? const SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Text(
+                                      "Pay",
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ],
@@ -245,26 +405,32 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
     );
   }
 
-  Widget _buildKey(String value) {
-    return Expanded(
-      child: InkWell(
-        onTap: () => _onKeypadTap(value),
-        child: Center(
-          child: Text(
-            value,
-            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w500),
+  Widget _buildKeyRow(List<String> keys) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: keys.map((key) {
+        return Expanded(
+          child: InkWell(
+            onTap: () => _onKeypadTap(key),
+            borderRadius: BorderRadius.circular(32),
+            child: SizedBox(
+              height: 56,
+              // Visual feedback container if needed, else plain
+              child: Center(
+                child: Text(
+                  key,
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.normal,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+              ),
+            ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBackspaceKey() {
-    return Expanded(
-      child: InkWell(
-        onTap: () => _onKeypadTap('BACK'),
-        child: const Center(child: Icon(Icons.backspace_outlined, size: 28)),
-      ),
+        );
+      }).toList(),
     );
   }
 }

@@ -20,6 +20,7 @@ class UserResponse(UserBase):
     upi_id: str
     mcc: Optional[str] = None
     balance: float
+    mobile_number: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -31,6 +32,26 @@ class UserLookupResponse(BaseModel):
     upi_id: str
     mcc: Optional[str] = None
 
+class UserLookupResponse(BaseModel):
+    username: str
+    upi_id: str
+    mcc: Optional[str] = None
+
+class MessageCreate(BaseModel):
+    receiver_upi_id: str
+    content: str
+    
+class MessageResponse(BaseModel):
+    id: int
+    sender_upi_id: str
+    receiver_upi_id: str
+    content: str
+    timestamp: datetime
+    type: str = "message"
+    
+    class Config:
+        from_attributes = True
+
 class TransactionCreate(BaseModel):
     receiver_upi_id: str
     amount: float
@@ -40,10 +61,13 @@ class TransactionResponse(BaseModel):
     transaction_id: str
     sender_upi_id: str
     receiver_upi_id: str
+    sender_name: Optional[str] = None
+    receiver_name: Optional[str] = None
     amount: float
     status: str
     risk_score: str
     timestamp: datetime
+    type: str = "transaction"
 
     class Config:
         from_attributes = True

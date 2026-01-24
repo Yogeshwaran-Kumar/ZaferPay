@@ -1,10 +1,16 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'api_service.dart';
+import 'transaction_history_screen.dart';
+import 'transaction_details_screen.dart';
+import 'balance_check_screen.dart';
 
 class MoneyScreen extends StatefulWidget {
-  const MoneyScreen({super.key});
+  final VoidCallback? onBack;
+
+  const MoneyScreen({super.key, this.onBack});
 
   @override
   State<MoneyScreen> createState() => _MoneyScreenState();
@@ -16,7 +22,6 @@ class _MoneyScreenState extends State<MoneyScreen> {
   List<dynamic> _history = [];
   bool _isLoading = true;
   bool _isBalanceVisible = false;
-  String _enteredPin = '';
   Timer? _timer;
 
   @override
@@ -54,143 +59,19 @@ class _MoneyScreenState extends State<MoneyScreen> {
     });
   }
 
-  void _showPinDialog() {
-    setState(() => _enteredPin = '');
+  Future<void> _checkBalance() async {
+    if (_user == null) return;
 
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            title: const Text(
-              'Enter PIN to View Balance',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Enter your 4-digit PIN'),
-                const SizedBox(height: 24),
-                // PIN Dots
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(4, (index) {
-                    final filled = index < _enteredPin.length;
-                    return Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: filled
-                            ? const Color(0xFF5F259F)
-                            : Colors.transparent,
-                        border: Border.all(
-                          color: const Color(0xFF5F259F),
-                          width: 2,
-                        ),
-                      ),
-                    );
-                  }),
-                ),
-                const SizedBox(height: 24),
-                // Keypad
-                ...List.generate(3, (row) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: List.generate(3, (col) {
-                        final number = (row * 3 + col + 1).toString();
-                        return _buildPinKey(number, setDialogState);
-                      }),
-                    ),
-                  );
-                }),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    const SizedBox(width: 60),
-                    _buildPinKey('0', setDialogState),
-                    IconButton(
-                      onPressed: () {
-                        if (_enteredPin.isNotEmpty) {
-                          setDialogState(() {
-                            _enteredPin = _enteredPin.substring(
-                              0,
-                              _enteredPin.length - 1,
-                            );
-                          });
-                        }
-                      },
-                      icon: const Icon(Icons.backspace_outlined),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-            ],
-          );
-        },
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            BalanceCheckScreen(mobileNumber: _user!['mobile_number'] ?? ''),
       ),
     );
-  }
 
-  Widget _buildPinKey(String number, StateSetter setDialogState) {
-    return InkWell(
-      onTap: () {
-        if (_enteredPin.length < 4) {
-          setDialogState(() {
-            _enteredPin += number;
-          });
-
-          if (_enteredPin.length == 4) {
-            // Verify PIN
-            _verifyPin();
-          }
-        }
-      },
-      borderRadius: BorderRadius.circular(30),
-      child: Container(
-        width: 60,
-        height: 60,
-        alignment: Alignment.center,
-        child: Text(
-          number,
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w500),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _verifyPin() async {
-    // Simulate PIN verification with login
-    final error = await _api.login(
-      _user?['mobile_number'] ?? '',
-      _enteredPin,
-      forceLogin: false,
-    );
-
-    if (!mounted) return;
-    Navigator.pop(context); // Close dialog
-
-    if (error == null) {
+    if (result == true && mounted) {
       setState(() => _isBalanceVisible = true);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Incorrect PIN'),
-          backgroundColor: Colors.red,
-        ),
-      );
     }
   }
 
@@ -204,15 +85,29 @@ class _MoneyScreenState extends State<MoneyScreen> {
       return const Scaffold(body: Center(child: Text('Failed to load data')));
     }
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Money'),
+        title: Text(
+          'Money',
+          style: TextStyle(
+            color: Theme.of(context).appBarTheme.titleTextStyle?.color,
+          ),
+        ),
         elevation: 0,
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+        iconTheme: Theme.of(context).iconTheme,
+        leading: widget.onBack != null
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: widget.onBack,
+              )
+            : null,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: Icon(Icons.refresh, color: Theme.of(context).iconTheme.color),
             onPressed: () => _loadData(),
           ),
         ],
@@ -227,7 +122,7 @@ class _MoneyScreenState extends State<MoneyScreen> {
             children: [
               // Balance Card
               GestureDetector(
-                onTap: _isBalanceVisible ? null : _showPinDialog,
+                onTap: _isBalanceVisible ? null : _checkBalance,
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(24),
@@ -240,7 +135,7 @@ class _MoneyScreenState extends State<MoneyScreen> {
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF5F259F).withOpacity(0.3),
+                        color: const Color(0xFF5F259F).withValues(alpha: 0.3),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -255,7 +150,7 @@ class _MoneyScreenState extends State<MoneyScreen> {
                           Text(
                             'Available Balance',
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.9),
+                              color: Colors.white.withValues(alpha: 0.9),
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
                             ),
@@ -285,7 +180,7 @@ class _MoneyScreenState extends State<MoneyScreen> {
                         Text(
                           'Tap to view balance',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.8),
+                            color: Colors.white.withValues(alpha: 0.8),
                             fontSize: 12,
                           ),
                         ),
@@ -305,7 +200,9 @@ class _MoneyScreenState extends State<MoneyScreen> {
                             style: TextStyle(color: Colors.white),
                           ),
                           style: TextButton.styleFrom(
-                            backgroundColor: Colors.white.withOpacity(0.2),
+                            backgroundColor: Colors.white.withValues(
+                              alpha: 0.2,
+                            ),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,
                               vertical: 6,
@@ -320,7 +217,7 @@ class _MoneyScreenState extends State<MoneyScreen> {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
@@ -332,12 +229,15 @@ class _MoneyScreenState extends State<MoneyScreen> {
                               size: 14,
                             ),
                             const SizedBox(width: 6),
-                            Text(
-                              _user!['upi_id'],
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
+                            Flexible(
+                              child: Text(
+                                _user!['upi_id'],
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
@@ -351,26 +251,51 @@ class _MoneyScreenState extends State<MoneyScreen> {
               const SizedBox(height: 32),
 
               // Transaction History
-              Text(
-                'Transaction History',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Transaction History',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).textTheme.titleLarge?.color,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              const TransactionHistoryScreen(),
+                        ),
+                      );
+                    },
+                    child: const Text('Show More'),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
 
               if (_history.isEmpty)
-                const Center(
+                Center(
                   child: Padding(
-                    padding: EdgeInsets.all(32.0),
-                    child: Text('No transactions yet'),
+                    padding: const EdgeInsets.all(32.0),
+                    child: Text(
+                      'No transactions yet',
+                      style: TextStyle(
+                        color: isDark
+                            ? Colors.grey.shade400
+                            : Colors.grey.shade600,
+                      ),
+                    ),
                   ),
                 )
               else
                 ListView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _history.length,
+                  itemCount: _history.length > 10 ? 10 : _history.length,
                   itemBuilder: (context, index) {
                     final tx = _history[index];
                     final isDebit = tx['sender_upi_id'] == _user!['upi_id'];
@@ -385,89 +310,132 @@ class _MoneyScreenState extends State<MoneyScreen> {
                     }
 
                     final String displayName = isDebit
-                        ? (tx['receiver_upi_id'] as String? ?? 'Unknown')
-                        : (tx['sender_upi_id'] as String? ?? 'Unknown');
+                        ? (tx['receiver_name'] as String? ??
+                              tx['receiver_upi_id'] as String? ??
+                              'Unknown')
+                        : (tx['sender_name'] as String? ??
+                              tx['sender_upi_id'] as String? ??
+                              'Unknown');
 
-                    return Card(
-                      elevation: 0,
-                      margin: const EdgeInsets.only(bottom: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: Colors.grey.shade200),
-                      ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        leading: CircleAvatar(
-                          backgroundColor: color.withOpacity(0.1),
-                          child: Icon(
-                            isDebit ? Icons.arrow_upward : Icons.arrow_downward,
-                            color: color,
-                            size: 20,
+                    String formattedDate;
+                    try {
+                      final dt = DateTime.parse(tx['timestamp']);
+                      formattedDate = DateFormat(
+                        'yyyy-MM-dd',
+                      ).format(dt.toLocal());
+                    } catch (e) {
+                      formattedDate = tx['timestamp'];
+                    }
+
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => TransactionDetailsScreen(
+                              transaction: tx,
+                              currentUpiId: _user!['upi_id'],
+                            ),
+                          ),
+                        );
+                      },
+                      child: Card(
+                        elevation: 0,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        color: Theme.of(context).cardTheme.color,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(
+                            color: isDark
+                                ? Colors.grey.shade800
+                                : Colors.grey.shade200,
                           ),
                         ),
-                        title: Text(
-                          displayName,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              tx['timestamp'],
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 12,
-                              ),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          leading: CircleAvatar(
+                            backgroundColor: color.withValues(alpha: 0.1),
+                            child: Icon(
+                              isDebit
+                                  ? Icons.arrow_upward
+                                  : Icons.arrow_downward,
+                              color: color,
+                              size: 20,
                             ),
-                            if (tx['risk_score'] != 'SAFE')
-                              Container(
-                                margin: const EdgeInsets.only(top: 4),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
+                          ),
+                          title: Text(
+                            displayName,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(
+                                context,
+                              ).textTheme.bodyLarge?.color,
+                            ),
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                formattedDate,
+                                style: TextStyle(
+                                  color: isDark
+                                      ? Colors.grey.shade400
+                                      : Colors.grey.shade600,
+                                  fontSize: 12,
                                 ),
-                                decoration: BoxDecoration(
-                                  color: tx['risk_score'] == 'HIGH'
-                                      ? Colors.red.shade100
-                                      : Colors.orange.shade100,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  'Risk: ${tx['risk_score']}',
-                                  style: TextStyle(
-                                    fontSize: 10,
+                              ),
+                              if (tx['risk_score'] != 'SAFE')
+                                Container(
+                                  margin: const EdgeInsets.only(top: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
                                     color: tx['risk_score'] == 'HIGH'
-                                        ? Colors.red
-                                        : Colors.orange.shade800,
-                                    fontWeight: FontWeight.bold,
+                                        ? Colors.red.shade100
+                                        : Colors.orange.shade100,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    'Risk: ${tx['risk_score']}',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: tx['risk_score'] == 'HIGH'
+                                          ? Colors.red
+                                          : Colors.orange.shade800,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
+                            ],
+                          ),
+                          trailing: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                '${isDebit ? '-' : '+'} ₹${tx['amount']}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  color: color,
+                                ),
                               ),
-                          ],
-                        ),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '${isDebit ? '-' : '+'} ₹${tx['amount']}',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                color: color,
+                              Text(
+                                tx['status'],
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: isDark
+                                      ? Colors.grey.shade400
+                                      : Colors.grey.shade600,
+                                ),
                               ),
-                            ),
-                            Text(
-                              tx['status'],
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     );

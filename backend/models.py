@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Boolean, Index
 from sqlalchemy.orm import relationship
 from database import Base
 import datetime
@@ -14,6 +14,7 @@ class User(Base):
     upi_id = Column(String, unique=True, index=True)  # e.g., user@mockbank
     mcc = Column(String, nullable=True)  # Merchant Category Code (e.g., 5411)
     device_id = Column(String, nullable=True)
+    last_active_at = Column(DateTime, nullable=True)  # Track when this device was last active
     balance = Column(Float, default=0.0)
 
     # Profiles for Rule-Based Fraud Detection
@@ -31,6 +32,12 @@ class Transaction(Base):
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
     status = Column(String)  # SUCCESS, BLOCKED, FAILED
     risk_score = Column(String)  # SAFE, WARN, HIGH
+    
+    # Indexes for faster queries on transaction history
+    __table_args__ = (
+        Index('ix_transactions_sender_id', 'sender_id'),
+        Index('ix_transactions_receiver_id', 'receiver_id'),
+    )
     
     sender = relationship("User", foreign_keys=[sender_id])
     receiver = relationship("User", foreign_keys=[receiver_id])
@@ -59,3 +66,15 @@ class ReceiverProfile(Base):
     unique_senders_count = Column(Integer, default=0)
     
     user = relationship("User", back_populates="receiver_profile")
+
+class Message(Base):
+    __tablename__ = "messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sender_id = Column(Integer, ForeignKey("users.id"))
+    receiver_id = Column(Integer, ForeignKey("users.id"))
+    content = Column(String)
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    sender = relationship("User", foreign_keys=[sender_id])
+    receiver = relationship("User", foreign_keys=[receiver_id])

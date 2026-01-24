@@ -1,13 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'api_service.dart';
-import 'package:qr_flutter/qr_flutter.dart';
+
 import 'mcc_helper.dart';
-import 'contacts_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final void Function(int)? onSwitchTab;
+
+  const HomeScreen({super.key, this.onSwitchTab});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -17,10 +18,14 @@ class _HomeScreenState extends State<HomeScreen> {
   final _api = ApiService();
   Map<String, dynamic>? _user;
   List<dynamic> _history = [];
+  List<dynamic> _recentPeople = [];
+  List<dynamic> _recentMerchants = [];
   bool _isLoading = true;
+  bool _isPeopleExpanded = false;
+  bool _isMerchantsExpanded = false;
 
   // New fields for UPI payment
-  final _upiController = TextEditingController();
+
   Timer? _timer;
 
   StreamSubscription? _authSubscription;
@@ -50,7 +55,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _timer?.cancel();
     _authSubscription?.cancel();
-    _upiController.dispose();
+
     super.dispose();
   }
 
@@ -58,8 +63,14 @@ class _HomeScreenState extends State<HomeScreen> {
     if (showLoading) {
       setState(() => _isLoading = true);
     }
-    final user = await _api.getMe();
-    final history = await _api.getHistory();
+
+    // Fetch all data in parallel for faster loading
+    final data = await _api.getHomeScreenData();
+    final user = data['user'];
+    final history = data['history'];
+    final people = data['people'];
+    final merchants = data['merchants'];
+
     setState(() {
       if (user != null) {
         _user = user;
@@ -67,566 +78,574 @@ class _HomeScreenState extends State<HomeScreen> {
       if (history != null) {
         _history = history;
       }
+      if (people != null) {
+        _recentPeople = people;
+      }
+      if (merchants != null) {
+        _recentMerchants = merchants;
+      }
       _isLoading = false;
     });
-  }
-
-  void _showMyQr() {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Center(child: Text("My QR Code")),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_user != null)
-              SizedBox(
-                height: 200,
-                width: 200,
-                child: QrImageView(
-                  data:
-                      'upi://pay?pa=${_user!['upi_id']}&pn=${Uri.encodeComponent(_user!['username'])}&mc=${_user!['mcc'] ?? ""}',
-                ),
-              ),
-            const SizedBox(height: 16),
-            Text(
-              _user?['upi_id'] ?? '',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text("Close"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _sendPayment() {
-    final upiId = _upiController.text.trim();
-
-    if (upiId.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Please enter a UPI ID')));
-      }
-      return;
-    }
-
-    // Check for self-transfer
-    final myUpi = _user?['upi_id'];
-    if (myUpi != null && myUpi == upiId) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cannot send money to self')),
-        );
-      }
-      return;
-    }
-
-    // Navigate to PayScreen with pre-filled UPI
-    Navigator.pushNamed(context, '/pay', arguments: {'upi': upiId});
-    _upiController.clear();
   }
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: const Center(child: CircularProgressIndicator()),
+      );
     }
     if (_user == null) {
-      return const Scaffold(body: Center(child: Text("Failed to load user")));
+      return Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: const Center(child: Text("Failed to load user")),
+      );
     }
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: RefreshIndicator(
-        onRefresh: () => _loadData(showLoading: false),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 10),
-                // 1. Large Scan QR Button (Top)
-                GestureDetector(
-                  onTap: () async {
-                    final scanResult = await Navigator.pushNamed(
-                      context,
-                      '/scan',
-                    );
-                    if (scanResult != null) {
-                      String scannedUpi = "";
-                      String? scannedMcc;
-                      String? scannedName;
-
-                      if (scanResult is Map) {
-                        scannedUpi = scanResult['upi'];
-                        scannedMcc = scanResult['mcc'];
-                        scannedName = scanResult['name'];
-                      } else if (scanResult is String) {
-                        scannedUpi = scanResult;
-                      }
-
-                      final myUpi = _user?['upi_id'];
-                      if (myUpi != null && myUpi == scannedUpi) {
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Cannot send money to self'),
-                          ),
-                        );
-                        return;
-                      }
-
-                      if (!mounted) return;
-                      String? category;
-                      if (scannedMcc != null && scannedMcc.isNotEmpty) {
-                        category = MccHelper.getDomain(scannedMcc);
-                      }
-
-                      if (!mounted) return;
-                      final nav = Navigator.of(context);
-
-                      final payResult = await nav.pushNamed(
-                        '/pay',
-                        arguments: {
-                          'upi': scannedUpi,
-                          'name': scannedName,
-                          'category': category,
-                        },
-                      );
-
-                      if (payResult != null &&
-                          payResult is Map<String, dynamic>) {
-                        setState(() {
-                          _history.insert(0, payResult);
-                          if (_user != null) {
-                            _user!['balance'] -= payResult['amount'];
-                          }
-                        });
-                      }
-                    }
-                  },
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 40),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          const Color(0xFFE3F2FD),
-                          const Color(0xFFF3E5F5),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: Colors.blue.withOpacity(0.1)),
-                    ),
-                    child: Column(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.blue.withOpacity(0.1),
-                                blurRadius: 10,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.qr_code_scanner,
-                            size: 48,
-                            color: Color(0xFF00B9F1),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Scan any QR Code',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF00B9F1),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Pay to any UPI app',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              // 1. Top Bar (Profile only)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
                 ),
-
-                const SizedBox(height: 32),
-
-                // 2. Search Bar Section
-                Text(
-                  'Or pay to contact',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey.shade700,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(30),
-                    border: Border.all(color: Colors.grey.shade300),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.grey.shade100,
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 4,
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.search, color: Colors.grey),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(
-                          controller: _upiController,
-                          decoration: InputDecoration(
-                            hintText: 'Pay by name or phone number',
-                            hintStyle: TextStyle(color: Colors.grey.shade500),
-                            border: InputBorder.none,
-                          ),
-                          onSubmitted: (_) => _sendPayment(),
-                        ),
-                      ),
-                      CircleAvatar(
-                        radius: 14,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        widget.onSwitchTab?.call(2);
+                      },
+                      child: CircleAvatar(
+                        radius: 20,
                         backgroundColor: const Color(0xFF00B9F1),
                         child: Text(
                           _user!['username'][0].toUpperCase(),
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
-                            fontSize: 12,
+                            fontSize: 18,
                           ),
                         ),
                       ),
-                    ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // 2. Banner Image
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Container(
+                  width: double.infinity,
+                  height: 180,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    image: const DecorationImage(
+                      image: AssetImage('assets/home_banner_2.png'),
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
+              ),
 
-                const SizedBox(height: 32),
+              const SizedBox(height: 32),
 
-                // 3. Quick Actions
-                Text(
-                  'Quick Actions',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey.shade800,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(
+              // 3. Functional Icons Section
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _buildQuickActionItem(
-                      icon: Icons.phone_android,
-                      label: 'Recharge',
-                      color: Colors.blue.shade600,
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Coming soon!')),
-                        );
-                      },
+                    // Scan QR
+                    _buildFunctionIcon(
+                      icon: Icons.qr_code_scanner,
+                      label: "Scan QR",
+                      onTap: _handleScan,
                     ),
-                    _buildQuickActionItem(
-                      icon: Icons.lightbulb_outline,
-                      label: 'Electricity',
-                      color: Colors.orange.shade600,
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Coming soon!')),
-                        );
-                      },
+
+                    // Pay Anyone
+                    _buildFunctionIcon(
+                      icon: Icons.send,
+                      label: "Pay anyone",
+                      onTap: _handlePayAnyone,
                     ),
-                    _buildQuickActionItem(
-                      icon: Icons.tv,
-                      label: 'DTH',
-                      color: Colors.purple.shade600,
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Coming soon!')),
-                        );
-                      },
-                    ),
-                    _buildQuickActionItem(
-                      icon: Icons.receipt_long,
-                      label: 'Bills',
-                      color: Colors.green.shade600,
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Coming soon!')),
-                        );
-                      },
+
+                    // View Balance
+                    _buildFunctionIcon(
+                      icon: Icons.account_balance_wallet,
+                      label: "View balance",
+                      onTap: _handleViewBalance,
                     ),
                   ],
                 ),
+              ),
 
-                const SizedBox(height: 32),
+              const SizedBox(height: 24),
 
-                // 4. People Section
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'People',
+              // 4. People Section
+              if (_recentPeople.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      "People",
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: Colors.grey.shade800,
+                        color: textColor,
                       ),
                     ),
-                    TextButton(
-                      onPressed: () async {
-                        final result = await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const ContactsScreen(),
-                          ),
-                        );
-                        if (result != null && result is Map) {
-                          final upi = result['upi'];
-                          final name = result['name'];
-                          if (!mounted) return;
-                          Navigator.pushNamed(
-                            context,
-                            '/pay',
-                            arguments: {'upi': upi, 'name': name},
-                          );
-                        }
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: _buildPeopleGrid(),
+                ),
+                const SizedBox(height: 24),
+              ],
+
+              // 5. Businesses Section
+              if (_recentMerchants.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      "Businesses",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: _buildMerchantGrid(),
+                ),
+                const SizedBox(height: 24),
+              ],
+
+              // 6. Extra Options Section (Transaction History & Settings)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  children: [
+                    _buildListItem(
+                      icon: Icons.history,
+                      text: "See transaction history",
+                      onTap: () {
+                        widget.onSwitchTab?.call(1);
                       },
-                      child: const Text('View all'),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildListItem(
+                      icon: Icons.settings_outlined,
+                      text: "View settings",
+                      onTap: () {
+                        Navigator.pushNamed(context, '/settings');
+                      },
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  height: 100,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: [
-                      // Contact selector
-                      _buildPersonAvatar(
-                        icon: Icons.person_add,
-                        label: 'Select\nContact',
-                        color: Colors.grey.shade300,
-                        onTap: () async {
-                          final result = await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const ContactsScreen(),
-                            ),
-                          );
-                          if (result != null && result is Map) {
-                            final upi = result['upi'];
-                            final name = result['name'];
-                            if (!mounted) return;
-                            Navigator.pushNamed(
-                              context,
-                              '/pay',
-                              arguments: {'upi': upi, 'name': name},
-                            );
-                          }
-                        },
-                      ),
-                      // Recent contacts from history
-                      ..._getRecentContacts().map(
-                        (contact) => _buildPersonAvatar(
-                          label: contact['name'] ?? 'Unknown',
-                          color: _getColorFromName(
-                            contact['name'] ?? 'Unknown',
-                          ),
-                          onTap: () {
-                            Navigator.pushNamed(
-                              context,
-                              '/pay',
-                              arguments: {
-                                'upi': contact['upi'],
-                                'name': contact['name'],
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // See Your Transactions Button
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      // Navigate to money tab via logic or just show message
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Go to Money tab for transactions'),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.history),
-                    label: const Text('See Your Transactions'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF00B9F1), // Blue
-                      side: const BorderSide(color: Color(0xFF00B9F1)),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 80), // Bottom padding
-              ],
-            ),
+              ),
+              const SizedBox(height: 32),
+            ],
           ),
         ),
       ),
     );
   }
 
-  // Local helper for quick actions circles
-  Widget _buildQuickActionItem({
+  Widget _buildFunctionIcon({
     required IconData icon,
     required String label,
-    required Color color,
     required VoidCallback onTap,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             width: 60,
             height: 60,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: isDark
+                  ? const Color(0xFF5F259F).withValues(alpha: 0.2)
+                  : const Color(0xFF5F259F).withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: color, size: 28),
+            child: Icon(
+              icon,
+              color: isDark ? const Color(0xFF9E65E6) : const Color(0xFF5F259F),
+              size: 28,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             label,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.white70 : Colors.black87,
+            ),
           ),
         ],
       ),
     );
   }
 
-  // Helper widget builders
+  Future<void> _handleScan() async {
+    final scanResult = await Navigator.pushNamed(
+      context,
+      '/scan',
+      arguments: _user,
+    );
+    if (scanResult != null) {
+      String scannedUpi = "";
+      String? scannedMcc;
+      String? scannedName;
 
-  Widget _buildPersonAvatar({
-    IconData? icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
+      if (scanResult is Map) {
+        scannedUpi = scanResult['upi'];
+        scannedMcc = scanResult['mcc'];
+        scannedName = scanResult['name'];
+      } else if (scanResult is String) {
+        scannedUpi = scanResult;
+      }
+
+      final myUpi = _user?['upi_id'];
+      if (myUpi != null && myUpi == scannedUpi) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cannot send money to self')),
+        );
+        return;
+      }
+
+      if (!mounted) return;
+      String? category;
+      if (scannedMcc != null && scannedMcc.isNotEmpty) {
+        category = MccHelper.getDomain(scannedMcc);
+      }
+
+      final nav = Navigator.of(context);
+      final payResult = await nav.pushNamed(
+        '/pay',
+        arguments: {
+          'upi': scannedUpi,
+          'name': scannedName,
+          'category': category,
+        },
+      );
+
+      if (payResult != null && payResult is Map<String, dynamic>) {
+        setState(() {
+          _history.insert(0, payResult);
+          if (_user != null) {
+            _user!['balance'] -= payResult['amount'];
+          }
+        });
+      }
+    }
+  }
+
+  void _handlePayAnyone() {
+    Navigator.pushNamed(context, '/pay');
+  }
+
+  void _handleViewBalance() {
+    widget.onSwitchTab?.call(1);
+  }
+
+  Widget _buildPeopleGrid() {
+    final totalPeople = _recentPeople.length;
+
+    int countToShow;
+    if (!_isPeopleExpanded) {
+      if (totalPeople > 8) {
+        countToShow = 7; // 7 people + 1 arrow
+      } else {
+        countToShow = totalPeople;
+      }
+    } else {
+      // Expanded
+      // Limit to 15 people + 1 arrow = 16 slots.
+      countToShow = totalPeople > 15 ? 15 : totalPeople;
+    }
+
+    List<Widget> items = [];
+    for (int i = 0; i < countToShow; i++) {
+      items.add(_buildPersonItem(_recentPeople[i]));
+    }
+
+    if (totalPeople > 8) {
+      items.add(_buildArrowItem(isDown: !_isPeopleExpanded));
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // GridView inside LayoutBuilder to respect parent width
+        return GridView.count(
+          crossAxisCount: 4,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          childAspectRatio: 0.75,
+          mainAxisSpacing: 16,
+          crossAxisSpacing: 12,
+          children: items,
+        );
+      },
+    );
+  }
+
+  Widget _buildPersonItem(
+    Map<String, dynamic> person, {
+    bool isMerchant = false,
   }) {
+    String name = person['username'] ?? "User";
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Clean up "User123..." names to just show "123..." or a formatted name
+    if (name.startsWith('User') && name.length > 4) {
+      if (RegExp(r'^User\d+$').hasMatch(name)) {
+        name = name.substring(4); // Show just the number
+      }
+    }
+
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : "?";
+
+    // Generate a consistent color based on the name
+    final List<Color> avatarColors = [
+      const Color(0xFFE57373), // Red
+      const Color(0xFFBA68C8), // Purple
+      const Color(0xFF7986CB), // Indigo
+      const Color(0xFF4FC3F7), // Light Blue
+      const Color(0xFF4DB6AC), // Teal
+      const Color(0xFF81C784), // Green
+      const Color(0xFFFFB74D), // Orange
+      const Color(0xFFA1887F), // Brown
+      const Color(0xFF90A4AE), // Blue Grey
+    ];
+    final color = avatarColors[name.hashCode.abs() % avatarColors.length];
+
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 80,
-        margin: const EdgeInsets.only(right: 12),
-        child: Column(
-          children: [
-            CircleAvatar(
-              radius: 30,
-              backgroundColor: color,
-              child: icon != null
-                  ? Icon(icon, color: Colors.white)
-                  : Text(
-                      label.isNotEmpty ? label[0].toUpperCase() : '?',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+      onTap: () {
+        final upi = person['upi_id'];
+        final mobile = person['mobile_number'];
+        Navigator.pushNamed(
+          context,
+          '/conversation',
+          arguments: {
+            'upi': upi,
+            'name': name,
+            'mobile': mobile,
+            'isMerchant': isMerchant,
+          },
+        );
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircleAvatar(
+            radius: 26,
+            backgroundColor: color,
+            child: Text(
+              initial,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+              ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              maxLines: 2,
-              textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: isDark ? Colors.white70 : Colors.black87,
             ),
-          ],
-        ),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }
 
-  List<Map<String, String>> _getRecentContacts() {
-    // Get unique contacts from history
-    final Set<String> seenUpi = {};
-    final List<Map<String, String>> contacts = [];
-
-    for (var tx in _history) {
-      final myUpi = _user?['upi_id'];
-      final bool isDebit = tx['sender_upi_id'] == myUpi;
-      final String otherUpi = isDebit
-          ? tx['receiver_upi_id']
-          : tx['sender_upi_id'];
-
-      if (!seenUpi.contains(otherUpi) && contacts.length < 10) {
-        seenUpi.add(otherUpi);
-        contacts.add({
-          'upi': otherUpi,
-          'name': otherUpi.split('@')[0], // Extract name from UPI
+  Widget _buildArrowItem({required bool isDown}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _isPeopleExpanded = !_isPeopleExpanded;
         });
-      }
-    }
-
-    return contacts;
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: isDark ? Colors.grey[800] : Colors.grey[200],
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isDown ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
+              color: isDark ? Colors.grey[400] : Colors.grey[600],
+              size: 30,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            isDown ? "More" : "Less",
+            style: TextStyle(
+              fontSize: 11,
+              color: isDark ? Colors.white70 : Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  Color _getColorFromName(String name) {
-    // Generate a color based on the name's hash code
-    final hash = name.hashCode;
-    final colors = [
-      const Color(0xFF5F259F),
-      const Color(0xFFE91E63),
-      const Color(0xFF00BCD4),
-      const Color(0xFF4CAF50),
-      const Color(0xFFFF9800),
-      const Color(0xFF9C27B0),
-      const Color(0xFF3F51B5),
-      const Color(0xFF009688),
-    ];
-    return colors[hash % colors.length];
+  Widget _buildMerchantGrid() {
+    final totalMerchants = _recentMerchants.length;
+
+    int countToShow;
+    if (!_isMerchantsExpanded) {
+      if (totalMerchants > 8) {
+        countToShow = 7; // 7 merchants + 1 arrow
+      } else {
+        countToShow = totalMerchants;
+      }
+    } else {
+      // Expanded
+      countToShow = totalMerchants > 15 ? 15 : totalMerchants;
+    }
+
+    List<Widget> items = [];
+    for (int i = 0; i < countToShow; i++) {
+      items.add(_buildPersonItem(_recentMerchants[i], isMerchant: true));
+    }
+
+    if (totalMerchants > 8) {
+      items.add(_buildMerchantArrowItem(isDown: !_isMerchantsExpanded));
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return GridView.count(
+          crossAxisCount: 4,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          childAspectRatio: 0.75,
+          mainAxisSpacing: 16,
+          crossAxisSpacing: 12,
+          children: items,
+        );
+      },
+    );
+  }
+
+  Widget _buildMerchantArrowItem({required bool isDown}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _isMerchantsExpanded = !_isMerchantsExpanded;
+        });
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: isDark ? Colors.grey[800] : Colors.grey[200],
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isDown ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
+              color: isDark ? Colors.grey[400] : Colors.grey[600],
+              size: 30,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            isDown ? "More" : "Less",
+            style: TextStyle(
+              fontSize: 11,
+              color: isDark ? Colors.white70 : Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildListItem({
+    required IconData icon,
+    required String text,
+    required VoidCallback onTap,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTap: onTap,
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isDark
+                  ? Colors.grey[800]
+                  : Colors.grey.shade100, // Light background for icon
+            ),
+            child: Icon(
+              icon,
+              color: isDark ? const Color(0xFF9E65E6) : const Color(0xFF5F259F),
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+            ),
+          ),
+          Icon(
+            Icons.arrow_forward_ios,
+            size: 16,
+            color: isDark ? Colors.grey[400] : Colors.grey,
+          ),
+        ],
+      ),
+    );
   }
 }

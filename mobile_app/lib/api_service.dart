@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:uuid/uuid.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
 class ApiService {
   // Default URLs for different environments
@@ -29,6 +31,7 @@ class ApiService {
 
   void _handleUnauthorized() {
     _storage.delete(key: 'token');
+    removeSavedMobile(); // Ensure we clear the saved session to avoid PIN loop
     _authStateController.add(null);
   }
 
@@ -211,6 +214,136 @@ class ApiService {
     return null;
   }
 
+  Future<List<dynamic>?> getRecentPeople() async {
+    try {
+      final url = await baseUrl;
+      final token = await _storage.read(key: 'token');
+
+      final response = await _retryRequest(
+        () => _client
+            .get(
+              Uri.parse('$url/transactions/recent-people?limit=16'),
+              headers: {
+                'Authorization': 'Bearer $token',
+                'ngrok-skip-browser-warning': 'true',
+              },
+            )
+            .timeout(_timeout),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else if (response.statusCode == 401) {
+        _handleUnauthorized();
+      }
+    } catch (e) {
+      if (kDebugMode) print("Recent People Error: $e");
+    }
+    return null;
+  }
+
+  Future<List<dynamic>?> getRecentMerchants() async {
+    try {
+      final url = await baseUrl;
+      final token = await _storage.read(key: 'token');
+
+      final response = await _retryRequest(
+        () => _client
+            .get(
+              Uri.parse('$url/transactions/recent-merchants?limit=16'),
+              headers: {
+                'Authorization': 'Bearer $token',
+                'ngrok-skip-browser-warning': 'true',
+              },
+            )
+            .timeout(_timeout),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else if (response.statusCode == 401) {
+        _handleUnauthorized();
+      }
+    } catch (e) {
+      if (kDebugMode) print("Recent Merchants Error: $e");
+    }
+    return null;
+  }
+
+  /// Fetches all home screen data in parallel for faster loading
+  Future<Map<String, dynamic>> getHomeScreenData() async {
+    // Run all API calls in parallel instead of sequential
+    final results = await Future.wait([
+      getMe(),
+      getHistory(),
+      getRecentPeople(),
+      getRecentMerchants(),
+    ]);
+    return {
+      'user': results[0],
+      'history': results[1],
+      'people': results[2],
+      'merchants': results[3],
+    };
+  }
+
+  Future<List<dynamic>?> getConversation(String upiId) async {
+    try {
+      final url = await baseUrl;
+      final token = await _storage.read(key: 'token');
+
+      final response = await _retryRequest(
+        () => _client
+            .get(
+              Uri.parse(
+                '$url/transactions/conversation/${Uri.encodeComponent(upiId)}',
+              ),
+              headers: {
+                'Authorization': 'Bearer $token',
+                'ngrok-skip-browser-warning': 'true',
+              },
+            )
+            .timeout(_timeout),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else if (response.statusCode == 401) {
+        _handleUnauthorized();
+      }
+    } catch (e) {
+      if (kDebugMode) print("Conversation Error: $e");
+    }
+    return null;
+  }
+
+  Future<bool> sendMessage(String targetUpi, String content) async {
+    try {
+      final url = await baseUrl;
+      final token = await _storage.read(key: 'token');
+
+      final response = await _client
+          .post(
+            Uri.parse('$url/messages'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'ngrok-skip-browser-warning': 'true',
+            },
+            body: json.encode({
+              'receiver_upi_id': targetUpi,
+              'content': content,
+            }),
+          )
+          .timeout(_timeout);
+
+      return response.statusCode == 200;
+    } catch (e) {
+      if (kDebugMode) print("Send Message Error: $e");
+      return false;
+    }
+  }
+
   Future<void> logout() async {
     try {
       final url = await baseUrl;
@@ -296,26 +429,58 @@ class ApiService {
     await _storage.write(key: 'backend_url', value: url);
   }
 
+  /// Gets a persistent device ID that survives app reinstalls.
+  /// Uses Android's ANDROID_ID or iOS's identifierForVendor.
   Future<String> getDeviceId() async {
-    var deviceId = await _storage.read(key: 'device_id');
-    if (deviceId == null) {
-      deviceId = const Uuid().v4();
-      await _storage.write(key: 'device_id', value: deviceId);
+    final prefs = await SharedPreferences.getInstance();
+
+    // Check if we already have a cached device ID
+    var deviceId = prefs.getString('device_id');
+    if (deviceId != null && deviceId.isNotEmpty) {
+      return deviceId;
     }
+
+    // Get hardware-level ID based on platform
+    final deviceInfo = DeviceInfoPlugin();
+
+    try {
+      if (Platform.isAndroid) {
+        final androidInfo = await deviceInfo.androidInfo;
+        // ANDROID_ID is unique per app signing key and survives reinstalls
+        deviceId = androidInfo.id; // This is the Android ID
+      } else if (Platform.isIOS) {
+        final iosInfo = await deviceInfo.iosInfo;
+        // identifierForVendor is unique per vendor and survives reinstalls
+        deviceId = iosInfo.identifierForVendor;
+      }
+    } catch (e) {
+      if (kDebugMode) print('Error getting device ID: $e');
+    }
+
+    // Fallback: generate a random ID if hardware ID unavailable
+    if (deviceId == null || deviceId.isEmpty) {
+      deviceId = DateTime.now().millisecondsSinceEpoch.toString();
+    }
+
+    // Cache the device ID
+    await prefs.setString('device_id', deviceId);
     return deviceId;
   }
 
   // --- Mobile Number Persistence ---
   Future<String?> getSavedMobile() async {
-    return await _storage.read(key: 'saved_mobile');
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('saved_mobile');
   }
 
   Future<void> saveMobile(String mobile) async {
-    await _storage.write(key: 'saved_mobile', value: mobile);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('saved_mobile', mobile);
   }
 
   Future<void> removeSavedMobile() async {
-    await _storage.delete(key: 'saved_mobile');
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('saved_mobile');
   }
 
   // --- Auth Flow Methods ---
