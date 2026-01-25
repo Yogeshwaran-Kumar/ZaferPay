@@ -14,11 +14,54 @@ class _AmountScreenState extends State<AmountScreen> {
   String? _receiverName;
   String? _category; // Domain/Category for merchants
   double? _balance; // User's current balance
+  String? _currentUserUpi; // Current user's UPI ID
+  bool _isSelfTransfer = false;
 
   final ApiService _api = ApiService();
   final _amountController = TextEditingController();
   bool _isLoadingName = true;
   bool _userNotFound = false;
+  bool _isAmountTooHigh = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountController.addListener(_validateAmount);
+  }
+
+  @override
+  void dispose() {
+    _amountController.removeListener(_validateAmount);
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  void _validateAmount() {
+    final amountText = _amountController.text;
+    if (amountText.isEmpty) {
+      if (_isAmountTooHigh) {
+        setState(() {
+          _isAmountTooHigh = false;
+        });
+      }
+      return;
+    }
+
+    final amount = double.tryParse(amountText);
+    if (amount != null && amount > 500000) {
+      if (!_isAmountTooHigh) {
+        setState(() {
+          _isAmountTooHigh = true;
+        });
+      }
+    } else {
+      if (_isAmountTooHigh) {
+        setState(() {
+          _isAmountTooHigh = false;
+        });
+      }
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -36,15 +79,17 @@ class _AmountScreenState extends State<AmountScreen> {
   }
 
   Future<void> _resolveReceiverAndName() async {
-    // 1. Fetch current user balance info concurrently
-    _api.getMe().then((userData) {
-      if (mounted && userData != null && userData['balance'] != null) {
-        setState(() {
-          _balance = (userData['balance'] as num).toDouble();
-        });
-        debugPrint('DEBUG AMOUNT: Fetched balance = $_balance');
-      }
-    });
+    // 1. Fetch current user info (await it first to ensure we have it for validation)
+    final userData = await _api.getMe();
+    if (mounted && userData != null && userData['balance'] != null) {
+      setState(() {
+        _balance = (userData['balance'] as num).toDouble();
+        _currentUserUpi = userData['upi_id'];
+      });
+      debugPrint(
+        'DEBUG AMOUNT: Fetched balance = $_balance, currentUserUpi = $_currentUserUpi',
+      );
+    }
 
     // Check if _receiverUpi looks like a phone number (mostly digits)
     final digitsOnly = _receiverUpi.replaceAll(RegExp(r'[^\d]'), '');
@@ -115,12 +160,22 @@ class _AmountScreenState extends State<AmountScreen> {
           }
         }
         _isLoadingName = false;
+
+        // Check for self-transfer
+        if (!_userNotFound &&
+            _currentUserUpi != null &&
+            _receiverUpi == _currentUserUpi) {
+          debugPrint('DEBUG AMOUNT: Self transfer detected');
+          _isSelfTransfer = true;
+        } else {
+          _isSelfTransfer = false;
+        }
       });
     }
   }
 
   Future<void> _onPayPressed() async {
-    if (_userNotFound) return;
+    if (_userNotFound || _isSelfTransfer || _isAmountTooHigh) return;
 
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) {
@@ -465,15 +520,30 @@ class _AmountScreenState extends State<AmountScreen> {
               ),
             ),
 
+          // Show error if self-transfer
+          if (_isSelfTransfer)
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: Center(
+                child: Text(
+                  "can't able to self transfer",
+                  style: TextStyle(
+                    color: Colors.red.shade700,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+
           const SizedBox(height: 40),
           TextField(
             controller: _amountController,
             keyboardType: TextInputType.number,
-            readOnly: _userNotFound, // Disable input
+            readOnly: _userNotFound || _isSelfTransfer, // Disable input
             style: TextStyle(
               fontSize: 40,
               fontWeight: FontWeight.bold,
-              color: _userNotFound
+              color: (_userNotFound || _isSelfTransfer)
                   ? Colors.grey
                   : (isDark ? Colors.white : Colors.black),
             ),
@@ -484,17 +554,33 @@ class _AmountScreenState extends State<AmountScreen> {
               border: InputBorder.none,
             ),
           ),
+          if (_isAmountTooHigh)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Center(
+                child: Text(
+                  "Amount can't be more than 500000",
+                  style: TextStyle(
+                    color: Colors.red.shade700,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
           const SizedBox(height: 40),
           ElevatedButton.icon(
-            onPressed: _userNotFound ? null : _onPayPressed, // Disable button
+            onPressed: (_userNotFound || _isSelfTransfer || _isAmountTooHigh)
+                ? null
+                : _onPayPressed, // Disable button
             icon: const Icon(Icons.send),
             label: const Text("Pay Now"),
             style: ElevatedButton.styleFrom(
               minimumSize: const Size(double.infinity, 56),
-              backgroundColor: _userNotFound
+              backgroundColor:
+                  (_userNotFound || _isSelfTransfer || _isAmountTooHigh)
                   ? Colors.grey
                   : (isDark ? Colors.white : Colors.black),
-              foregroundColor: _userNotFound
+              foregroundColor: (_userNotFound || _isSelfTransfer)
                   ? Colors.white
                   : (isDark ? Colors.black : Colors.white),
               shape: RoundedRectangleBorder(

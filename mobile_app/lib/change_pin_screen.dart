@@ -12,7 +12,11 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
   final _api = ApiService();
   String _enteredPin = '';
   String _firstPin = '';
-  int _step = 0; // 0: Enter New, 1: Confirm
+  String _mobileNumber = '';
+  // 0: Enter Current PIN
+  // 1: Enter New PIN
+  // 2: Confirm New PIN
+  int _step = 0;
   bool _isLoading = false;
   String _upiId = '';
 
@@ -27,6 +31,7 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
     if (user != null && mounted) {
       setState(() {
         _upiId = user['upi_id'] ?? '';
+        _mobileNumber = user['mobile_number'] ?? '';
       });
     }
   }
@@ -52,31 +57,83 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
 
   Future<void> _handlePinComplete() async {
     if (_step == 0) {
-      // Finished entering NEW PIN
+      // Step 0: Verify Current PIN
+      await _verifyCurrentPin();
+    } else if (_step == 1) {
+      // Step 1: Finished entering NEW PIN
       setState(() {
         _firstPin = _enteredPin;
         _enteredPin = '';
-        _step = 1; // Move to Confirm
+        _step = 2; // Move to Confirm
       });
-    } else {
-      // Finished Confirmation
+    } else if (_step == 2) {
+      // Step 2: Finished Confirmation
       if (_enteredPin == _firstPin) {
+        // Validation: New PIN cannot be same as Old PIN is handled by backend usually,
+        // but user requirement doesn't specify.
         // Match! Call API
         await _changePinOnServer();
       } else {
         // Mismatch
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('PIN mismatch'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('PIN mismatch! Please enter new PIN again.'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        // Requirement: "asked again to enter the new pin and conform pin"
         setState(() {
           _enteredPin = '';
           _firstPin = '';
-          _step = 0; // Restart
+          _step = 1; // Restart New PIN entry
         });
       }
+    }
+  }
+
+  Future<void> _verifyCurrentPin() async {
+    if (_mobileNumber.isEmpty) {
+      // Should catch this edge case
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error: User details not loaded')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    // We use the login endpoint to verify the PIN
+    final error = await _api.login(
+      _mobileNumber,
+      _enteredPin,
+      forceLogin: false,
+    );
+
+    setState(() => _isLoading = false);
+
+    if (error == null) {
+      // Success - PIN is correct
+      setState(() {
+        _enteredPin = '';
+        _step = 1; // Move to New PIN
+      });
+    } else {
+      // Failed
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Incorrect Current PIN'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      setState(() {
+        _enteredPin = '';
+        // Stay on Step 0
+      });
     }
   }
 
@@ -101,18 +158,32 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
             backgroundColor: Colors.red,
           ),
         );
+        // On server failure, maybe just reset current step?
+        // Or restart whole flow? Let's restart New PIN flow to be safe.
         setState(() {
           _enteredPin = '';
           _firstPin = '';
-          _step = 0;
+          _step = 1;
         });
       }
     }
   }
 
+  String get _title {
+    switch (_step) {
+      case 0:
+        return "Enter Current PIN";
+      case 1:
+        return "Enter New PIN";
+      case 2:
+        return "Confirm New PIN";
+      default:
+        return "";
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final title = _step == 0 ? "Enter New PIN" : "Confirm New PIN";
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -147,7 +218,7 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
                     ),
                     const SizedBox(height: 24),
                     Text(
-                      title,
+                      _title,
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
