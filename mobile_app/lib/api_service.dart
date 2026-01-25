@@ -503,7 +503,11 @@ class ApiService {
       if (response.statusCode == 200) {
         return json.decode(response.body);
       }
-      return {'exists': false, 'status': 'error', 'detail': 'Server error'};
+      return {
+        'exists': false,
+        'status': 'error',
+        'detail': 'Server error: ${response.statusCode} ${response.body}',
+      };
     } catch (e) {
       if (kDebugMode) print("Check Mobile Error: $e");
       return {
@@ -558,5 +562,33 @@ class ApiService {
       if (kDebugMode) print("Change PIN Error: $e");
       return false;
     }
+  }
+
+  Future<List<dynamic>?> getLoginHistory() async {
+    try {
+      final url = await baseUrl;
+      final token = await _storage.read(key: 'token');
+
+      final response = await _retryRequest(
+        () => _client
+            .get(
+              Uri.parse('$url/users/login-history'),
+              headers: {
+                'Authorization': 'Bearer $token',
+                'ngrok-skip-browser-warning': 'true',
+              },
+            )
+            .timeout(_timeout),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else if (response.statusCode == 401) {
+        _handleUnauthorized();
+      }
+    } catch (e) {
+      if (kDebugMode) print("Login History Error: $e");
+    }
+    return null;
   }
 }

@@ -10,6 +10,7 @@ import 'scan_screen.dart';
 import 'pay_screen.dart';
 import 'settings_screen.dart';
 import 'change_pin_screen.dart';
+
 // Note: PaymentPinScreen is usually pushed with arguments, so simpler to use named route or onGenerateRoute.
 // But we can add it here if we want named route navigation.
 import 'payment_pin_screen.dart';
@@ -230,6 +231,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             '/pay': (context) => const PayScreen(),
             '/amount': (context) => const AmountScreen(),
             '/settings': (context) => const SettingsScreen(),
+
             '/change-pin': (context) => const ChangePinScreen(),
             '/payment-pin': (context) {
               final args =

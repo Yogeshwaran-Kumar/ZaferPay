@@ -75,6 +75,7 @@ class _LoginScreenState extends State<LoginScreen> {
             // Check for device conflict (Logged in elsewhere)
             if (result['has_device_conflict'] == true) {
               await _api.removeSavedMobile(); // Clear local session
+              if (!mounted) return;
               setState(() {
                 // Return to Step 0 (Mobile Entry)
                 // We keep the mobile number filled for convenience, but user must "Continue" to re-login

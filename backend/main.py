@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Header
+from fastapi import FastAPI, Depends, HTTPException, status, Header, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -73,6 +73,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 
 @app.post("/token", response_model=schemas.Token)
 def login_for_access_token(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(), 
     db: Session = Depends(get_db),
     x_device_id: str = Header(None),
@@ -115,6 +116,26 @@ def login_for_access_token(
         user.device_id = x_device_id
         user.last_active_at = datetime.utcnow()  # Mark as active now
         db.commit()
+
+    # Record Login History (New Feature)
+    try:
+        if x_device_id:
+            # Check if this device logged in very recently (e.g. last 5 seconds) to avoid dupes on retries
+            # but generally we want to log every login session.
+            
+            client_ip = request.client.host if request.client else None
+            
+            login_record = models.LoginHistory(
+                user_id=user.id,
+                device_id=x_device_id,
+                login_time=datetime.utcnow(),
+                ip_address=client_ip
+            )
+            db.add(login_record)
+            db.commit()
+    except Exception as e:
+        print(f"Error saving login history: {e}")
+        # Don't block login if history save fails
     
     access_token_expires = timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = auth.create_access_token(
@@ -265,6 +286,23 @@ def set_pin(
 def logout(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     # Clear device_id and last_active_at to allow login from another device
     device_id = current_user.device_id
+    
+    # Update Login History: Mark session as ended
+    try:
+        if device_id:
+            active_history = db.query(models.LoginHistory).filter(
+                models.LoginHistory.user_id == current_user.id,
+                models.LoginHistory.device_id == device_id,
+                models.LoginHistory.is_active == True
+            ).first()
+            
+            if active_history:
+                active_history.logout_time = datetime.utcnow()
+                active_history.is_active = False
+                db.add(active_history)
+    except Exception as e:
+        print(f"Error updating logout history: {e}")
+
     current_user.device_id = None
     current_user.last_active_at = None
     db.commit()
@@ -331,6 +369,13 @@ def lookup_user_by_upi(upi_id: str, current_user: models.User = Depends(get_curr
             raise HTTPException(status_code=500, detail="Failed to register external user")
             
     return user
+
+@app.get("/users/history/login", response_model=list[schemas.LoginHistoryResponse])
+def get_login_history(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    history = db.query(models.LoginHistory).filter(
+        models.LoginHistory.user_id == current_user.id
+    ).order_by(models.LoginHistory.login_time.desc()).all()
+    return history
 
 @app.get("/users/lookup-phone/{phone_number}", response_model=schemas.UserLookupResponse)
 def lookup_user_by_phone(phone_number: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):

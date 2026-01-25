@@ -78,3 +78,20 @@ class Message(Base):
     
     sender = relationship("User", foreign_keys=[sender_id])
     receiver = relationship("User", foreign_keys=[receiver_id])
+
+class LoginHistory(Base):
+    __tablename__ = "login_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    # Updated Schema
+    device_id = Column(String)
+    login_time = Column(DateTime, default=datetime.datetime.utcnow)
+    logout_time = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True)
+    ip_address = Column(String, nullable=True)
+    
+    user = relationship("User", back_populates="login_history")
+
+# Add back_populates to User model as well
+User.login_history = relationship("LoginHistory", back_populates="user")

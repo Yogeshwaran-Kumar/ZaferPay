@@ -93,3 +93,14 @@ class PinSetRequest(BaseModel):
 
 class ChangePinRequest(BaseModel):
     new_pin: str
+
+class LoginHistoryResponse(BaseModel):
+    id: int
+    device_id: str
+    login_time: datetime
+    logout_time: Optional[datetime] = None
+    ip_address: Optional[str] = None
+    is_active: bool
+
+    class Config:
+        from_attributes = True

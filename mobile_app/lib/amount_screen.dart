@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'api_service.dart';
 import 'mcc_helper.dart';
 
@@ -539,6 +540,18 @@ class _AmountScreenState extends State<AmountScreen> {
           TextField(
             controller: _amountController,
             keyboardType: TextInputType.number,
+            inputFormatters: [
+              MaxValueTextInputFormatter(
+                500000,
+                onMaxValueExceeded: () {
+                  if (!_isAmountTooHigh) {
+                    setState(() {
+                      _isAmountTooHigh = true;
+                    });
+                  }
+                },
+              ),
+            ], // Block > 500k
             readOnly: _userNotFound || _isSelfTransfer, // Disable input
             style: TextStyle(
               fontSize: 40,
@@ -591,5 +604,34 @@ class _AmountScreenState extends State<AmountScreen> {
         ],
       ),
     );
+  }
+}
+
+class MaxValueTextInputFormatter extends TextInputFormatter {
+  final double maxValue;
+  final VoidCallback? onMaxValueExceeded;
+
+  MaxValueTextInputFormatter(this.maxValue, {this.onMaxValueExceeded});
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) {
+      return newValue;
+    }
+
+    final newDouble = double.tryParse(newValue.text);
+    if (newDouble == null) {
+      return oldValue; // Revert if not a number
+    }
+
+    if (newDouble > maxValue) {
+      onMaxValueExceeded?.call(); // Notify callback
+      return oldValue; // Revert if > maxValue
+    }
+
+    return newValue; // Allow
   }
 }
