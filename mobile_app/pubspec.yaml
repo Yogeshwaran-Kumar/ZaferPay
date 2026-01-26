@@ -37,16 +37,19 @@ dependencies:
   http: ^1.6.0
   flutter_secure_storage: ^10.0.0
   mobile_scanner: ^7.1.4
+  image_picker: ^1.0.7
   qr_flutter: ^4.1.0
   google_fonts: ^7.1.0
   uuid: ^4.2.0
   flutter_contacts: ^1.1.9+2
   permission_handler: ^11.3.1
+  google_mlkit_barcode_scanning: ^0.14.1
   intl: ^0.20.2
   share_plus: ^12.0.1
   shared_preferences: ^2.2.0
   path_provider: ^2.1.5
   device_info_plus: ^10.1.0
+  flutter_jailbreak_detection: ^1.10.0  # Root/Jailbreak detection for security
 
 dev_dependencies:
   flutter_test:

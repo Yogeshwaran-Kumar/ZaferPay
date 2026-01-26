@@ -3,19 +3,23 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'mcc_helper.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:mobile_app/main.dart';
 
 class TransactionDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> transaction;
   final String currentUpiId;
+  final String? merchantCategory;
 
   const TransactionDetailsScreen({
     super.key,
     required this.transaction,
     required this.currentUpiId,
+    this.merchantCategory,
   });
 
   @override
@@ -45,11 +49,18 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         ).create();
         await file.writeAsBytes(pngBytes);
 
-        // ignore: deprecated_member_use
-        await Share.shareXFiles([XFile(file.path)]);
+        MyApp.isSharing = true;
+        try {
+          // ignore: deprecated_member_use
+          await Share.shareXFiles([XFile(file.path)]);
+        } finally {
+          MyApp.isSharing = false;
+          MyApp.lastShareTime = DateTime.now();
+        }
       }
     } catch (e) {
       debugPrint('Error sharing: $e');
+      MyApp.isSharing = false; // Ensure reset on error before catch block ends
     }
   }
 
@@ -62,6 +73,16 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     final amount = transaction['amount'];
     final status = transaction['status'];
     final timestamp = transaction['timestamp'];
+
+    // Merchant Logic
+    final mcc = isDebit
+        ? transaction['receiver_mcc']
+        : transaction['sender_mcc'];
+    final isMerchant =
+        mcc != null && mcc != '0000' && mcc.toString().trim().isNotEmpty;
+    final merchantDomain =
+        widget.merchantCategory ??
+        (isMerchant ? MccHelper.getDomain(mcc.toString()) : null);
 
     final senderName =
         transaction['sender_name'] ?? transaction['sender_upi_id'] ?? 'Unknown';
@@ -106,16 +127,21 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                 // Avatar
                 CircleAvatar(
                   radius: 36,
-                  backgroundColor:
-                      Colors.deepOrange, // Matches the "V" orange circle style
-                  child: Text(
-                    displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 32,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+                  backgroundColor: isMerchant
+                      ? Colors.orange
+                      : Colors.deepOrange,
+                  child: isMerchant
+                      ? const Icon(Icons.store, color: Colors.white, size: 36)
+                      : Text(
+                          displayName.isNotEmpty
+                              ? displayName[0].toUpperCase()
+                              : '?',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 32,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                 ),
                 const SizedBox(height: 12),
                 // To/From Text
@@ -127,6 +153,28 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                     color: Theme.of(context).textTheme.bodyLarge?.color,
                   ),
                 ),
+                if (merchantDomain != null) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.orange.shade200),
+                    ),
+                    child: Text(
+                      merchantDomain,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.orange.shade800,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 // Amount
                 Text(

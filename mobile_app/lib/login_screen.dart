@@ -29,7 +29,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // Status text for the PIN screen title
   String get _pinTitle {
-    // if (widget.isUnlockMode) return 'Unlock App';
+    if (widget.isUnlockMode) return 'Unlock App';
     switch (_currentStep) {
       case 1:
         return 'Set New PIN';
@@ -49,85 +49,92 @@ class _LoginScreenState extends State<LoginScreen> {
     if (widget.isUnlockMode) {
       _currentStep = 3;
       _isCheckingAuth = false; // Already "checked" implicitly by mode
+
+      // 0. Sync RAM Fetch (0.0s Latency)
+      // This ensures UPI ID appears in the very first frame if app is just resuming
+      final user = _api.getUserSync();
+      if (user != null) {
+        _upiId = user['upi_id'] ?? '';
+      }
+
+      _populateCachedUserForUnlock();
     } else {
       _isCheckingAuth = true;
+      // Always check for saved login to populate UPI ID and correct state
+      _checkSavedLogin();
     }
-    // Always check for saved login to populate UPI ID and correct state
-    _checkSavedLogin();
+  }
+
+  Future<void> _populateCachedUserForUnlock() async {
+    final savedMobile = await _api.getSavedMobile();
+    if (mounted && savedMobile != null) {
+      setState(() {
+        _mobileController.text = savedMobile;
+      });
+      // Try to get cached UPI ID
+      try {
+        final user = await _api.getCachedMe();
+        if (mounted && user != null) {
+          setState(() {
+            _upiId = user['upi_id'] ?? '';
+          });
+        }
+      } catch (_) {}
+    }
   }
 
   Future<void> _checkSavedLogin() async {
     final savedMobile = await _api.getSavedMobile();
     if (savedMobile != null && savedMobile.isNotEmpty) {
       if (mounted) {
-        // We found a user, ensure we are on step 3
+        // Zero Latency: Show PIN immediately
+        // Try to get cached UPI ID for context
+        try {
+          final user = await _api.getCachedMe();
+          if (user != null) {
+            setState(() => _upiId = user['upi_id'] ?? '');
+          }
+        } catch (_) {}
+
         setState(() {
-          _isLoading = true;
-          _isCheckingAuth = false; // Auth check done, transitioning to PIN
-          _currentStep = 3;
+          _mobileController.text = savedMobile;
+          _isLoading = false; // NO Spinner!
+          _isCheckingAuth = false;
+          _currentStep = 3; // Show PIN Pad Instantly
         });
 
-        try {
-          // Fetch user details to get real UPI ID
-          final result = await _api.checkMobile(savedMobile);
-
-          if (mounted) {
-            // Check for device conflict (Logged in elsewhere)
-            if (result['has_device_conflict'] == true) {
-              await _api.removeSavedMobile(); // Clear local session
-              if (!mounted) return;
-              setState(() {
-                // Return to Step 0 (Mobile Entry)
-                // We keep the mobile number filled for convenience, but user must "Continue" to re-login
-                _mobileController.text = savedMobile;
-                _currentStep = 0;
-                _isLoading = false;
-                _isCheckingAuth = false;
-              });
-              // Optional: Show snackbar to explain why
+        // Background Validity Check (Fire & Forget/Async Update)
+        _api.checkMobile(savedMobile).then((result) async {
+          if (!mounted) return;
+          if (result['has_device_conflict'] == true) {
+            // Oh no, conflict found. NOW we interrupt.
+            await _api.removeSavedMobile();
+            setState(() {
+              _currentStep = 0; // Go back to mobile entry
+              _mobileController.text = savedMobile;
+            });
+            if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text(
-                    'Logged out because your account was used on another device',
+                    'Session expired (Device Conflict). Please login again.',
                   ),
-                  backgroundColor: Colors.orange,
                 ),
               );
-            } else {
-              // No conflict - Proceed to PIN (Step 3)
-              setState(() {
-                _mobileController.text = savedMobile;
-                _upiId = result['upi_id'] ?? '';
-                // Check if user actually has a PIN set (status 'existing')?
-                // Usually checkMobile returns 'existing' if PIN is set.
-                // We assume 'existing' status here if we had a savedMobile, but let's be safe.
-                if (result['status'] == 'new') {
-                  // Should technically not happen if we had saved session, but possible if DB wiped
-                  _currentStep = 1;
-                } else {
-                  _currentStep = 3;
-                }
-                _isLoading = false;
-              });
+            }
+          } else {
+            if (result['upi_id'] != null) {
+              setState(() => _upiId = result['upi_id']);
             }
           }
-        } catch (e) {
-          // Fallback if offline/error
-          if (mounted) {
-            setState(() {
-              _mobileController.text = savedMobile;
-              _upiId = '';
-              _currentStep = 3;
-              _isLoading = false;
-            });
-          }
-        }
+        });
       }
     } else {
       // No saved user, show login (Step 0)
       if (mounted) {
         setState(() {
           _isCheckingAuth = false;
+          _isLoading = false; // Ensure no spinner even here
           _currentStep = 0;
         });
       }
@@ -254,6 +261,52 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _login({bool force = false, String? pinToUse}) async {
     final pin = pinToUse ?? _enteredPin;
+
+    // 0. Smart Local Verify (Zero Latency)
+    // Only attempt fast path if we are NOT forcing a logout/login sequence
+    if (!force) {
+      final status = await _api.verifyPinSmart(pin);
+
+      if (status == PinVerificationStatus.success) {
+        if (mounted) {
+          if (widget.isUnlockMode) {
+            Navigator.pop(context); // Instant unlock
+          } else {
+            Navigator.pushReplacementNamed(
+              context,
+              '/home',
+            ); // Instant Home load
+          }
+          return;
+        }
+      } else if (status == PinVerificationStatus.incorrect) {
+        setState(() => _enteredPin = ''); // Clear PIN locally
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Incorrect PIN'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 1), // Fast dismissal
+            ),
+          );
+        }
+        return; // Stop here, do NOT call network
+      } else if (status == PinVerificationStatus.lockedOut) {
+        // verifyPinSmart already triggers logout()
+        // We just need to navigate to Login (Reset)
+        if (mounted) {
+          // If unlock mode, we are basically already at login screen but modal.
+          // We should dismiss modal and go to full login?
+          // Or just reset UI to Step 0?
+          Navigator.of(
+            context,
+          ).pushNamedAndRemoveUntil('/login', (route) => false);
+        }
+        return;
+      }
+      // If PinVerificationStatus.unknown, we fall through to network check (below)
+    }
+
     setState(() => _isLoading = true);
 
     final error = await _api.login(
@@ -271,6 +324,9 @@ class _LoginScreenState extends State<LoginScreen> {
         if (widget.isUnlockMode) {
           Navigator.pop(context); // Unlock successful
         } else {
+          // Optimistic Navigation:
+          // Go to home immediately. Home screen is now cached, so it will load instantly.
+          // No need to wait for anything else.
           Navigator.pushReplacementNamed(context, '/home');
         }
       }

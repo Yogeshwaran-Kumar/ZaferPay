@@ -17,6 +17,26 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
   bool _isLoading = false;
   bool _isSuccess = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _loadCachedBalance();
+  }
+
+  Future<void> _loadCachedBalance() async {
+    final cached = await _api.getCachedBalance();
+    if (mounted && cached != null) {
+      // Just log/debug, or if we wanted to show it on this screen we could.
+      // But this screen is for PIN entry to REVEAL balance.
+      // The showing of balance happens in MoneyScreen.
+      // Wait, MoneyScreen calls this screen, awaits result, then shows balance.
+      // So this screen verifies PIN.
+      // User request: "balance checking loading page"
+      // This means the process of verify PIN -> Loading -> Result.
+      // We can't pre-verify PIN. But we can make the transition faster.
+    }
+  }
+
   void _handleKeyPress(String value) {
     if (_enteredPin.length < 4) {
       setState(() {
@@ -36,9 +56,46 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
   Future<void> _verifyPin() async {
     if (_enteredPin.length != 4) return;
 
+    // 1. Zero Latency Local Check (Smart)
+    final status = await _api.verifyPinSmart(_enteredPin);
+
+    if (status == PinVerificationStatus.success) {
+      if (mounted) {
+        setState(() => _isSuccess = true);
+        // Instant success!
+        await Future.delayed(const Duration(milliseconds: 200));
+        if (mounted) Navigator.pop(context, true);
+        return;
+      }
+    } else if (status == PinVerificationStatus.incorrect) {
+      // Instant Fail (0.0s)
+      if (mounted) {
+        setState(() {
+          _enteredPin = ''; // Clear PIN
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Incorrect PIN!"),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+      return;
+    } else if (status == PinVerificationStatus.lockedOut) {
+      // Instant Logout (0.0s)
+      if (mounted) {
+        Navigator.of(
+          context,
+        ).pushNamedAndRemoveUntil('/login', (route) => false);
+      }
+      return;
+    }
+
+    // Fallback: If status is unknown (no cache), try Server
     setState(() => _isLoading = true);
 
-    // Simulate PIN verification with login (as per existing logic)
+    // 2. Server Fallback
     final error = await _api.login(
       widget.mobileNumber,
       _enteredPin,
@@ -59,12 +116,23 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
     } else {
       // Clear PIN and show error
       setState(() => _enteredPin = '');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Incorrect PIN'),
-          backgroundColor: Colors.red,
-        ),
-      );
+
+      String msg = 'Incorrect PIN';
+      if (error == 'INCORRECT_PIN') {
+        msg = 'Incorrect PIN';
+      } else if (error == 'RATE_LIMIT_EXCEEDED') {
+        msg = 'Too many attempts. Try again later.';
+      } else if (error == 'LOGGED_IN_ELSEWHERE') {
+        msg = 'Logged in on another device';
+      } else if (error == 'CONNECTION_ERROR') {
+        msg = 'Network connection failed';
+      } else {
+        msg = error; // Show server error details
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
     }
   }
 

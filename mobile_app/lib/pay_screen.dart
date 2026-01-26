@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart'; // Add this for kDebugMode
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'api_service.dart';
+import 'mcc_helper.dart';
 import 'main.dart';
+import 'conversation_screen.dart';
 
 class PayScreen extends StatefulWidget {
   const PayScreen({super.key});
@@ -16,10 +19,12 @@ class _PayScreenState extends State<PayScreen> {
   final ApiService _api = ApiService();
   final TextEditingController _searchController = TextEditingController();
 
-  List<dynamic> _recents = [];
+  List<dynamic> _recentPeople = [];
+  List<dynamic> _recentMerchants = [];
   List<Contact> _contacts = [];
   List<Contact> _filteredContacts = [];
   bool _isLoading = true;
+  bool _areContactsLoaded = false; // Add this flag
   bool _isSearching = false;
   String _searchQuery = '';
 
@@ -34,6 +39,23 @@ class _PayScreenState extends State<PayScreen> {
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+
+    // 0. Sync Load (True Zero Latency)
+    // We leverage the data already loaded in HomeScreen (RAM)
+    final homeData = _api.getCachedHomeDataSync();
+    if (homeData != null) {
+      if (homeData['people'] != null) {
+        _recentPeople = (homeData['people'] as List).take(6).toList();
+      }
+      if (homeData['merchants'] != null) {
+        _recentMerchants = (homeData['merchants'] as List).take(6).toList();
+      }
+      // If we have ANY data, show UI immediately (No spinner)
+      if (_recentPeople.isNotEmpty || _recentMerchants.isNotEmpty) {
+        _isLoading = false;
+      }
+    }
+
     _loadData();
   }
 
@@ -77,11 +99,6 @@ class _PayScreenState extends State<PayScreen> {
         ? normalizedQuery.substring(normalizedQuery.length - 10)
         : normalizedQuery;
 
-    debugPrint(
-      'DEBUG FILTER: Query="$query", normalized="$normalizedQuery", last10="$queryLast10"',
-    );
-    debugPrint('DEBUG FILTER: Total contacts to search: ${_contacts.length}');
-
     // Filter contacts that match the query (by name or phone number)
     final filtered = _contacts.where((contact) {
       // Check if name matches
@@ -102,19 +119,12 @@ class _PayScreenState extends State<PayScreen> {
             phoneLast10 == queryLast10;
 
         // Debug EVERY comparison when query is exactly 10 digits
-        if (normalizedQuery.length == 10) {
-          debugPrint(
-            'DEBUG: "${contact.displayName}" phone="${phone.number}" phoneLast10="$phoneLast10" match=$isMatch',
-          );
-        }
 
         return isMatch;
       });
 
       return nameMatch || phoneMatch;
     }).toList();
-
-    debugPrint('DEBUG FILTER: Found ${filtered.length} matching contacts');
 
     setState(() {
       _filteredContacts = filtered;
@@ -137,6 +147,19 @@ class _PayScreenState extends State<PayScreen> {
   }
 
   Future<void> _lookupUserByUpi(String upiId) async {
+    // 1. Check Cache
+    final cached = await _api.getCachedUser(upiId);
+    if (cached != null) {
+      if (mounted) {
+        setState(() {
+          _databaseUser = cached;
+          _isLookingUp = false;
+        });
+      }
+      return;
+    }
+
+    // 2. Network Lookup
     setState(() {
       _isLookingUp = true;
     });
@@ -158,12 +181,18 @@ class _PayScreenState extends State<PayScreen> {
   }
 
   Future<void> _lookupUserFromDatabase(String phoneNumber) async {
+    // Normalize phone number
+    final normalizedPhone = phoneNumber.replaceAll(RegExp(r'[\s\-\(\)\+]'), '');
+
+    // 1. Check Cache (Try to find by phone if we had a mapping, else skip for now)
+    // Since we only cache by UPI ID currently, we might miss this optimization for pure phone entry
+    // UNLESS we update _api to cache by phone too.
+    // Ideally, we should skip cache for phone unless we're sure.
+    // However, if the user enters a number that resolves to a cached UPI, we wouldn't know the UPI yet.
+
     setState(() {
       _isLookingUp = true;
     });
-
-    // Normalize phone number
-    final normalizedPhone = phoneNumber.replaceAll(RegExp(r'[\s\-\(\)\+]'), '');
 
     final user = await _api.lookupUserByPhone(normalizedPhone);
 
@@ -176,17 +205,42 @@ class _PayScreenState extends State<PayScreen> {
   }
 
   Future<void> _loadData() async {
-    // 1. Fetch Recents
-    final people = await _api.getRecentPeople();
+    // 1. Instant Cache Load
+    final cachedPeople = await _api.getCachedRecents('people_cache');
+    final cachedMerchants = await _api.getCachedRecents('merchants_cache');
 
-    // 2. Fetch Contacts with proper permission handling
+    if (mounted) {
+      if (cachedPeople != null || cachedMerchants != null) {
+        setState(() {
+          if (cachedPeople != null) {
+            _recentPeople = cachedPeople.take(6).toList();
+          }
+          if (cachedMerchants != null) {
+            _recentMerchants = cachedMerchants.take(6).toList();
+          }
+          // Hide loading if we have initial data to show
+          if (cachedPeople != null) _isLoading = false;
+        });
+      }
+    }
+
+    // 2. Fetch Fresh Recents (People + Merchants)
+    // Run in parallel
+    final results = await Future.wait([
+      _api.getRecentPeople(),
+      _api.getRecentMerchants(),
+    ]);
+
+    final people = results[0];
+    final merchants = results[1];
+
+    // 3. Fetch Contacts with proper permission handling
     await _loadContacts();
 
     if (mounted) {
       setState(() {
-        if (people != null) {
-          _recents = people.take(3).toList();
-        }
+        _recentPeople = people?.take(6).toList() ?? _recentPeople;
+        _recentMerchants = merchants?.take(6).toList() ?? _recentMerchants;
         _isLoading = false;
       });
     }
@@ -200,8 +254,6 @@ class _PayScreenState extends State<PayScreen> {
       // Request permission
       final permissionStatus = await Permission.contacts.request();
 
-      debugPrint('DEBUG: Contact permission status: $permissionStatus');
-
       if (permissionStatus.isGranted) {
         // Get ALL contacts with account info
         final contacts = await FlutterContacts.getContacts(
@@ -210,25 +262,10 @@ class _PayScreenState extends State<PayScreen> {
           withAccounts: true, // Include account info to see sources
         );
 
-        debugPrint('DEBUG: Total contacts fetched: ${contacts.length}');
-
         // Filter to only contacts with phone numbers
         final contactsWithPhones = contacts
             .where((c) => c.phones.isNotEmpty)
             .toList();
-
-        debugPrint('DEBUG: Contacts with phones: ${contactsWithPhones.length}');
-
-        // Debug: Print first 5 contacts with account info
-        for (int i = 0; i < contactsWithPhones.length && i < 5; i++) {
-          final c = contactsWithPhones[i];
-          final accounts = c.accounts
-              .map((a) => '${a.type}:${a.name}')
-              .join(', ');
-          debugPrint(
-            'DEBUG: Contact ${i + 1}: ${c.displayName} - ${c.phones.map((p) => p.number).join(", ")} [Account: $accounts]',
-          );
-        }
 
         if (mounted) {
           setState(() {
@@ -236,15 +273,17 @@ class _PayScreenState extends State<PayScreen> {
           });
         }
       } else if (permissionStatus.isPermanentlyDenied) {
-        debugPrint('DEBUG: Contact permission permanently denied');
         // Open app settings if permanently denied
         // openAppSettings();
-      } else {
-        debugPrint('DEBUG: Contact permission denied: $permissionStatus');
-      }
+      } else {}
     } catch (e) {
-      debugPrint('DEBUG: Error loading contacts: $e');
+      // Ignore errors (permission denied or platform error)
     } finally {
+      if (mounted) {
+        setState(() {
+          _areContactsLoaded = true;
+        });
+      }
       // Delay before re-enabling app lock to allow lifecycle callback to complete
       Future.delayed(const Duration(seconds: 1), () {
         MyApp.isSharing = false;
@@ -253,18 +292,86 @@ class _PayScreenState extends State<PayScreen> {
     }
   }
 
-  void _onPay(String upi, String? name) {
-    Navigator.pushNamed(
+  Future<void> _onPay(String upi, String? name, {String? category}) async {
+    // Navigate with all known data for INSTANT render
+    await Navigator.pushNamed(
       context,
       '/amount',
-      arguments: {'upi': upi, 'name': name},
+      // Pass 'name' properly so AmountScreen doesn't need to look it up if known
+      arguments: {'upi': upi, 'name': name, 'category': category},
+    );
+    // Refresh recents on return in case payment was made
+    if (mounted) {
+      _loadData();
+    }
+  }
+
+  void _openConversation(dynamic person) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ConversationScreen(
+          args: {
+            'upi': person['upi_id'] ?? '',
+            'name': person['username'] ?? 'User',
+            'mobile':
+                person['mobile_encrypted'] ??
+                '', // or decoded if available locally
+            'isMerchant': false, // or logic from person
+          },
+        ),
+      ),
     );
   }
 
-  void _onContactTap(Contact contact) {
-    if (contact.phones.isNotEmpty) {
-      final phone = contact.phones.first.number.replaceAll(RegExp(r'\s+'), '');
-      _onPay(phone, contact.displayName);
+  Future<void> _onContactTap(Contact contact) async {
+    if (contact.phones.isEmpty) return;
+
+    // Show loading while looking up
+    setState(() => _isLookingUp = true);
+
+    String originalPhone = contact.phones.first.number;
+    // 1. Normalize the phone number
+    String normalizedPhone = originalPhone.replaceAll(
+      RegExp(r'[\s\-\(\)]'),
+      '',
+    ); // Remove spaces, dashes, parens
+
+    // Remove country code if present (assuming +91 or 91 for India)
+    if (normalizedPhone.startsWith('+91')) {
+      normalizedPhone = normalizedPhone.substring(3);
+    } else if (normalizedPhone.startsWith('91') &&
+        normalizedPhone.length > 10) {
+      // Basic check to avoid removing '91' from real numbers like 9198... if trying to guess
+      // But safest is to only remove +91.
+      // However, user said "if i save that number with +91 also"
+      // If it starts with 91 and is 12 digits, it's likely country code.
+      if (normalizedPhone.length == 12) {
+        normalizedPhone = normalizedPhone.substring(2);
+      }
+    }
+
+    String? displayName = contact.displayName;
+    String upiIdOrPhone = normalizedPhone;
+
+    // 2. Lookup this normalized phone in our backend
+    try {
+      final user = await _api.lookupUserByPhone(normalizedPhone);
+      if (user != null) {
+        // User exists! Use their data
+        displayName = _getDisplayName(user); // Will get "Dhanush" etc
+        upiIdOrPhone = user['upi_id'];
+      }
+    } catch (e) {
+      if (kDebugMode) print("Contact Lookup Error: $e");
+    } finally {
+      if (mounted) {
+        setState(() => _isLookingUp = false);
+      }
+    }
+
+    if (mounted) {
+      _onPay(upiIdOrPhone, displayName);
     }
   }
 
@@ -493,13 +600,41 @@ class _PayScreenState extends State<PayScreen> {
                           color: Theme.of(context).textTheme.bodyLarge?.color,
                         ),
                       ),
-                      subtitle: Text(
-                        _databaseUser!['upi_id'] ?? _searchQuery,
-                        style: TextStyle(
-                          color: isDark
-                              ? Colors.grey.shade400
-                              : Colors.grey.shade600,
-                        ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _databaseUser!['upi_id'] ?? _searchQuery,
+                            style: TextStyle(
+                              color: isDark
+                                  ? Colors.grey.shade400
+                                  : Colors.grey.shade600,
+                            ),
+                          ),
+                          // Show MCC category if merchant account
+                          if (_databaseUser!['mcc'] != null &&
+                              _databaseUser!['mcc'] != '0000') ...[
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                '🏪 ${MccHelper.getDomain(_databaseUser!['mcc'])}',
+                                style: const TextStyle(
+                                  color: Colors.orange,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       trailing: Container(
                         padding: const EdgeInsets.symmetric(
@@ -521,6 +656,11 @@ class _PayScreenState extends State<PayScreen> {
                       onTap: () => _onPay(
                         _databaseUser!['upi_id'] ?? _searchQuery,
                         _getDisplayName(_databaseUser!),
+                        category:
+                            (_databaseUser!['mcc'] != null &&
+                                _databaseUser!['mcc'] != '0000')
+                            ? MccHelper.getDomain(_databaseUser!['mcc'])
+                            : null,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -608,64 +748,37 @@ class _PayScreenState extends State<PayScreen> {
                 ] else ...[
                   // Show recents and all contacts when not searching
                   // Recents
-                  Text(
-                    "Recents",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).textTheme.bodyLarge?.color,
+                  // Recent People
+                  if (_recentPeople.isNotEmpty) ...[
+                    Text(
+                      "Recent People",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).textTheme.bodyLarge?.color,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
+                    const SizedBox(height: 16),
+                    ..._recentPeople.map((person) => _buildRecentItem(person)),
+                    const SizedBox(height: 24),
+                  ],
 
-                  ..._recents.map((person) {
-                    String name = person['username'] ?? 'Unknown';
-                    final upi = person['upi_id'] ?? '';
-
-                    // Clean up default "UserXXX" format
-                    if (name.startsWith('User') && name.length > 4) {
-                      if (RegExp(r'^User\d+$').hasMatch(name)) {
-                        name = name.substring(4);
-                      }
-                    }
-
-                    final color = (person['color'] as String?) != null
-                        ? Color(
-                            int.parse(
-                              person['color'].replaceFirst('#', '0xFF'),
-                            ),
-                          )
-                        : Colors.purple;
-
-                    return ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: CircleAvatar(
-                        backgroundColor: color,
-                        child: Text(
-                          name.isNotEmpty ? name[0].toUpperCase() : 'U',
-                          style: const TextStyle(color: Colors.white),
-                        ),
+                  // Recent Businesses
+                  if (_recentMerchants.isNotEmpty) ...[
+                    Text(
+                      "Recent Businesses",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).textTheme.bodyLarge?.color,
                       ),
-                      title: Text(
-                        name,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).textTheme.bodyLarge?.color,
-                        ),
-                      ),
-                      subtitle: Text(
-                        upi,
-                        style: TextStyle(
-                          color: isDark
-                              ? Colors.grey.shade400
-                              : Colors.grey.shade600,
-                        ),
-                      ),
-                      onTap: () => _onPay(upi, name),
-                    );
-                  }),
-
-                  const SizedBox(height: 24),
+                    ),
+                    const SizedBox(height: 16),
+                    ..._recentMerchants.map(
+                      (merchant) => _buildRecentItem(merchant),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
 
                   // All people on UPI
                   Text(
@@ -679,13 +792,18 @@ class _PayScreenState extends State<PayScreen> {
                   const SizedBox(height: 16),
 
                   if (_contacts.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 20),
-                      child: Text(
-                        "No contacts found or permission denied",
-                        style: TextStyle(color: Colors.grey.shade500),
-                      ),
-                    )
+                    _areContactsLoaded
+                        ? Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            child: Text(
+                              "No contacts found or permission denied",
+                              style: TextStyle(color: Colors.grey.shade500),
+                            ),
+                          )
+                        : const Padding(
+                            padding: EdgeInsets.all(20.0),
+                            child: Center(child: CircularProgressIndicator()),
+                          )
                   else
                     ..._contacts.map((contact) {
                       return ListTile(
@@ -740,6 +858,51 @@ class _PayScreenState extends State<PayScreen> {
                 ],
               ],
             ),
+    );
+  }
+
+  Widget _buildRecentItem(dynamic item) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    String name = item['username'] ?? 'Unknown';
+    final upi = item['upi_id'] ?? '';
+    final isMerchant = item['mcc'] != null && item['mcc'] != '0000';
+
+    // Clean up default "UserXXX" format
+    if (name.startsWith('User') && name.length > 4) {
+      if (RegExp(r'^User\d+$').hasMatch(name)) {
+        name = name.substring(4);
+      }
+    }
+
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: CircleAvatar(
+        radius: 24,
+        backgroundColor: Colors.blue.shade100,
+        child: Text(
+          name.isNotEmpty ? name[0].toUpperCase() : 'U',
+          style: TextStyle(
+            color: Colors.blue.shade900,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+      title: Text(
+        name,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Theme.of(context).textTheme.bodyLarge?.color,
+        ),
+      ),
+      subtitle: Text(
+        isMerchant ? 'Merchant' : upi,
+        style: TextStyle(
+          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+        ),
+      ),
+      onTap: () {
+        _openConversation(item);
+      },
     );
   }
 }

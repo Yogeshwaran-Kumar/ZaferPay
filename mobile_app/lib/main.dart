@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'dart:io'; // Import dart:io for HttpOverrides
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_jailbreak_detection/flutter_jailbreak_detection.dart';
 import 'login_screen.dart';
+import 'api_service.dart';
 
 import 'main_navigation_screen.dart';
 import 'scan_screen.dart';
@@ -23,10 +24,31 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 // Global Theme Notifier
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
 
-void main() {
+// Flag to track if device is compromised
+bool _isDeviceCompromised = false;
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   HttpOverrides.global = MyHttpOverrides(); // Bypass SSL verification
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECURITY CHECK: Root/Jailbreak Detection
+  // ═══════════════════════════════════════════════════════════════════════════
+  try {
+    _isDeviceCompromised = await FlutterJailbreakDetection.jailbroken;
+    // Also check for developer mode (optional, can be commented out if too strict)
+    // final isDeveloperMode = await FlutterJailbreakDetection.developerMode;
+    // _isDeviceCompromised = _isDeviceCompromised || isDeveloperMode;
+  } catch (e) {
+    // If detection fails, assume safe (don't block legitimate users)
+    _isDeviceCompromised = false;
+  }
+
+  // OPTIMIZATION: Warm up caches
+  // Fire and forget, don't await, so app starts fast
+  ApiService().warmUpPinCache();
+
   runApp(const MyApp());
 }
 
@@ -44,6 +66,8 @@ class MyApp extends StatefulWidget {
 
   static bool isSharing = false;
   static DateTime? lastShareTime;
+  static bool isRequestingPermission = false;
+  static DateTime? lastPermissionRequestTime;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -52,7 +76,6 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   // We need to know if we are already showing the lock screen to avoid stacking it
   bool _isLockScreenShown = false;
-  final _storage = const FlutterSecureStorage();
 
   // Route Observer to track current route
   final _routeObserver = _CurrentRouteObserver();
@@ -84,54 +107,95 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   Future<void> _checkAndLockApp() async {
-    // Check if user is "logged in" (has a token or saved mobile)
-    // We only want to lock if the user has actually set up the app.
-    final savedMobile = await _storage.read(key: 'saved_mobile');
+    // If lock screen is already shown, don't show it again.
+    if (_isLockScreenShown) return;
 
-    if (savedMobile != null && !_isLockScreenShown) {
-      // Check if we are currently on the Login Screen or Payment PIN Screen
-      final currentRoute = _routeObserver.currentRouteName;
-      // ONLY skip locking if we are already on the Login screen (App Unlock)
-      // If we are on Payment PIN, we MUST lock for security.
-      if (currentRoute == '/login') {
-        return;
-      }
+    // Check current route to decide if we should lock.
+    final currentRoute = _routeObserver.currentRouteName;
 
-      // Check if we are currently on the Login Screen (to avoid double locking on startup/logout)
-      // This is a bit tricky with Navigator, but usually if we have savedMobile, we might be in Home.
-      // A simple heuristic: If we are resumed, and have a user, show lock.
-
-      // However, we don't want to show it if the user just opened the app and is AT the login screen.
-      // But typically, if they have savedMobile, we might auto-login or show login.
-      // To be safe and simple: Always show unlock screen if savedMobile exists.
-
-      // 1. If currently sharing (awaiting return), skip lock
-      if (MyApp.isSharing) return;
-
-      // 2. If returned from sharing recently (within 2 seconds), skip lock
-      if (MyApp.lastShareTime != null) {
-        final diff = DateTime.now().difference(MyApp.lastShareTime!);
-        if (diff.inSeconds < 2) {
-          return;
-        }
-      }
-
-      _isLockScreenShown = true;
-      navigatorKey.currentState
-          ?.push(
-            MaterialPageRoute(
-              builder: (context) => const LoginScreen(isUnlockMode: true),
-              fullscreenDialog: false,
-            ),
-          )
-          .then((_) {
-            _isLockScreenShown = false;
-          });
+    // 1. If we are on the Login Screen (App Unlock), do NOT lock.
+    // This handles the "Double Lock" prevention.
+    // Also handles the case where user is not logged in yet (initial flow).
+    if (currentRoute == '/login') {
+      return;
     }
+
+    // 2. If currently sharing (awaiting return), skip lock.
+    if (MyApp.isSharing) return;
+
+    // 3. If returned from sharing recently (within 2 seconds), skip lock.
+    // 3. Removed grace period for sharing return as per user request
+
+    // 4. If requesting permission (awaiting return), skip lock.
+    if (MyApp.isRequestingPermission) return;
+
+    // 5. If returned from permission request recently, skip lock.
+    // 5. Removed grace period for permission return as per user request
+
+    // Default: LOCK THE APP
+    // We assume if the user is NOT on /login, they are logged in and in a sensitive area.
+    _isLockScreenShown = true;
+    navigatorKey.currentState
+        ?.push(
+          MaterialPageRoute(
+            builder: (context) => const LoginScreen(isUnlockMode: true),
+            fullscreenDialog: false,
+          ),
+        )
+        .then((_) {
+          _isLockScreenShown = false;
+        });
   }
 
   @override
   Widget build(BuildContext context) {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SECURITY: Block compromised devices
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (_isDeviceCompromised) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          backgroundColor: Colors.red.shade900,
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.security, size: 80, color: Colors.white),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Security Alert',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'This app cannot run on rooted or jailbroken devices for security reasons.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white70, fontSize: 16),
+                  ),
+                  const SizedBox(height: 32),
+                  ElevatedButton(
+                    onPressed: () => SystemNavigator.pop(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.red.shade900,
+                    ),
+                    child: const Text('Exit App'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: themeNotifier,
       builder: (context, currentMode, _) {

@@ -1,11 +1,13 @@
 import 'dart:io';
-import 'dart:ui';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:path_provider/path_provider.dart'; // Add path_provider
-import 'package:share_plus/share_plus.dart' as fp; // Add share_plus with prefix
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart' as fp;
 import 'api_service.dart';
-import 'main.dart'; // Import main.dart to access MyApp.shouldSkipLock
+import 'main.dart';
 
 class ProfileScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -20,6 +22,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _api = ApiService();
   Map<String, dynamic>? _user;
   bool _isLoading = true;
+  final GlobalKey _qrKey = GlobalKey(); // Add GlobalKey
 
   @override
   void initState() {
@@ -96,33 +99,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 40),
 
                     // QR Code
-                    // We Wrap in RepaintBoundary if we were using screenshot,
-                    // but here we just display it. We'll regenerate for sharing.
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: Colors
-                            .white, // Keep QR background white for scannability
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: isDark
-                              ? Colors.grey.shade700
-                              : Colors.grey.shade200,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
+                    // Wrapped in RepaintBoundary for sharing capture
+                    RepaintBoundary(
+                      key: _qrKey,
+                      child: Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.grey.shade700
+                                : Colors.grey.shade200,
                           ),
-                        ],
-                      ),
-                      child: QrImageView(
-                        data: _user!['upi_id'],
-                        version: QrVersions.auto,
-                        size: 250.0,
-                        backgroundColor: Colors.white,
-                        errorCorrectionLevel: QrErrorCorrectLevel.M,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: QrImageView(
+                          data:
+                              'upi://pay?pa=${_user!['upi_id']}&pn=${Uri.encodeComponent(_user!['username'])}&mc=${_user!['mcc'] ?? ""}',
+                          version: QrVersions.auto,
+                          size: 250.0,
+                          backgroundColor: Colors.white,
+                          errorCorrectionLevel: QrErrorCorrectLevel.M,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -138,7 +143,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 24),
 
                     // Bank Name (if available)
-                    if (_user!['mcc'] != null)
+                    if (_user!['mcc'] != null &&
+                        _user!['mcc'].toString().trim().isNotEmpty &&
+                        _user!['mcc'] != '0000')
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,
@@ -279,63 +286,69 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final upiId = _user!['upi_id'];
     final name = _user!['username'];
-    final link = "upi://pay?pa=$upiId&pn=$name&mc=0000&mode=02&purpose=00";
+    final mcc = _user!['mcc'] ?? '0000';
+
+    String link = "upi://pay?pa=$upiId&pn=$name";
+    if (mcc != '0000') {
+      link += "&mc=$mcc&mode=02&purpose=00";
+    } else {
+      link += "&mode=00";
+    }
+
     final shareText = "Use my UPI ID to pay me: $upiId\n\nLink: $link";
 
+    File? fileToShare;
+
     try {
-      // 1. Generate QR Image
-      final painter = QrPainter(
-        data: upiId,
-        version: QrVersions.auto,
-        gapless: true,
-        eyeStyle: const QrEyeStyle(
-          eyeShape: QrEyeShape.square,
-          color: Colors.black,
-        ),
-        dataModuleStyle: const QrDataModuleStyle(
-          dataModuleShape: QrDataModuleShape.square,
-          color: Colors.black,
-        ),
+      // Capture QR image from the widget
+      RenderRepaintBoundary boundary =
+          _qrKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+      ByteData? byteData = await image.toByteData(
+        format: ui.ImageByteFormat.png,
       );
 
-      // 2. Save to temporary file
-      final tempDir = await getTemporaryDirectory();
-      final ts = DateTime.now().millisecondsSinceEpoch;
-      final path = '${tempDir.path}/qr_$ts.png';
-      final file = File(path);
+      if (byteData != null) {
+        final Uint8List pngBytes = byteData.buffer.asUint8List();
 
-      final picData = await painter.toImageData(
-        2048,
-        format: ImageByteFormat.png,
-      );
-      if (picData != null) {
-        await file.writeAsBytes(picData.buffer.asUint8List());
+        // Save to temporary file
+        final tempDir = await getTemporaryDirectory();
+        final ts = DateTime.now().millisecondsSinceEpoch;
+        final path = '${tempDir.path}/my_qr_$ts.png';
+        final file = File(path);
+        await file.writeAsBytes(pngBytes);
+        fileToShare = file;
+      }
+    } catch (e) {
+      debugPrint("Error capturing QR: $e");
+    }
 
-        // 3. Share
-        MyApp.isSharing = true;
+    // Share logic
+    MyApp.isSharing = true;
+    try {
+      if (fileToShare != null) {
         // ignore: deprecated_member_use
         await fp.Share.shareXFiles(
-          [fp.XFile(path)],
+          [fp.XFile(fileToShare.path)],
           text: shareText,
           subject: "Payment QR Code",
         );
-        MyApp.isSharing = false;
-        MyApp.lastShareTime = DateTime.now(); // Mark completion time
       } else {
-        // Fallback if image generation fails
-        MyApp.isSharing = true;
         // ignore: deprecated_member_use
         await fp.Share.share(shareText);
-        MyApp.isSharing = false;
-        MyApp.lastShareTime = DateTime.now();
       }
     } catch (e) {
-      debugPrint("Error sharing QR: $e");
+      debugPrint("Error sharing: $e");
+      // Fallback to text if file share failed
+      if (fileToShare != null) {
+        try {
+          // ignore: deprecated_member_use
+          await fp.Share.share(shareText);
+        } catch (_) {}
+      }
+    } finally {
       MyApp.isSharing = false;
       MyApp.lastShareTime = DateTime.now();
-      // Fallback
-      // ignore: deprecated_member_use
-      await fp.Share.share(shareText);
     }
   }
 }

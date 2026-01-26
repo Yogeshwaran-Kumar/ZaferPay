@@ -1,20 +1,20 @@
 @echo off
 echo ===================================================
-echo   MockBank Remote Access Launcher
+echo   SafePay Remote Access Helper
 echo ===================================================
 echo.
-echo 1. Ensure you have ngrok installed.
-echo    If not, download from: https://ngrok.com/download
+echo This script helps you expose your local backend to the internet.
+echo You need 'ngrok' installed and in your PATH.
 echo.
-echo 2. Open a NEW terminal and run:
-echo    ngrok http 8000
+echo [1] Starting Backend Server in a new window...
+start "SafePay Backend" cmd /k "backend\venv\Scripts\activate & cd backend & uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+
 echo.
-echo 3. Copy the 'Forwarding' URL (e.g., https://xyz.ngrok-free.app)
-echo    and enter it in the Mobile App Settings.
+echo [2] Starting Ngrok Tunnel...
 echo.
-echo ===================================================
-echo Starting Backend Server on Port 8000...
+echo IMPORTANT: 
+echo 1. Look for the "Forwarding" line (e.g., https://abc.ngrok-free.app)
+echo 2. Copy that URL.
+echo 3. Paste it into the SafePay Mobile App settings.
 echo.
-cd backend
-python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-pause
+ngrok http 8000

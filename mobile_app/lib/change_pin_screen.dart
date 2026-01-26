@@ -12,7 +12,7 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
   final _api = ApiService();
   String _enteredPin = '';
   String _firstPin = '';
-  String _mobileNumber = '';
+  String _username = '';
   // 0: Enter Current PIN
   // 1: Enter New PIN
   // 2: Confirm New PIN
@@ -31,7 +31,7 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
     if (user != null && mounted) {
       setState(() {
         _upiId = user['upi_id'] ?? '';
-        _mobileNumber = user['mobile_number'] ?? '';
+        _username = user['username'] ?? '';
       });
     }
   }
@@ -95,7 +95,7 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
   }
 
   Future<void> _verifyCurrentPin() async {
-    if (_mobileNumber.isEmpty) {
+    if (_username.isEmpty) {
       // Should catch this edge case
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Error: User details not loaded')),
@@ -106,11 +106,7 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
     setState(() => _isLoading = true);
 
     // We use the login endpoint to verify the PIN
-    final error = await _api.login(
-      _mobileNumber,
-      _enteredPin,
-      forceLogin: false,
-    );
+    final error = await _api.login(_username, _enteredPin, forceLogin: false);
 
     setState(() => _isLoading = false);
 

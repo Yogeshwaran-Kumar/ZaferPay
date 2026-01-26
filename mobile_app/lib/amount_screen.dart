@@ -17,6 +17,7 @@ class _AmountScreenState extends State<AmountScreen> {
   double? _balance; // User's current balance
   String? _currentUserUpi; // Current user's UPI ID
   bool _isSelfTransfer = false;
+  String? _rawMcc;
 
   final ApiService _api = ApiService();
   final _amountController = TextEditingController();
@@ -71,6 +72,14 @@ class _AmountScreenState extends State<AmountScreen> {
     _receiverUpi = args?['upi'] ?? '';
     _receiverName = args?['name']; // Can be passed directly
     _category = args?['category'];
+    if (args != null) {
+      if (args['senderBalance'] != null) {
+        _balance = (args['senderBalance'] as num).toDouble();
+      }
+      if (args['senderUpi'] != null) {
+        _currentUserUpi = args['senderUpi'];
+      }
+    }
 
     // Always resolve receiver in case it's a phone number that needs to be converted to UPI ID
     // Or if we need to verify the user exists
@@ -80,16 +89,18 @@ class _AmountScreenState extends State<AmountScreen> {
   }
 
   Future<void> _resolveReceiverAndName() async {
-    // 1. Fetch current user info (await it first to ensure we have it for validation)
-    final userData = await _api.getMe();
-    if (mounted && userData != null && userData['balance'] != null) {
-      setState(() {
-        _balance = (userData['balance'] as num).toDouble();
-        _currentUserUpi = userData['upi_id'];
-      });
-      debugPrint(
-        'DEBUG AMOUNT: Fetched balance = $_balance, currentUserUpi = $_currentUserUpi',
-      );
+    // 1. Fetch current user info (Optimized: Check preloaded args first)
+    if (_balance == null || _currentUserUpi == null) {
+      final userData = await _api.getMe();
+      if (mounted && userData != null && userData['balance'] != null) {
+        setState(() {
+          _balance = (userData['balance'] as num).toDouble();
+          _currentUserUpi = userData['upi_id'];
+        });
+        debugPrint(
+          'DEBUG AMOUNT: Fetched balance = $_balance, currentUserUpi = $_currentUserUpi',
+        );
+      }
     }
 
     // Check if _receiverUpi looks like a phone number (mostly digits)
@@ -105,47 +116,74 @@ class _AmountScreenState extends State<AmountScreen> {
 
     Map<String, dynamic>? info;
 
+    // Check local cache first for instant resolution
+    Map<String, dynamic>? cachedUser;
     if (isPhoneNumber) {
-      // It's a phone number - lookup by phone to get UPI ID
-      // Use last 10 digits for lookup (removes country code)
-      final phoneLast10 = digitsOnly.length >= 10
-          ? digitsOnly.substring(digitsOnly.length - 10)
-          : digitsOnly;
-
-      debugPrint('DEBUG AMOUNT: Looking up phone last10="$phoneLast10"');
-
-      info = await _api.lookupUserByPhone(phoneLast10);
-
-      debugPrint('DEBUG AMOUNT: Phone lookup result: $info');
-
-      if (info != null && info['upi_id'] != null) {
-        // Update _receiverUpi to actual UPI ID (critical for payment to work!)
-        debugPrint('DEBUG AMOUNT: Found UPI ID: ${info['upi_id']}');
-        setState(() {
-          _receiverUpi = info!['upi_id'];
-          // Also update name if not already set
-          if (_receiverName == null || _receiverName!.isEmpty) {
-            _receiverName = info['username'];
-          }
-          _userNotFound = false; // User confirmed found
-        });
-      } else {
-        debugPrint('DEBUG AMOUNT: No UPI ID found for phone');
-        setState(() {
-          _userNotFound = true;
-        });
-      }
+      // For phone numbers, we might not have a direct cache unless we implement phone-to-upi mapping cache
+      // But if we have a user cache by UPI, we might miss it here.
+      // For now, let's skip cache for phone numbers unless we add that specific cache.
     } else {
-      // Not a phone number - regular UPI lookup
-      info = await _api.lookupUser(_receiverUpi);
-      if (info == null) {
-        setState(() {
-          _userNotFound = true;
-        });
+      cachedUser = await _api.getCachedUser(_receiverUpi);
+    }
+
+    if (cachedUser != null) {
+      debugPrint('DEBUG AMOUNT: Found user in cache: $cachedUser');
+      info = cachedUser;
+      _userNotFound = false;
+    } else {
+      // Network Lookup (Fallback)
+      if (isPhoneNumber) {
+        // RAM Cache for Phone -> UPI mapping?
+        // We can add a simple caching layer for phone lookups in ApiService too
+        // For now, try to find in general user cache if we know the UPI
+
+        final phoneLast10 = digitsOnly.length >= 10
+            ? digitsOnly.substring(digitsOnly.length - 10)
+            : digitsOnly;
+
+        // 1. Try RAM Cache for Phone Lookup
+        info = _api.getCachedUserByPhoneSync(phoneLast10);
+
+        if (info == null) {
+          debugPrint('DEBUG AMOUNT: Looking up phone last10="$phoneLast10"');
+          info = await _api.lookupUserByPhone(phoneLast10);
+        }
+
+        debugPrint('DEBUG AMOUNT: Phone lookup result: $info');
+
+        if (info != null && info['upi_id'] != null) {
+          // Update _receiverUpi to actual UPI ID (critical for payment to work!)
+          debugPrint('DEBUG AMOUNT: Found UPI ID: ${info['upi_id']}');
+          setState(() {
+            _receiverUpi = info!['upi_id'];
+            // Also update name if not already set
+            if (_receiverName == null || _receiverName!.isEmpty) {
+              _receiverName = info['username'];
+            }
+            _userNotFound = false; // User confirmed found
+          });
+          // cache this user for future UPI lookups
+          _api.getCachedUser(
+            _receiverUpi,
+          ); // This effectively caches it if we implemented writing in lookup
+        } else {
+          debugPrint('DEBUG AMOUNT: No UPI ID found for phone');
+          setState(() {
+            _userNotFound = true;
+          });
+        }
       } else {
-        setState(() {
-          _userNotFound = false;
-        });
+        // Not a phone number - regular UPI lookup
+        info = await _api.lookupUser(_receiverUpi);
+        if (info == null) {
+          setState(() {
+            _userNotFound = true;
+          });
+        } else {
+          setState(() {
+            _userNotFound = false;
+          });
+        }
       }
     }
 
@@ -153,10 +191,12 @@ class _AmountScreenState extends State<AmountScreen> {
       setState(() {
         if (info != null) {
           // Set name if not already set
+
           if (_receiverName == null || _receiverName!.isEmpty) {
             _receiverName = info['username'];
           }
-          if (info['mcc'] != null) {
+          if (info['mcc'] != null && info['mcc'] != '0000') {
+            _rawMcc = info['mcc'];
             _category = MccHelper.getDomain(info['mcc']);
           }
         }
@@ -176,7 +216,7 @@ class _AmountScreenState extends State<AmountScreen> {
   }
 
   Future<void> _onPayPressed() async {
-    if (_userNotFound || _isSelfTransfer || _isAmountTooHigh) return;
+    if (_isSelfTransfer || _isAmountTooHigh) return;
 
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) {
@@ -207,6 +247,7 @@ class _AmountScreenState extends State<AmountScreen> {
         'amount': amount,
         'name': _receiverName ?? _receiverUpi, // Pass name or fallback to UPI
         'category': _category, // Pass category
+        'mcc': _rawMcc,
       },
     );
 
@@ -512,9 +553,9 @@ class _AmountScreenState extends State<AmountScreen> {
               padding: const EdgeInsets.only(top: 16),
               child: Center(
                 child: Text(
-                  "User not registered on 2Way",
+                  "External UPI ID",
                   style: TextStyle(
-                    color: Colors.red.shade700,
+                    color: Colors.orange.shade700,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -552,11 +593,11 @@ class _AmountScreenState extends State<AmountScreen> {
                 },
               ),
             ], // Block > 500k
-            readOnly: _userNotFound || _isSelfTransfer, // Disable input
+            readOnly: _isSelfTransfer, // Allow input for userNotFound
             style: TextStyle(
               fontSize: 40,
               fontWeight: FontWeight.bold,
-              color: (_userNotFound || _isSelfTransfer)
+              color: (_isSelfTransfer)
                   ? Colors.grey
                   : (isDark ? Colors.white : Colors.black),
             ),
@@ -582,20 +623,15 @@ class _AmountScreenState extends State<AmountScreen> {
             ),
           const SizedBox(height: 40),
           ElevatedButton.icon(
-            onPressed: (_userNotFound || _isSelfTransfer || _isAmountTooHigh)
+            onPressed: (_isSelfTransfer || _isAmountTooHigh)
                 ? null
-                : _onPayPressed, // Disable button
+                : _onPayPressed,
             icon: const Icon(Icons.send),
             label: const Text("Pay Now"),
             style: ElevatedButton.styleFrom(
               minimumSize: const Size(double.infinity, 56),
-              backgroundColor:
-                  (_userNotFound || _isSelfTransfer || _isAmountTooHigh)
-                  ? Colors.grey
-                  : (isDark ? Colors.white : Colors.black),
-              foregroundColor: (_userNotFound || _isSelfTransfer)
-                  ? Colors.white
-                  : (isDark ? Colors.black : Colors.white),
+              backgroundColor: isDark ? Colors.white : Colors.black,
+              foregroundColor: isDark ? Colors.black : Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),

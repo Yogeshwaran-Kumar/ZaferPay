@@ -1,13 +1,45 @@
 from fastapi import FastAPI, Depends, HTTPException, status, Header, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import timedelta, datetime
-import models, schemas, auth, database, fraud_engine
-import seed
+import models, schemas, auth, database, fraud_engine, security
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# RATE LIMITING - Brute Force Protection
+# ═══════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════
+# RATE LIMITING - Brute Force Protection
+# ═══════════════════════════════════════════════════════════════════════════
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+# Helper to get real IP behind Cloudflare/Proxy
+def get_real_ip(request: Request) -> str:
+    # Cloudflare Tunnel passes the real user IP in this header
+    cf_ip = request.headers.get("CF-Connecting-IP")
+    if cf_ip:
+        return cf_ip
+    
+    # Fallback to X-Forwarded-For
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0]
+        
+    # Fallback to direct connection (e.g. localhost testing)
+    return request.client.host if request.client else "127.0.0.1"
+
+# Rate limiting enabled for brute force protection (FREE)
+limiter = Limiter(key_func=get_real_ip) 
 
 app = FastAPI(title="Application-2 Mock Bank")
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Add CORS middleware to allow connections from mobile apps
 app.add_middleware(
@@ -21,13 +53,7 @@ app.add_middleware(
 # Create Database Tables
 models.Base.metadata.create_all(bind=database.engine)
 
-# Run Seed on Startup (Simple toggle)
-# In production, this would be a separate script, but for "works immediately", we check on start
-try:
-    with database.SessionLocal() as db:
-        seed.seed_data(db)
-except Exception as e:
-    print(f"Seeding skipped or failed: {e}")
+# Seed data removed - use import_mock_users.py for population
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -58,12 +84,15 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     # Check device_id match
     token_device_id = payload.get("device_id")
     # If the user has a device_id set in DB, the token must match it.
-    if user.device_id and token_device_id != user.device_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Logged in on another device",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    # SECURE: Compare hashes
+    if user.device_id_hash:
+        token_device_hash = security.hash_value(token_device_id)
+        if token_device_hash != user.device_id_hash:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Logged in on another device",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
     
     # Update last_active_at on every authenticated request
     user.last_active_at = datetime.utcnow()
@@ -72,6 +101,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     return user
 
 @app.post("/token", response_model=schemas.Token)
+@limiter.limit("5/minute")
 def login_for_access_token(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(), 
@@ -80,10 +110,12 @@ def login_for_access_token(
     force_logout: bool = False
 ):
     # Authenticate by Mobile Number OR Email (passed in form_data.username)
+    # SECURE: Search by hash, not plain text
     identifier = form_data.username
+    identifier_hash = security.hash_value(identifier)
     user = db.query(models.User).filter(
-        (models.User.mobile_number == identifier) | 
-        (models.User.email == identifier)
+        (models.User.mobile_hash == identifier_hash) | 
+        (models.User.email_hash == identifier_hash)
     ).first()
     
     # If not found, try username as fallback
@@ -99,7 +131,10 @@ def login_for_access_token(
     
     # Check Single Device Login
     if x_device_id:
-        if user.device_id and user.device_id != x_device_id:
+        x_device_hash = security.hash_value(x_device_id)
+        
+        # Check against stored hash
+        if user.device_id_hash and user.device_id_hash != x_device_hash:
             if not force_logout:
                 # User is already logged in on another device
                 raise HTTPException(
@@ -109,11 +144,11 @@ def login_for_access_token(
                         "info": "You are currently logged in on another device. To continue on this device, you must logout from the other device."
                     },
                 )
-            # Force logout from other device - update device_id
-            print(f"Force logout: User {user.username} logging out from {user.device_id} and logging into {x_device_id}")
+            # Force logout from other device - update device_id automatically below
         
         # Update device_id (either first login or force logout)
-        user.device_id = x_device_id
+        user.device_id_hash = x_device_hash
+        user.device_id_encrypted = security.encrypt_value(x_device_id)  # AES-256 encrypted
         user.last_active_at = datetime.utcnow()  # Mark as active now
         db.commit()
 
@@ -123,13 +158,17 @@ def login_for_access_token(
             # Check if this device logged in very recently (e.g. last 5 seconds) to avoid dupes on retries
             # but generally we want to log every login session.
             
-            client_ip = request.client.host if request.client else None
+            client_ip = get_real_ip(request)
             
             login_record = models.LoginHistory(
                 user_id=user.id,
-                device_id=x_device_id,
+                # Device ID: SECURE - Hash + Encrypt only
+                device_id_hash=security.hash_value(x_device_id),
+                device_id_encrypted=security.encrypt_value(x_device_id),
                 login_time=datetime.utcnow(),
-                ip_address=client_ip
+                # IP: SECURE - Hash + Encrypt only
+                ip_hash=security.hash_value(client_ip) if client_ip else None,
+                ip_encrypted=security.encrypt_value(client_ip) if client_ip else None
             )
             db.add(login_record)
             db.commit()
@@ -141,7 +180,58 @@ def login_for_access_token(
     access_token = auth.create_access_token(
         data={"sub": user.username, "device_id": x_device_id}, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    
+    # Create refresh token for token rotation (long-lived - 7 days)
+    refresh_token = auth.create_refresh_token(
+        data={"sub": user.username, "device_id": x_device_id}
+    )
+    
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "expires_in": auth.ACCESS_TOKEN_EXPIRE_MINUTES * 60  # seconds
+    }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# REFRESH TOKEN ENDPOINT - Get new access token using refresh token
+# ═══════════════════════════════════════════════════════════════════════════
+@app.post("/auth/refresh")
+def refresh_token(
+    refresh_token: str = Header(..., alias="X-Refresh-Token"),
+    db: Session = Depends(get_db)
+):
+    """
+    Token Rotation: Exchange refresh token for new access token
+    
+    This allows the app to get a new access token without re-entering PIN.
+    The refresh token is valid for 7 days.
+    """
+    payload = auth.verify_refresh_token(refresh_token)
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token"
+        )
+    
+    username = payload.get("sub")
+    device_id = payload.get("device_id")
+    
+    # Verify user still exists
+    user = db.query(models.User).filter(models.User.username == username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Create new access token
+    new_access_token = auth.create_access_token(
+        data={"sub": username, "device_id": device_id}
+    )
+    
+    return {
+        "access_token": new_access_token,
+        "token_type": "bearer",
+        "expires_in": auth.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    }
 
 @app.post("/auth/check-mobile", response_model=schemas.MobileCheckResponse)
 def check_mobile(
@@ -149,64 +239,82 @@ def check_mobile(
     db: Session = Depends(get_db),
     x_device_id: str = Header(None)
 ):
-    # Search by mobile number OR email
-    identifier = check.mobile_number # We reuse this field name from frontend but it can be email
-    print(f"DEBUG: Checking mobile/email for identifier: '{identifier}'")
-    
-    user = db.query(models.User).filter(
-        (models.User.mobile_number == identifier) | 
-        (models.User.email == identifier)
-    ).first()
-    
-    if not user:
-        # Check username just in case
-        user = db.query(models.User).filter(models.User.username == identifier).first()
-    
-    if not user:
-        # User not found -> treat as NEW user (Registration Flow)
-        # However, for import scenario, we expect them to exist. 
-        # If not existing, frontend handles 'new' status
-        return {
-            "exists": False, 
-            "status": "new",
-            "upi_id": None,
-            "has_device_conflict": False
-        }
-    
-    # Check if PIN is set
-    # We assume empty password hash or specifically "NULL" string means not set
-    if not user.hashed_password or user.hashed_password == "NULL":
+    try:
+        # Normalize input
+        identifier = check.mobile_number.strip() # Raw input
+        normalized = ''.join(filter(str.isdigit, identifier))
+        
+        # Calculate hashes for raw AND normalized (to support legacy + new)
+        hashes = {security.hash_value(identifier), security.hash_value(normalized)}
+        
+        # Add +91 variation checks for robustness (login with/without code)
+        if len(normalized) == 10:
+             hashes.add(security.hash_value(f"+91{normalized}"))
+             hashes.add(security.hash_value(f"91{normalized}"))
+        
+        # Search by hash
+        user = db.query(models.User).filter(
+            (models.User.mobile_hash.in_(hashes)) | 
+            (models.User.email_hash == security.hash_value(identifier))
+        ).first()
+        
+        if not user:
+            # Check username just in case
+            user = db.query(models.User).filter(models.User.username == identifier).first()
+        
+        if not user:
+            return {
+                "exists": False, 
+                "status": "new",
+                "upi_id": None,
+                "has_device_conflict": False
+            }
+        
+        # Check if PIN is set
+        if not user.hashed_password or user.hashed_password == "NULL":
+            return {
+                "exists": True, 
+                "status": "new", 
+                "upi_id": user.upi_id,
+                "has_device_conflict": False
+            }
+        
+        # Existing user with PIN - Check for device conflict
+        has_device_conflict = False
+        if x_device_id:
+            x_device_hash = security.hash_value(x_device_id)
+            if user.device_id_hash and user.device_id_hash != x_device_hash:
+                has_device_conflict = True
+                print(f"Device conflict: {user.username} logged in on another device")
+        
         return {
             "exists": True, 
-            "status": "new", # User exists but needs PIN set (unlikely for imported data with PINs)
+            "status": "existing",
             "upi_id": user.upi_id,
-            "has_device_conflict": False
+            "has_device_conflict": has_device_conflict
         }
-    
-    # Existing user with PIN - Check for device conflict
-    # Show conflict if a different device is currently logged in (device_id exists and differs)
-    has_device_conflict = False
-    if x_device_id and user.device_id and user.device_id != x_device_id:
-        has_device_conflict = True
-        print(f"Device conflict: {user.username} logged in on {user.device_id}, request from {x_device_id}")
-    
-    return {
-        "exists": True, 
-        "status": "existing",
-        "upi_id": user.upi_id,
-        "has_device_conflict": has_device_conflict
-    }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/auth/register", response_model=schemas.UserResponse)
 def register_user(
     user: schemas.UserRegister,
     db: Session = Depends(get_db)
 ):
-    # Check if user exists
+    # Normalize mobile
+    normalized_mobile = ''.join(filter(str.isdigit, user.mobile_number)) if user.mobile_number else None
+    
+    # Check if user exists (check username OR mobile hash)
+    # Note: We check mobile_hash of normalized version
+    mobile_hash = security.hash_value(normalized_mobile) if normalized_mobile else None
+    
     db_user = db.query(models.User).filter(
         (models.User.username == user.username) | 
-        (models.User.mobile_number == user.mobile_number)
+        (models.User.mobile_hash == mobile_hash if mobile_hash else False)
     ).first()
+    
     if db_user:
         raise HTTPException(status_code=400, detail="Username or Mobile already registered")
     
@@ -216,9 +324,15 @@ def register_user(
     
     new_user = models.User(
         username=user.username,
-        mobile_number=user.mobile_number,
-        email=user.email,
+        # Mobile: SECURE - Hash + Encrypt only (no plain text)
+        mobile_hash=mobile_hash,
+        mobile_encrypted=security.encrypt_value(normalized_mobile) if normalized_mobile else None,
+        # Email: SECURE - Hash + Encrypt only (no plain text)
+        email_hash=security.hash_value(user.email) if user.email else None,
+        email_encrypted=security.encrypt_value(user.email) if user.email else None,
+        # UPI ID (shareable - kept plain)
         upi_id=new_upi,
+        upi_id_hash=security.hash_value(new_upi),
         balance=1000.0, # Sign up bonus?
         hashed_password=None # No PIN set yet
     )
@@ -237,30 +351,45 @@ def register_user(
     return new_user
 
 @app.post("/auth/set-pin")
+@limiter.limit("10/minute")
 def set_pin(
+    request: Request,
     req: schemas.PinSetRequest,
     db: Session = Depends(get_db)
 ):
-    user = db.query(models.User).filter(models.User.mobile_number == req.mobile_number).first()
+    # Normalize input first
+    normalized_mobile = ''.join(filter(str.isdigit, req.mobile_number))
+    
+    # SECURE: Search by hash (Check normalized AND raw for backward compat)
+    hashes = {security.hash_value(req.mobile_number), security.hash_value(normalized_mobile)}
+    
+    user = db.query(models.User).filter(models.User.mobile_hash.in_(hashes)).first()
+    
     if not user:
         # Check by username just in case
         user = db.query(models.User).filter(models.User.username == req.mobile_number).first()
         
     if not user:
         # NEW USER REGISTRATION via Set PIN
-        # Create a new user since they passed the mobile check and set a PIN
-        print(f"Creating new user for mobile: {req.mobile_number}")
+        # Always store NORMALIZED mobile for new users
         
         # Generate defaults
-        username = f"User{req.mobile_number}"
+        username = f"User{normalized_mobile}"
         # Use provided UPI ID or fallback to mobile_number
-        upi_id = req.upi_id if req.upi_id else req.mobile_number
+        upi_id = req.upi_id if req.upi_id else normalized_mobile
+        placeholder_email = f"{normalized_mobile}@example.com"
         
         new_user = models.User(
             username=username,
-            mobile_number=req.mobile_number,
-            email=f"{req.mobile_number}@example.com", # Placeholder
+            # Mobile: SECURE - Hash + Encrypt only (no plain text)
+            mobile_hash=security.hash_value(normalized_mobile),
+            mobile_encrypted=security.encrypt_value(normalized_mobile),
+            # Email: SECURE - Hash + Encrypt only (no plain text)
+            email_hash=security.hash_value(placeholder_email),
+            email_encrypted=security.encrypt_value(placeholder_email),
+            # UPI ID (shareable - kept plain)
             upi_id=upi_id,
+            upi_id_hash=security.hash_value(upi_id),
             balance=1000.0, # Welcome Bonus
             hashed_password=auth.get_password_hash(req.pin)
         )
@@ -285,14 +414,18 @@ def set_pin(
 @app.post("/logout")
 def logout(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     # Clear device_id and last_active_at to allow login from another device
-    device_id = current_user.device_id
+    # For logout audit, we might need the current device ID? 
+    # Usually passed in header, but we can rely on current_user state if we trust they match (which get_current_user checks)
+    
+    # We can try to decrypt the stored device ID for logging if needed, or just log the hash
+    stored_device_hash = current_user.device_id_hash
     
     # Update Login History: Mark session as ended
     try:
-        if device_id:
+        if stored_device_hash:
             active_history = db.query(models.LoginHistory).filter(
                 models.LoginHistory.user_id == current_user.id,
-                models.LoginHistory.device_id == device_id,
+                models.LoginHistory.device_id_hash == stored_device_hash,
                 models.LoginHistory.is_active == True
             ).first()
             
@@ -303,10 +436,11 @@ def logout(current_user: models.User = Depends(get_current_user), db: Session = 
     except Exception as e:
         print(f"Error updating logout history: {e}")
 
-    current_user.device_id = None
+    current_user.device_id_hash = None
+    current_user.device_id_encrypted = None
     current_user.last_active_at = None
     db.commit()
-    print(f"User {current_user.username} logged out from device {device_id}")
+    print(f"User {current_user.username} logged out")
     return {
         "msg": "Successfully logged out",
         "username": current_user.username,
@@ -331,7 +465,8 @@ def lookup_user_by_upi(upi_id: str, current_user: models.User = Depends(get_curr
     if not user:
         # AUTO-CREATE External User
         # This fixes issues where scanning a real QR code fails because the user isn't in our local DB
-        print(f"DEBUG: Auto-Creating user for UPI: {upi_id}")
+        # Check by UPI hash
+        hashed_upi = security.hash_value(upi_id)
         
         # Generate username from UPI
         base_name = upi_id.split('@')[0] if '@' in upi_id else upi_id
@@ -377,25 +512,32 @@ def get_login_history(current_user: models.User = Depends(get_current_user), db:
     ).order_by(models.LoginHistory.login_time.desc()).all()
     return history
 
-@app.get("/users/lookup-phone/{phone_number}", response_model=schemas.UserLookupResponse)
-def lookup_user_by_phone(phone_number: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+@app.get("/users/lookup-phone/{phone_number}", response_model=schemas.UserResponse)
+def lookup_user_by_phone(phone_number: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     # Normalize phone number - remove all non-digit characters
     normalized_phone = ''.join(filter(str.isdigit, phone_number))
     
-    # Try to find by mobile_number field
-    user = db.query(models.User).filter(models.User.mobile_number == normalized_phone).first()
+    # We need to check variations because we don't know exactly how it was stored
+    # (some users might have +91, some might not, some might be new/normalized)
     
-    # Optimized: SEARCH STRATEGY CHANGED
-    # We remove the leading wildcard search (LIKE %...) because it causes full table scans.
-    # Instead, we rely on exact matches or simple variations.
+    variations = [
+        normalized_phone,             # Raw digits (e.g. 9876543210)
+        f"91{normalized_phone}",      # With 91 prefix
+        f"+91{normalized_phone}",     # With +91 prefix
+    ]
     
-    if not user:
-        # If the user typed 1234567890, but we store +911234567890, let's try adding country code.
-        # This is O(log N) because it hits the index directly.
-        if len(normalized_phone) == 10:
-             user = db.query(models.User).filter(models.User.mobile_number == f"91{normalized_phone}").first()
-             if not user:
-                 user = db.query(models.User).filter(models.User.mobile_number == f"+91{normalized_phone}").first()
+    # Also handle case where input ALREADY has 91 (e.g. input 9198765...)
+    if len(normalized_phone) == 12 and normalized_phone.startswith("91"):
+        no_prefix = normalized_phone[2:]
+        if no_prefix not in variations:
+            variations.append(no_prefix)
+            variations.append(f"+91{no_prefix}") # +91 + digits
+
+    # Calculate hashes for all variations
+    hashes = [security.hash_value(v) for v in variations]
+    
+    # Query for any match
+    user = db.query(models.User).filter(models.User.mobile_hash.in_(hashes)).first()
 
     if not user:
         raise HTTPException(status_code=404, detail="Phone number not found")
@@ -413,86 +555,384 @@ def change_pin(
 
 @app.post("/transactions/", response_model=schemas.TransactionResponse)
 def create_transaction(
+    request: Request,
     tx: schemas.TransactionCreate, 
     current_user: models.User = Depends(get_current_user), 
     db: Session = Depends(get_db)
 ):
-    # 0. Verify PIN
+    """
+    DOUBLE-SPEND PROTECTED TRANSACTION
+    
+    This implementation uses SQLite-compatible locking to prevent race conditions:
+    1. PIN verification (outside lock - fast fail)
+    2. Receiver validation (outside lock - fast fail)
+    3. ATOMIC BLOCK: Lock -> Re-read balance -> Transfer -> Commit/Rollback
+    
+    Idempotency Key: If provided, prevents duplicate transactions when user
+    clicks pay button multiple times due to slow network.
+    """
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # IDEMPOTENCY CHECK - Prevent Duplicate Transactions
+    # ═══════════════════════════════════════════════════════════════════════════
+    if tx.idempotency_key:
+        # Check if this key was already processed
+        existing_key = db.query(models.IdempotencyKey).filter(
+            models.IdempotencyKey.key == tx.idempotency_key,
+            models.IdempotencyKey.user_id == current_user.id
+        ).first()
+        
+        if existing_key:
+            # Key already processed - return cached response
+            import json
+            if existing_key.response_data:
+                cached_response = json.loads(existing_key.response_data)
+                return schemas.TransactionResponse(**cached_response)
+            else:
+                # Fallback: return basic response with original transaction
+                if existing_key.transaction_id:
+                    original_tx = db.query(models.Transaction).filter(
+                        models.Transaction.transaction_id == existing_key.transaction_id
+                    ).first()
+                    if original_tx:
+                        return schemas.TransactionResponse(
+                            transaction_id=original_tx.transaction_id,
+                            sender_upi_id=current_user.upi_id,
+                            receiver_upi_id=original_tx.receiver.upi_id,
+                            sender_name=current_user.username,
+                            receiver_name=original_tx.receiver.username,
+                            amount=original_tx.amount,
+                            status=original_tx.status,
+                            risk_score=original_tx.risk_score,
+                            timestamp=original_tx.timestamp
+                        )
+                raise HTTPException(status_code=409, detail="Transaction already processed")
+    
+    # 0. Verify PIN (outside lock - fail fast)
     if not auth.verify_password(tx.pin, current_user.hashed_password):
         raise HTTPException(status_code=401, detail="Incorrect PIN")
 
-    # 1. Validate Receiver
+    # 1. Validate Receiver (outside lock - fail fast)
     receiver = db.query(models.User).filter(models.User.upi_id == tx.receiver_upi_id).first()
     if not receiver:
-        raise HTTPException(status_code=404, detail="Receiver UPI ID not found")
+        # AUTO-REGISTER EXTERNAL USER
+        # This allows payments to UPI IDs not yet in our system (Interop simulation)
+        try:
+             import random
+             # Create dummy user for external UPI
+             # Use timestamp to ensure uniqueness of "ext" mobile
+             dummy_suffix = f"{int(datetime.utcnow().timestamp())}{random.randint(1000,9999)}"
+             dummy_mobile = f"ext{dummy_suffix}" 
+             dummy_email = f"ext_{tx.receiver_upi_id}_{dummy_suffix}@external.mock"
+             
+             # Create hash/encrypted values
+             mobile_hash = security.hash_value(dummy_mobile)
+             mobile_enc = security.encrypt_value(dummy_mobile)
+             email_hash = security.hash_value(dummy_email)
+             email_enc = security.encrypt_value(dummy_email)
+             
+             new_receiver = models.User(
+                 username=f"Ext User",
+                 mobile_hash=mobile_hash,
+                 mobile_encrypted=mobile_enc,
+                 email_hash=email_hash,
+                 email_encrypted=email_enc,
+                 upi_id=tx.receiver_upi_id,
+                 hashed_password=auth.get_password_hash("external_default"),
+                 balance=0.0
+             )
+             db.add(new_receiver)
+             db.commit()
+             db.refresh(new_receiver)
+             
+             # Init profiles
+             db.add(models.SenderProfile(user_id=new_receiver.id))
+             db.add(models.ReceiverProfile(user_id=new_receiver.id))
+             db.commit()
+             
+             receiver = new_receiver
+        except Exception as e:
+             db.rollback()
+             print(f"Failed to auto-register external user: {e}")
+             # Look up one more time in case of race condition
+             receiver = db.query(models.User).filter(models.User.upi_id == tx.receiver_upi_id).first()
+             if not receiver:
+                 raise HTTPException(status_code=404, detail="Receiver UPI ID not found and could not be registered")
     
     if receiver.id == current_user.id:
         raise HTTPException(status_code=400, detail="Cannot send money to self")
 
-    # 2. Check Balance & 3. Fraud Check
-    # We evaluate fraud regardless, but balance check determines immediate failure
-    
-    tx_status = "SUCCESS"
+    # 2. Fraud Check (outside lock - informational)
     risk_result = fraud_engine.evaluate_fraud(db, current_user, receiver, tx.amount)
     
-    if current_user.balance < tx.amount:
-        tx_status = "FAILED"
-        # We can use a special indicator for risk or just rely on status
-        # Let's append to risk_result or use a standard code if compatible
-        # For simplicity, we just save status=FAILED
-    elif risk_result == "HIGH":
-        tx_status = "BLOCKED"
-    elif risk_result == "WARN":
-        tx_status = "SUCCESS" 
-    
-    # 5. Execute Transfer if SUCCESS
-    if tx_status == "SUCCESS":
-        current_user.balance -= tx.amount
-        receiver.balance += tx.amount
-        
-        # Update Profiles (Simplified)
-        s_prof = current_user.sender_profile
-        s_prof.total_transactions_count += 1
-        s_prof.monthly_volume += tx.amount
-        # Re-calculate average
-        s_prof.avg_transaction_amount = ( (s_prof.avg_transaction_amount * (s_prof.total_transactions_count-1)) + tx.amount ) / s_prof.total_transactions_count
-        s_prof.last_transaction_time = datetime.utcnow()
-        
-        r_prof = receiver.receiver_profile
-        r_prof.total_received_count += 1
-        r_prof.total_received_amount += tx.amount
+    if risk_result == "HIGH":
+        # Blocked by fraud engine - no need to attempt transfer
+        new_tx = models.Transaction(
+            transaction_id=f"TXN{datetime.utcnow().timestamp()}",
+            sender_id=current_user.id,
+            receiver_id=receiver.id,
+            amount=tx.amount,
+            encrypted_amount=security.encrypt_value(tx.amount),
+            status="BLOCKED",
+            risk_score=risk_result,
+            timestamp=datetime.utcnow()
+        )
+        db.add(new_tx)
+        db.commit()
+        db.refresh(new_tx)
+        return schemas.TransactionResponse(
+            transaction_id=new_tx.transaction_id,
+            sender_upi_id=current_user.upi_id,
+            receiver_upi_id=receiver.upi_id,
+            sender_name=current_user.username,
+            receiver_name=receiver.username,
+            amount=tx.amount,
+            status="BLOCKED",
+            risk_score=risk_result,
+            timestamp=new_tx.timestamp,
+            sender_mcc=current_user.mcc,
+            receiver_mcc=receiver.mcc
+        )
 
-    # 6. Record Transaction
-    new_tx = models.Transaction(
-        transaction_id=f"TXN{datetime.utcnow().timestamp()}",
-        sender_id=current_user.id,
-        receiver_id=receiver.id,
-        amount=tx.amount,
-        status=tx_status,
-        risk_score=risk_result,
-        timestamp=datetime.utcnow()
-    )
-    db.add(new_tx)
-    db.commit()
-    db.refresh(new_tx)
+    # 3. Perform Transfer (ATOMIC TRANSACTION)
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Unified Atomic Block: Handles Balance, History, Profiles, and Idempotency
+    # ═══════════════════════════════════════════════════════════════════════════
+    try:
+        # PESSIMISTIC LOCKING (Postgres Compatible)
+        # We must lock both users to prevent race conditions.
+        # DEADLOCK PREVENTION: Always lock users in ID order (smaller ID first)
+        
+        first_id, second_id = sorted([current_user.id, receiver.id])
+        
+        # Lock first user
+        u1 = db.query(models.User).with_for_update().filter(models.User.id == first_id).first()
+        # Lock second user
+        u2 = db.query(models.User).with_for_update().filter(models.User.id == second_id).first()
+        
+        if not u1 or not u2:
+             raise HTTPException(status_code=404, detail="User not found during transaction lock")
+             
+        # Identify which is sender/receiver after locking
+        sender_user = u1 if u1.id == current_user.id else u2
+        receiver_user = u1 if u1.id == receiver.id else u2
+        
+        if sender_user.balance < tx.amount:
+             raise HTTPException(status_code=400, detail="Insufficient balance")
+
+        # B. UPDATE BALANCES
+        sender_user.balance -= tx.amount
+        receiver_user.balance += tx.amount
+
+        # B2. UPDATE MERCHANT CATEGORY (if provided and valid)
+        if tx.receiver_mcc and tx.receiver_mcc != '0000':
+            # We trust the transaction source (QR code) more than default '0000'
+            receiver_user.mcc = tx.receiver_mcc
+        
+        # C. CREATE TRANSACTION RECORD
+        transaction_id = f"TXN{int(datetime.utcnow().timestamp()*1000)}"
+        new_tx = models.Transaction(
+            transaction_id=transaction_id,
+            sender_id=sender_user.id,
+            receiver_id=receiver_user.id,
+            amount=tx.amount,
+            encrypted_amount=security.encrypt_value(tx.amount),
+            status="SUCCESS",
+            risk_score=risk_result,
+            timestamp=datetime.utcnow()
+        )
+        db.add(new_tx)
+
+        # D. UPDATE PROFILES (Best Effort / Part of Transaction)
+        if sender_user.sender_profile:
+            sender_user.sender_profile.total_transactions_count += 1
+            sender_user.sender_profile.total_transactions_amount += tx.amount
+            sender_user.sender_profile.last_transaction_time = datetime.utcnow()
+            if sender_user.sender_profile.total_transactions_count > 0:
+                sender_user.sender_profile.avg_transaction_amount = (
+                    sender_user.sender_profile.total_transactions_amount / 
+                    sender_user.sender_profile.total_transactions_count
+                )
+        
+        if receiver_user.receiver_profile:
+            receiver_user.receiver_profile.total_received_count += 1
+            receiver_user.receiver_profile.total_received_amount += tx.amount
+            receiver_user.receiver_profile.last_received_time = datetime.utcnow()
+
+        # E. IDEMPOTENCY KEY
+        if tx.idempotency_key:
+            import json
+            response_obj = {
+                "transaction_id": transaction_id,
+                "sender_upi_id": sender_user.upi_id,
+                "receiver_upi_id": receiver_user.upi_id,
+                "sender_name": sender_user.username,
+                "receiver_name": receiver_user.username,
+                "amount": tx.amount,
+                "status": "SUCCESS",
+                "risk_score": risk_result,
+                "timestamp": new_tx.timestamp.isoformat() 
+            }
+            new_idemp = models.IdempotencyKey(
+                key=tx.idempotency_key,
+                user_id=sender_user.id,
+                transaction_id=transaction_id,
+                response_status="200",
+                response_data=json.dumps(response_obj)
+            )
+            db.add(new_idemp)
+
+        # COMMIT EVERYTHING
+        db.commit()
+        db.refresh(new_tx)
+        
+        return schemas.TransactionResponse(
+            transaction_id=new_tx.transaction_id,
+            sender_upi_id=sender_user.upi_id,
+            receiver_upi_id=receiver_user.upi_id,
+            sender_name=sender_user.username,
+            receiver_name=receiver_user.username,
+            amount=new_tx.amount,
+            status="SUCCESS",
+            risk_score=risk_result,
+            timestamp=new_tx.timestamp
+        )
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"Transaction Logic Error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Transaction failed due to system error")
+
+
+# Simple In-Memory Cache for Home Data
+# Key: user_id, Value: (timestamp, data)
+HOME_DATA_CACHE = {}
+CACHE_TTL = 5 # seconds
+
+@app.get("/home-aggregate", response_model=schemas.HomeAggregateResponse)
+def get_home_aggregate(
+    current_user: models.User = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
+    # Check Cache
+    if current_user.id in HOME_DATA_CACHE:
+        ts, cached_data = HOME_DATA_CACHE[current_user.id]
+        if (datetime.utcnow() - ts).total_seconds() < CACHE_TTL:
+            return cached_data
+
+    from sqlalchemy.orm import joinedload
     
-    # Return response (include UPI IDs manually since model relation might need load)
-    return schemas.TransactionResponse(
-        transaction_id=new_tx.transaction_id,
-        sender_upi_id=current_user.upi_id,
-        receiver_upi_id=receiver.upi_id,
-        sender_name=current_user.username,
-        receiver_name=receiver.username,
-        amount=new_tx.amount,
-        status=new_tx.status,
-        risk_score=new_tx.risk_score,
-        timestamp=new_tx.timestamp
+    # 1. Get History (Limit 10) - Eager Load
+    history_txs = db.query(models.Transaction).options(
+        joinedload(models.Transaction.sender), 
+        joinedload(models.Transaction.receiver)
+    ).filter(
+        (models.Transaction.sender_id == current_user.id) | 
+        (models.Transaction.receiver_id == current_user.id)
+    ).order_by(models.Transaction.timestamp.desc()).limit(10).all()
+    
+    history_list = []
+    for t in history_txs:
+        # Check manual mapping validity
+        history_list.append(schemas.TransactionResponse(
+            transaction_id=t.transaction_id,
+            sender_upi_id=t.sender.upi_id,
+            receiver_upi_id=t.receiver.upi_id,
+            sender_name=t.sender.username,
+            receiver_name=t.receiver.username,
+            amount=t.amount,
+            status=t.status,
+            risk_score=t.risk_score,
+            timestamp=t.timestamp,
+            sender_mcc=t.sender.mcc,
+            receiver_mcc=t.receiver.mcc
+        ))
+
+    # 2. Get Recent People (Limit 16)
+    people_query = text("""
+        SELECT u.id, u.username, u.mobile_encrypted, u.email_encrypted, u.upi_id, u.mcc, u.device_id_encrypted, u.balance, u.hashed_password
+        FROM users u
+        JOIN (
+            SELECT 
+                CASE WHEN sender_id = :uid THEN receiver_id ELSE sender_id END as other_id,
+                MAX(timestamp) as last_tx
+            FROM transactions 
+            WHERE sender_id = :uid OR receiver_id = :uid
+            GROUP BY other_id
+        ) t ON u.id = t.other_id
+        WHERE (u.mcc IS NULL OR u.mcc = '0000' OR u.mcc = '') AND u.id != :uid
+        ORDER BY t.last_tx DESC
+        LIMIT 16
+    """)
+    people_result = db.execute(people_query, {"uid": current_user.id}).fetchall()
+    people_list = [
+        models.User(
+            id=row.id, username=row.username, mobile_encrypted=row.mobile_encrypted,
+            email_encrypted=row.email_encrypted, upi_id=row.upi_id, mcc=row.mcc,
+            device_id_encrypted=row.device_id_encrypted, balance=row.balance,
+            hashed_password=row.hashed_password
+        ) for row in people_result
+    ]
+
+    # 3. Get Recent Merchants (Limit 16)
+    merchants_query = text("""
+        SELECT u.id, u.username, u.mobile_encrypted, u.email_encrypted, u.upi_id, u.mcc, u.device_id_encrypted, u.balance, u.hashed_password
+        FROM users u
+        JOIN (
+            SELECT 
+                CASE WHEN sender_id = :uid THEN receiver_id ELSE sender_id END as other_id,
+                MAX(timestamp) as last_tx
+            FROM transactions 
+            WHERE sender_id = :uid OR receiver_id = :uid
+            GROUP BY other_id
+        ) t ON u.id = t.other_id
+        WHERE u.mcc IS NOT NULL AND u.mcc != '0000' AND u.mcc != '' AND u.id != :uid
+        ORDER BY t.last_tx DESC
+        LIMIT 16
+    """)
+    merchants_result = db.execute(merchants_query, {"uid": current_user.id}).fetchall()
+    merchants_list = [
+        models.User(
+            id=row.id, username=row.username, mobile_encrypted=row.mobile_encrypted,
+            email_encrypted=row.email_encrypted, upi_id=row.upi_id, mcc=row.mcc,
+            device_id_encrypted=row.device_id_encrypted, balance=row.balance,
+            hashed_password=row.hashed_password
+        ) for row in merchants_result
+    ]
+
+    response_data = schemas.HomeAggregateResponse(
+        user=current_user,
+        history=history_list,
+        people=people_list,
+        merchants=merchants_list
     )
+    
+    # Update Cache
+    HOME_DATA_CACHE[current_user.id] = (datetime.utcnow(), response_data)
+    
+    return response_data
 
 @app.get("/transactions/history", response_model=list[schemas.TransactionResponse])
 def read_history(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Check Cache
+    CACHE_KEY = f"history_{current_user.id}"
+    if CACHE_KEY in HOME_DATA_CACHE:
+        ts, cached_data = HOME_DATA_CACHE[CACHE_KEY]
+        if (datetime.utcnow() - ts).total_seconds() < CACHE_TTL:
+            return cached_data
+
+    from sqlalchemy.orm import joinedload
     # Get sent and received
-    txs = db.query(models.Transaction).filter(
+    # OPTIMIZATION: Eager load sender and receiver to prevent N+1 queries
+    txs = db.query(models.Transaction).options(
+        joinedload(models.Transaction.sender), 
+        joinedload(models.Transaction.receiver)
+    ).filter(
         (models.Transaction.sender_id == current_user.id) | 
         (
             (models.Transaction.receiver_id == current_user.id) & 
@@ -514,8 +954,14 @@ def read_history(current_user: models.User = Depends(get_current_user), db: Sess
             amount=t.amount,
             status=t.status,
             risk_score=t.risk_score,
-            timestamp=t.timestamp
+            timestamp=t.timestamp,
+            sender_mcc=t.sender.mcc,
+            receiver_mcc=t.receiver.mcc
         ))
+        
+    # Update Cache
+    HOME_DATA_CACHE[CACHE_KEY] = (datetime.utcnow(), results)
+        
     return results
 
 @app.get("/transactions/recent-people", response_model=list[schemas.UserResponse])
@@ -524,12 +970,18 @@ def get_recent_people(
     current_user: models.User = Depends(get_current_user), 
     db: Session = Depends(get_db)
 ):
+    # Check Cache
+    CACHE_KEY = f"people_{current_user.id}_{limit}"
+    if CACHE_KEY in HOME_DATA_CACHE:
+        ts, cached_data = HOME_DATA_CACHE[CACHE_KEY]
+        if (datetime.utcnow() - ts).total_seconds() < CACHE_TTL:
+            return cached_data
+
     # FAST SQL QUERY
-    # We use raw SQL to efficiently find distinct counterparties sorted by most recent transaction.
-    # This avoids fetching all history into Python memory.
+    # PEOPLE = MCC is NULL OR MCC is '0000' OR MCC is empty ''
     
     query = text("""
-        SELECT u.id, u.username, u.mobile_number, u.email, u.upi_id, u.mcc, u.device_id, u.balance, u.hashed_password
+        SELECT u.id, u.username, u.mobile_encrypted, u.email_encrypted, u.upi_id, u.mcc, u.device_id_encrypted, u.balance, u.hashed_password
         FROM users u
         JOIN (
             SELECT 
@@ -539,30 +991,33 @@ def get_recent_people(
             WHERE sender_id = :uid OR receiver_id = :uid
             GROUP BY other_id
         ) t ON u.id = t.other_id
-        WHERE u.mcc IS NULL AND u.id != :uid
+        WHERE (u.mcc IS NULL OR u.mcc = '0000' OR u.mcc = '') AND u.id != :uid
         ORDER BY t.last_tx DESC
         LIMIT :limit
     """)
     
     result = db.execute(query, {"uid": current_user.id, "limit": limit}).fetchall()
     
-    # Map raw results back to Pydantic models (or dicts suitable for response)
-    # Since we selected columns matching the User model, we can reconstruct them.
+    print(f"DEBUG: get_recent_people for uid={current_user.id} query returned {len(result)} rows")
+
+    # Map raw results back to Pydantic models
     users = []
     for row in result:
-        # row is a Row object (tuple-like)
-        # We need to match the UserResponse schema
+        # print(f"DEBUG: Processing person: {row.username} (MCC: {row.mcc})") 
         users.append(models.User(
             id=row.id,
             username=row.username,
-            mobile_number=row.mobile_number,
-            email=row.email,
+            mobile_encrypted=row.mobile_encrypted,
+            email_encrypted=row.email_encrypted,
             upi_id=row.upi_id,
             mcc=row.mcc,
-            device_id=row.device_id,
+            device_id_encrypted=row.device_id_encrypted,
             balance=row.balance,
-            hashed_password=row.hashed_password # Needed for internal logic, though response model filters it
+            hashed_password=row.hashed_password
         ))
+        
+    # Update Cache
+    HOME_DATA_CACHE[CACHE_KEY] = (datetime.utcnow(), users)
         
     return users
 
@@ -572,9 +1027,17 @@ def get_recent_merchants(
     current_user: models.User = Depends(get_current_user), 
     db: Session = Depends(get_db)
 ):
+    # Check Cache
+    CACHE_KEY = f"merchants_{current_user.id}_{limit}"
+    if CACHE_KEY in HOME_DATA_CACHE:
+        ts, cached_data = HOME_DATA_CACHE[CACHE_KEY]
+        if (datetime.utcnow() - ts).total_seconds() < CACHE_TTL:
+            return cached_data
+
     # FAST SQL QUERY
+    # MERCHANTS = MCC is NOT NULL AND MCC != '0000' AND MCC != ''
     query = text("""
-        SELECT u.id, u.username, u.mobile_number, u.email, u.upi_id, u.mcc, u.device_id, u.balance, u.hashed_password
+        SELECT u.id, u.username, u.mobile_encrypted, u.email_encrypted, u.upi_id, u.mcc, u.device_id_encrypted, u.balance, u.hashed_password
         FROM users u
         JOIN (
             SELECT 
@@ -584,26 +1047,32 @@ def get_recent_merchants(
             WHERE sender_id = :uid OR receiver_id = :uid
             GROUP BY other_id
         ) t ON u.id = t.other_id
-        WHERE u.mcc IS NOT NULL AND u.id != :uid
+        WHERE u.mcc IS NOT NULL AND u.mcc != '0000' AND u.mcc != '' AND u.id != :uid
         ORDER BY t.last_tx DESC
         LIMIT :limit
     """)
     
     result = db.execute(query, {"uid": current_user.id, "limit": limit}).fetchall()
     
+    print(f"DEBUG: get_recent_merchants for uid={current_user.id} query returned {len(result)} rows")
+
     users = []
     for row in result:
+        # print(f"DEBUG: Processing merchant: {row.username} (MCC: {row.mcc})")
         users.append(models.User(
             id=row.id,
             username=row.username,
-            mobile_number=row.mobile_number,
-            email=row.email,
+            mobile_encrypted=row.mobile_encrypted,
+            email_encrypted=row.email_encrypted,
             upi_id=row.upi_id,
             mcc=row.mcc,
-            device_id=row.device_id,
+            device_id_encrypted=row.device_id_encrypted,
             balance=row.balance,
             hashed_password=row.hashed_password
         ))
+        
+    # Update Cache
+    HOME_DATA_CACHE[CACHE_KEY] = (datetime.utcnow(), users)
         
     return users
 
@@ -620,7 +1089,8 @@ def send_message(
     new_msg = models.Message(
         sender_id=current_user.id,
         receiver_id=receiver.id,
-        content=msg.content,
+        content=msg.content,  # Keep plain for backward compatibility
+        encrypted_content=security.encrypt_value(msg.content),  # AES-256 encrypted
         timestamp=datetime.utcnow()
     )
     db.add(new_msg)
@@ -631,7 +1101,7 @@ def send_message(
         id=new_msg.id,
         sender_upi_id=current_user.upi_id,
         receiver_upi_id=receiver.upi_id,
-        content=new_msg.content,
+        content=msg.content,  # Return original content to sender
         timestamp=new_msg.timestamp
     )
 
@@ -690,17 +1160,26 @@ def get_conversation(
                 "amount": t.amount,
                 "status": t.status,
                 "risk_score": t.risk_score,
-                "timestamp": t.timestamp
+                "timestamp": t.timestamp,
+                "sender_mcc": t.sender.mcc,
+                "receiver_mcc": t.receiver.mcc
             })
             
     # Process Messages
     for m in msgs:
+        # Prefer encrypted content if available, otherwise use plain content
+        msg_content = m.content
+        if m.encrypted_content:
+            decrypted = security.decrypt_value(m.encrypted_content, str)
+            if decrypted:
+                msg_content = decrypted
+        
         combined.append({
             "type": "message",
             "id": m.id,
             "sender_upi_id": m.sender.upi_id,
             "receiver_upi_id": m.receiver.upi_id,
-            "content": m.content,
+            "content": msg_content,
             "timestamp": m.timestamp
         })
         

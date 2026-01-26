@@ -6,6 +6,7 @@ class PaymentPinScreen extends StatefulWidget {
   final double amount;
   final String receiverName;
   final String? category; // Add category
+  final String? mcc;
 
   const PaymentPinScreen({
     super.key,
@@ -13,6 +14,7 @@ class PaymentPinScreen extends StatefulWidget {
     required this.amount,
     required this.receiverName,
     this.category,
+    this.mcc,
   });
 
   @override
@@ -42,14 +44,19 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
     });
   }
 
+  // State for In-Place Success UI
+  bool _showSuccess = false;
+
   Future<void> _verifyPin() async {
     setState(() => _isLoading = true);
 
     try {
-      final result = await _api.createTransaction(
+      final result = await _api.createTransactionOptimistic(
         widget.receiverUpi,
         widget.amount,
         _enteredPin,
+        mcc: widget.mcc,
+        receiverName: widget.receiverName,
       );
 
       if (mounted) {
@@ -57,10 +64,22 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
 
         if (result.containsKey('detail') &&
             result['detail'] == 'Incorrect PIN') {
+          // Instant Error (Local or Remote)
           _handleIncorrectPin();
+        } else if (result['status'] == 'LOCKED') {
+          // Instant Logout
+          Navigator.of(
+            context,
+          ).pushNamedAndRemoveUntil('/login', (route) => false);
+        } else if (result.containsKey('detail') &&
+            result['status'] != 'SUCCESS') {
+          // Other error
+          _handleError(result['detail']);
         } else {
-          // Success! Return result to PayScreen
-          Navigator.pop(context, result);
+          // Success! Show Success Screen In-Place
+          setState(() {
+            _showSuccess = true;
+          });
         }
       }
     } catch (e) {
@@ -84,7 +103,7 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
         ),
       );
       // Navigate to Home
-      Navigator.of(context).popUntil(ModalRoute.withName('/home'));
+      Navigator.of(context).popUntil((route) => route.settings.name == '/home');
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -108,6 +127,11 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // If success, Show Success UI
+    if (_showSuccess) {
+      return _buildSuccessUI();
+    }
+
     // Determine icon based on category (Merchant/Store vs Personal)
     // If category is present, it's likely a merchant.
     final bool isMerchant =
@@ -431,6 +455,76 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
           ),
         );
       }).toList(),
+    );
+  }
+
+  Widget _buildSuccessUI() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final color = const Color(0xFF4CAF50); // Success Green
+
+    return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Big Green Check
+            ScaleTransition(
+              scale: const AlwaysStoppedAnimation(
+                1.0,
+              ), // Could animate this later
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: color.withValues(alpha: 0.1),
+                ),
+                child: Icon(Icons.check_circle, size: 80, color: color),
+              ),
+            ),
+            const SizedBox(height: 32),
+            Text(
+              'Payment Successful',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '₹${widget.amount}',
+              style: TextStyle(
+                fontSize: 40,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Paid to ${widget.receiverName}',
+              style: TextStyle(fontSize: 16, color: Colors.grey),
+            ),
+            const SizedBox(height: 64),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 48),
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.of(
+                    context,
+                  ).popUntil((route) => route.settings.name == '/home');
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isDark ? Colors.grey[800] : Colors.black,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+                child: const Text('Done'),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

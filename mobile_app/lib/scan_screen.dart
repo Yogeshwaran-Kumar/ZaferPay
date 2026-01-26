@@ -5,10 +5,13 @@ import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:permission_handler/permission_handler.dart'; // Add permission_handler
+import 'package:permission_handler/permission_handler.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
-import 'main.dart';
+import 'package:mobile_app/main.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:google_mlkit_barcode_scanning/google_mlkit_barcode_scanning.dart'
+    as mlkit;
 
 class ScanScreen extends StatefulWidget {
   const ScanScreen({super.key});
@@ -19,7 +22,7 @@ class ScanScreen extends StatefulWidget {
 
 class _ScanScreenState extends State<ScanScreen> {
   bool _found = false;
-  bool _isScanning = true; // Toggle between Camera and My QR
+  bool _isScanning = true; // Toggle between Camera and My QR (UI only)
   MobileScannerController cameraController = MobileScannerController();
   Map<String, dynamic>? _user;
   final GlobalKey _qrKey = GlobalKey();
@@ -39,13 +42,19 @@ class _ScanScreenState extends State<ScanScreen> {
     _checkPermission();
   }
 
+  PermissionStatus? _permissionStatus;
+
   Future<void> _checkPermission() async {
-    final status = await Permission.camera.status;
-    if (!status.isGranted) {
-      MyApp.isSharing = true;
-      await Permission.camera.request();
-      MyApp.isSharing = false;
-      MyApp.lastShareTime = DateTime.now();
+    // Request permission explicitly on load
+    MyApp.isRequestingPermission = true;
+    try {
+      final status = await Permission.camera.request();
+      setState(() {
+        _permissionStatus = status;
+      });
+    } finally {
+      MyApp.isRequestingPermission = false;
+      MyApp.lastPermissionRequestTime = DateTime.now();
     }
   }
 
@@ -76,12 +85,15 @@ class _ScanScreenState extends State<ScanScreen> {
 
         // Share the image and text
         MyApp.isSharing = true;
-        // ignore: deprecated_member_use
-        await Share.shareXFiles([
-          XFile(path),
-        ], text: 'Use my UPI ID to pay me: $upiId\n\nLink: $upiUri');
-        MyApp.isSharing = false;
-        MyApp.lastShareTime = DateTime.now();
+        try {
+          // ignore: deprecated_member_use
+          await Share.shareXFiles([
+            XFile(path),
+          ], text: 'Use my UPI ID to pay me: $upiId\n\nLink: $upiUri');
+        } finally {
+          MyApp.isSharing = false;
+          MyApp.lastShareTime = DateTime.now();
+        }
       }
     } catch (e) {
       debugPrint('Error sharing QR code: $e');
@@ -95,29 +107,107 @@ class _ScanScreenState extends State<ScanScreen> {
     }
   }
 
+  Future<void> _pickImageFromGallery() async {
+    final ImagePicker picker = ImagePicker();
+    try {
+      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+      if (image == null) return;
+
+      // Show loading indicator
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            ),
+          ),
+        );
+      }
+
+      await Future.delayed(const Duration(milliseconds: 50)); // Small UX delay
+
+      String? result;
+      // Use Google ML Kit directly for robust file analysis
+      final inputImage = mlkit.InputImage.fromFilePath(image.path);
+      final scanner = mlkit.BarcodeScanner(
+        formats: [mlkit.BarcodeFormat.qrCode],
+      );
+
+      try {
+        final barcodes = await scanner.processImage(inputImage);
+        for (final barcode in barcodes) {
+          if (barcode.rawValue != null && barcode.rawValue!.isNotEmpty) {
+            result = barcode.rawValue;
+            break;
+          }
+        }
+      } catch (e) {
+        debugPrint("ML Kit Error: $e");
+      } finally {
+        await scanner.close();
+      }
+
+      // Dismiss loading
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop(); // Pop Dialog
+      }
+
+      if (result != null && result.isNotEmpty) {
+        _handleScanResult(result);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'No Valid QR code found. Please ensure the image contains a clear QR code.',
+              ),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        try {
+          Navigator.of(context, rootNavigator: true).pop();
+        } catch (_) {}
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error reading image: $e')));
+      }
+    }
+  }
+
+  void _handleScanResult(String raw) {
+    if (_found) return; // Prevent duplicates
+    setState(() => _found = true);
+
+    Map<String, String> result = {'upi': raw};
+
+    if (raw.startsWith('upi://')) {
+      try {
+        final uri = Uri.parse(raw);
+        final params = uri.queryParameters;
+        if (params.containsKey('pa')) result['upi'] = params['pa']!;
+        if (params.containsKey('mc')) result['mcc'] = params['mc']!;
+        if (params.containsKey('pn')) result['name'] = params['pn']!;
+      } catch (e) {
+        debugPrint("Error parsing URI: $e");
+      }
+    }
+
+    Navigator.pop(context, result);
+  }
+
   void _onDetect(BarcodeCapture capture) {
     if (_found || !_isScanning) return;
     final List<Barcode> barcodes = capture.barcodes;
     for (final barcode in barcodes) {
       if (barcode.rawValue != null) {
-        setState(() => _found = true);
-
-        String raw = barcode.rawValue!;
-        Map<String, String> result = {'upi': raw};
-
-        if (raw.startsWith('upi://')) {
-          try {
-            final uri = Uri.parse(raw);
-            final params = uri.queryParameters;
-            if (params.containsKey('pa')) result['upi'] = params['pa']!;
-            if (params.containsKey('mc')) result['mcc'] = params['mc']!;
-            if (params.containsKey('pn')) result['name'] = params['pn']!;
-          } catch (e) {
-            debugPrint("Error parsing URI: $e");
-          }
-        }
-
-        Navigator.pop(context, result);
+        _handleScanResult(barcode.rawValue!);
         break;
       }
     }
@@ -125,9 +215,54 @@ class _ScanScreenState extends State<ScanScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_permissionStatus == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_permissionStatus != PermissionStatus.granted) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.close, color: Colors.white),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.videocam_off, size: 60, color: Colors.grey),
+              const SizedBox(height: 16),
+              const Text(
+                "Camera permission denied",
+                style: TextStyle(color: Colors.white),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _checkPermission,
+                child: const Text("Grant Permission"),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: _isScanning ? _buildScannerView() : _buildMyQrView(),
+      // Stack ensures ScannerView (and its Controller) stays mounted/active
+      body: Stack(
+        children: [
+          _buildScannerView(), // Always active in background
+          if (!_isScanning)
+            Container(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              child: _buildMyQrView(),
+            ),
+        ],
+      ),
     );
   }
 
@@ -208,11 +343,8 @@ class _ScanScreenState extends State<ScanScreen> {
                   onTap: () {
                     setState(() {
                       _isScanning = false;
-                      // Turn off torch when leaving scanner
-                      cameraController
-                          .switchCamera(); // workaround or ensure torch off
-                      // Ideally just set state, but if torch was on, it might stay on?
-                      // cameraController.toggleTorch() if on.
+                      // Try to turn off torch if it was on
+                      cameraController.toggleTorch();
                     });
                   },
                   child: Container(
@@ -238,13 +370,7 @@ class _ScanScreenState extends State<ScanScreen> {
                 const SizedBox(height: 24),
 
                 ElevatedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Gallery feature coming soon!'),
-                      ),
-                    );
-                  },
+                  onPressed: _pickImageFromGallery,
                   icon: const Icon(Icons.photo_library),
                   label: const Text('Upload from gallery'),
                   style: ElevatedButton.styleFrom(
@@ -285,10 +411,18 @@ class _ScanScreenState extends State<ScanScreen> {
     final upiId = _user?['upi_id'] ?? 'user@upi';
     final name = _user?['username'] ?? 'User';
     final mobile = _user?['mobile_number'] ?? '';
+    final mcc = _user?['mcc'] ?? '0000'; // Use actual MCC from database
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Construct UPI URI
-    final upiUri = 'upi://pay?pa=$upiId&pn=$name&mc=0000&mode=02&purpose=00';
+    // Construct UPI URI with conditional MCC for Personal vs Merchant
+    String upiUri = 'upi://pay?pa=$upiId&pn=$name';
+    if (mcc != '0000') {
+      // Merchant QR: Include MCC and specific mode
+      upiUri += '&mc=$mcc&mode=02&purpose=00';
+    } else {
+      // Personal QR: Omit MCC, use basic mode if needed
+      upiUri += '&mode=00';
+    }
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -342,6 +476,32 @@ class _ScanScreenState extends State<ScanScreen> {
                   style: TextStyle(
                     fontSize: 14,
                     color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                  ),
+                ),
+              ],
+
+              // Merchant Account Badge
+              if (mcc != '0000' && mcc.toString().trim().isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade700,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.store, color: Colors.white, size: 16),
+                      SizedBox(width: 8),
+                      Text(
+                        'Merchant Account',
+                        style: TextStyle(color: Colors.white, fontSize: 12),
+                      ),
+                    ],
                   ),
                 ),
               ],

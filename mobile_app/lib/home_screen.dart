@@ -33,9 +33,22 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _loadData();
-    // Start polling every 2 seconds
-    _timer = Timer.periodic(const Duration(seconds: 2), (timer) {
+    // 0. Sync Load (True Zero Latency)
+    // Initialize state BEFORE first build
+    final cached = _api.getCachedHomeDataSync();
+    if (cached != null) {
+      _user = cached['user'];
+      _history = cached['history'] ?? [];
+      _recentPeople = cached['people'] ?? [];
+      _recentMerchants = cached['merchants'] ?? [];
+      _isLoading = false; // No spinner ever!
+    } else {
+      // Only trigger async load if sync failed
+      _loadData();
+    }
+
+    // Start polling every 10 seconds to avoid hitting rate limits
+    _timer = Timer.periodic(const Duration(seconds: 10), (timer) {
       if (mounted) {
         _loadData(showLoading: false);
       }
@@ -61,30 +74,44 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadData({bool showLoading = true}) async {
     if (showLoading) {
+      // Try loading cache first for instant UI
+      final cached = await _api.getCachedHomeData();
+      if (cached != null) {
+        _updateStateWithData(cached);
+        // If we have cache, don't show loading spinner, just refresh in background
+        showLoading = false;
+      }
+    }
+
+    if (showLoading) {
       setState(() => _isLoading = true);
     }
 
-    // Fetch all data in parallel for faster loading
-    final data = await _api.getHomeScreenData();
+    // Fetch fresh data
+    try {
+      final data = await _api.getHomeScreenData();
+      _updateStateWithData(data);
+    } catch (e) {
+      // Ignore error if we have cache, otherwise stop loading
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _updateStateWithData(Map<String, dynamic> data) {
+    if (!mounted) return;
     final user = data['user'];
     final history = data['history'];
     final people = data['people'];
     final merchants = data['merchants'];
 
     setState(() {
-      if (user != null) {
-        _user = user;
-      }
-      if (history != null) {
-        _history = history;
-      }
-      if (people != null) {
-        _recentPeople = people;
-      }
-      if (merchants != null) {
-        _recentMerchants = merchants;
-      }
-      _isLoading = false;
+      if (user != null) _user = user;
+      if (history != null) _history = history;
+      if (people != null) _recentPeople = people;
+      if (merchants != null) _recentMerchants = merchants;
     });
   }
 
@@ -346,11 +373,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final nav = Navigator.of(context);
       final payResult = await nav.pushNamed(
-        '/pay',
+        '/amount',
         arguments: {
           'upi': scannedUpi,
           'name': scannedName,
           'category': category,
+          'mcc': scannedMcc,
+          'senderBalance': _user?['balance'],
+          'senderUpi': _user?['upi_id'],
         },
       );
 
@@ -365,8 +395,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _handlePayAnyone() {
-    Navigator.pushNamed(context, '/pay');
+  Future<void> _handlePayAnyone() async {
+    await Navigator.pushNamed(context, '/pay');
+    if (mounted) {
+      _loadData(showLoading: false);
+    }
   }
 
   void _handleViewBalance() {

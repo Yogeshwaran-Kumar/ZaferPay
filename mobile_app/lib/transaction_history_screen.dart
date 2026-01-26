@@ -48,8 +48,36 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
   }
 
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+    // 1. Instant Cache Load
+    final cachedHistory = await _api.getCachedHistory();
+    if (mounted && cachedHistory != null) {
+      // We might need user info for filtering logic to work correctly
+      // Ideally we cache 'me' as well or check if we have it from previous screen (not passed currently)
+      // For now, let's try to get cached 'me' or valid 'me' quickly.
+      // Actually, we can fetch 'me' from cache if we add that getter,
+      // OR we just rely on 'me' being fast or wait for it.
+      // But user wants 0.0s.
+      // Let's assume we can render list without 'me' IF filters aren't applied yet?
+      // Filters need _user to determine "Sent/Received".
+      // Let's check if we can get cached user too.
+      // Note: We haven't implemented getCachedMe explicitly, but we have getCachedHomeData which contains 'user'.
+      final homeData = await _api.getCachedHomeData();
+      if (homeData != null && homeData['user'] != null) {
+        setState(() {
+          _user = homeData['user'];
+          _allHistory = cachedHistory;
+          _applyFilters();
+          _isLoading = false;
+        });
+      }
+    }
+
+    if (_allHistory.isEmpty) {
+      setState(() => _isLoading = true);
+    }
+
     try {
+      // 2. Fresh Fetch
       final user = await _api.getMe();
       final history = await _api.getHistory();
       if (mounted) {
@@ -61,7 +89,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted && _allHistory.isEmpty) setState(() => _isLoading = false);
     }
   }
 
@@ -932,6 +960,26 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
           : Colors.green.shade700;
     }
 
+    // Identify Merchant
+    final mcc = isDebit ? tx['receiver_mcc'] : tx['sender_mcc'];
+    final isMerchant = mcc != null && mcc != '0000';
+
+    // Consistent Colors for People
+    final List<Color> avatarColors = [
+      const Color(0xFFE57373),
+      const Color(0xFFBA68C8),
+      const Color(0xFF7986CB),
+      const Color(0xFF4FC3F7),
+      const Color(0xFF4DB6AC),
+      const Color(0xFF81C784),
+      const Color(0xFFFFB74D),
+      const Color(0xFFA1887F),
+      const Color(0xFF90A4AE),
+    ];
+    final color = isMerchant
+        ? Colors.orange
+        : avatarColors[displayName.hashCode.abs() % avatarColors.length];
+
     String dateStr = "";
     try {
       final dt = DateTime.parse(tx['timestamp']);
@@ -959,18 +1007,24 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: Colors.purple, // Or random color based on name
+                color: isMerchant
+                    ? Colors.orange.withValues(alpha: 0.2)
+                    : color,
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
-              child: Text(
-                displayName.isNotEmpty ? displayName[0].toUpperCase() : '?',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              child: isMerchant
+                  ? const Icon(Icons.store, color: Colors.orange, size: 24)
+                  : Text(
+                      displayName.isNotEmpty
+                          ? displayName[0].toUpperCase()
+                          : '?',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
             ),
             const SizedBox(width: 16),
             // Details

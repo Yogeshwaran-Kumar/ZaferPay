@@ -1,41 +1,104 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
+
+# ═══════════════════════════════════════════════════════════════════════════
+# AUTH & TOKEN SCHEMAS
+# ═══════════════════════════════════════════════════════════════════════════
+
+class Token(BaseModel):
+    access_token: str
+    refresh_token: Optional[str] = None
+    token_type: str
+    expires_in: int
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
+
+class MobileCheckRequest(BaseModel):
+    mobile_number: str
+
+class MobileCheckResponse(BaseModel):
+    exists: bool
+    status: str
+    upi_id: Optional[str] = None
+    has_device_conflict: bool = False
+
+# ═══════════════════════════════════════════════════════════════════════════
+# USER SCHEMAS
+# ═══════════════════════════════════════════════════════════════════════════
 
 class UserBase(BaseModel):
     username: str
-    email: Optional[str] = None
 
-class UserCreate(UserBase):
+class UserRegister(UserBase):
+    mobile_number: Optional[str] = None
+    email: Optional[str] = None
     password: str
 
-class UserRegister(BaseModel):
-    username: str
+class PinSetRequest(BaseModel):
     mobile_number: str
-    email: Optional[str] = None
-    # Password/PIN checks happen later or separate
+    pin: str
+    upi_id: Optional[str] = None
+
+class ChangePinRequest(BaseModel):
+    new_pin: str
 
 class UserResponse(UserBase):
     id: int
     upi_id: str
-    mcc: Optional[str] = None
     balance: float
-    mobile_number: Optional[str] = None
+    mcc: Optional[str] = None
+    # We don't return hashed_password or sensitive fields
+    
+    class Config:
+        from_attributes = True
+
+class UserLookupResponse(UserResponse):
+    pass
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TRANSACTION SCHEMAS
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TransactionCreate(BaseModel):
+    receiver_upi_id: str
+    amount: float
+    pin: str
+    idempotency_key: Optional[str] = None
+    receiver_mcc: Optional[str] = None
+
+class TransactionResponse(BaseModel):
+    transaction_id: str
+    sender_upi_id: str
+    receiver_upi_id: str
+    sender_name: str
+    receiver_name: str
+    amount: float
+    status: str
+    risk_score: str
+    timestamp: datetime
+    sender_mcc: Optional[str] = None
+    receiver_mcc: Optional[str] = None
 
     class Config:
         from_attributes = True
 
+# ═══════════════════════════════════════════════════════════════════════════
+# HISTORY SCHEMAS
+# ═══════════════════════════════════════════════════════════════════════════
 
+class LoginHistoryResponse(BaseModel):
+    login_time: datetime
+    logout_time: Optional[datetime]
+    is_active: bool
+    
+    class Config:
+        from_attributes = True
 
-class UserLookupResponse(BaseModel):
-    username: str
-    upi_id: str
-    mcc: Optional[str] = None
-
-class UserLookupResponse(BaseModel):
-    username: str
-    upi_id: str
-    mcc: Optional[str] = None
+# ═══════════════════════════════════════════════════════════════════════════
+# MESSAGE SCHEMAS
+# ═══════════════════════════════════════════════════════════════════════════
 
 class MessageCreate(BaseModel):
     receiver_upi_id: str
@@ -47,60 +110,12 @@ class MessageResponse(BaseModel):
     receiver_upi_id: str
     content: str
     timestamp: datetime
-    type: str = "message"
     
     class Config:
         from_attributes = True
 
-class TransactionCreate(BaseModel):
-    receiver_upi_id: str
-    amount: float
-    pin: str
-
-class TransactionResponse(BaseModel):
-    transaction_id: str
-    sender_upi_id: str
-    receiver_upi_id: str
-    sender_name: Optional[str] = None
-    receiver_name: Optional[str] = None
-    amount: float
-    status: str
-    risk_score: str
-    timestamp: datetime
-    type: str = "transaction"
-
-    class Config:
-        from_attributes = True
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-class MobileCheckRequest(BaseModel):
-    mobile_number: str
-
-class MobileCheckResponse(BaseModel):
-    exists: bool
-    status: str  # "new" (needs pin), "existing" (login), "not_found"
-    upi_id: Optional[str] = None
-    detail: Optional[str] = None
-    has_device_conflict: bool = False
-
-class PinSetRequest(BaseModel):
-    mobile_number: str
-    pin: str
-    upi_id: Optional[str] = None
-
-class ChangePinRequest(BaseModel):
-    new_pin: str
-
-class LoginHistoryResponse(BaseModel):
-    id: int
-    device_id: str
-    login_time: datetime
-    logout_time: Optional[datetime] = None
-    ip_address: Optional[str] = None
-    is_active: bool
-
-    class Config:
-        from_attributes = True
+class HomeAggregateResponse(BaseModel):
+    user: UserResponse
+    history: List[TransactionResponse]
+    people: List[UserLookupResponse]
+    merchants: List[UserLookupResponse]

@@ -1,18 +1,38 @@
+"""
+Database Configuration - PostgreSQL (Neon Cloud)
+"""
+
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
 
-import os
+# Load environment variables
+load_dotenv()
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# SQLITE_DATABASE_URL = "sqlite:///./transactions.db"
-# Using SQLite for immediate "work out of the box" capability as requested.
-# If Postgres is needed later: "postgresql://user:password@localhost/dbname"
-SQLALCHEMY_DATABASE_URL = f"sqlite:///{os.path.join(BASE_DIR, 'transactions.db')}"
+# ═══════════════════════════════════════════════════════════════════════════
+# POSTGRESQL DATABASE CONNECTION
+# ═══════════════════════════════════════════════════════════════════════════
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable is required. Check your .env file.")
+
+# Handle URL format variations (postgres:// -> postgresql://)
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+print(f"🐘 Connected to PostgreSQL database")
 
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+    DATABASE_URL,
+    pool_pre_ping=True,    # Verify connections before use
+    pool_size=5,           # Connection pool size
+    max_overflow=10,       # Extra connections when pool is exhausted
 )
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()

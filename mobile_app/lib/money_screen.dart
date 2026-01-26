@@ -6,6 +6,7 @@ import 'api_service.dart';
 import 'transaction_history_screen.dart';
 import 'transaction_details_screen.dart';
 import 'balance_check_screen.dart';
+import 'mcc_helper.dart';
 
 class MoneyScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -44,19 +45,60 @@ class _MoneyScreenState extends State<MoneyScreen> {
 
   Future<void> _loadData({bool showLoading = true}) async {
     if (showLoading) {
-      setState(() => _isLoading = true);
+      // 1. Sync Cache Load (True Zero Latency)
+      // A. Load User Sync (Critical for "Failed to load" check)
+      Map<String, dynamic>? cachedUser = _api.getUserSync();
+
+      // Fallback: If RAM empty (app restart), try Disk Cache immediately
+      if (cachedUser == null) {
+        final homeDisk = await _api
+            .getCachedHomeData(); // This populates RAM too
+        if (homeDisk != null) {
+          cachedUser = homeDisk['user'];
+        }
+      }
+
+      if (cachedUser != null) {
+        _user = cachedUser;
+      }
+
+      // B. Load History Sync
+      final cachedHistory = _api.getHistorySync();
+      if (cachedHistory != null) {
+        _history = cachedHistory;
+        // If we have cache, we paint immediately.
+        // Still fetch fresh in background, but no spinner needed if cache is good.
+        if (_user != null) showLoading = false;
+      }
+
+      if (showLoading) {
+        // Fallback to async disk cache if RAM is empty
+        final diskHistory = await _api.getCachedHistory();
+        if (diskHistory != null) {
+          _history = diskHistory;
+          if (_user != null) showLoading = false;
+        }
+      }
+
+      if (_history.isEmpty && showLoading) {
+        setState(() => _isLoading = true);
+      } else {
+        // Ensure state reflects loaded content
+        if (mounted) setState(() => _isLoading = false);
+      }
     }
+
+    // 2. Fetch Fresh Data (Background)
     final user = await _api.getMe();
     final history = await _api.getHistory();
-    setState(() {
-      if (user != null) {
-        _user = user;
-      }
-      if (history != null) {
-        _history = history;
-      }
-      _isLoading = false;
-    });
+
+    if (mounted) {
+      setState(() {
+        if (user != null) _user = user;
+        if (history != null) _history = history;
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _checkBalance() async {
@@ -66,7 +108,7 @@ class _MoneyScreenState extends State<MoneyScreen> {
       context,
       MaterialPageRoute(
         builder: (context) =>
-            BalanceCheckScreen(mobileNumber: _user!['mobile_number'] ?? ''),
+            BalanceCheckScreen(mobileNumber: _user!['username'] ?? ''),
       ),
     );
 
@@ -327,6 +369,16 @@ class _MoneyScreenState extends State<MoneyScreen> {
                       formattedDate = tx['timestamp'];
                     }
 
+                    // Merchant Detection
+                    final mcc = isDebit ? tx['receiver_mcc'] : tx['sender_mcc'];
+                    final isMerchant =
+                        mcc != null &&
+                        mcc != '0000' &&
+                        mcc.toString().trim().isNotEmpty;
+                    final merchantDomain = isMerchant
+                        ? MccHelper.getDomain(mcc.toString())
+                        : null;
+
                     return GestureDetector(
                       onTap: () {
                         Navigator.push(
@@ -335,6 +387,7 @@ class _MoneyScreenState extends State<MoneyScreen> {
                             builder: (context) => TransactionDetailsScreen(
                               transaction: tx,
                               currentUpiId: _user!['upi_id'],
+                              merchantCategory: merchantDomain,
                             ),
                           ),
                         );
@@ -357,12 +410,16 @@ class _MoneyScreenState extends State<MoneyScreen> {
                             vertical: 8,
                           ),
                           leading: CircleAvatar(
-                            backgroundColor: color.withValues(alpha: 0.1),
+                            backgroundColor: isMerchant
+                                ? Colors.orange.withValues(alpha: 0.1)
+                                : color.withValues(alpha: 0.1),
                             child: Icon(
-                              isDebit
-                                  ? Icons.arrow_upward
-                                  : Icons.arrow_downward,
-                              color: color,
+                              isMerchant
+                                  ? Icons.store
+                                  : (isDebit
+                                        ? Icons.arrow_upward
+                                        : Icons.arrow_downward),
+                              color: isMerchant ? Colors.orange : color,
                               size: 20,
                             ),
                           ),
@@ -378,6 +435,17 @@ class _MoneyScreenState extends State<MoneyScreen> {
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              if (isMerchant && merchantDomain != null)
+                                Text(
+                                  merchantDomain,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isDark
+                                        ? Colors.grey.shade300
+                                        : Colors.grey.shade700,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
                               Text(
                                 formattedDate,
                                 style: TextStyle(

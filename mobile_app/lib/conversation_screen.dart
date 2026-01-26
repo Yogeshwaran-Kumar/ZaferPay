@@ -22,23 +22,60 @@ class _ConversationScreenState extends State<ConversationScreen> {
   @override
   void initState() {
     super.initState();
+    // 0. Sync Load (True Zero Latency)
+    final targetUpi = widget.args['upi'];
+
+    // Load User Sync (Me)
+    final me = _api.getUserSync();
+    if (me != null) {
+      _myUpi = me['upi_id'];
+    }
+
+    final cached = _api.getCachedConversationSync(targetUpi);
+    if (cached != null) {
+      _messages = List.from(
+        cached,
+      ); // Create copy to avoid reference aliasing bugs
+      _isLoading = false; // Render immediately!
+    }
+
+    // Always fetch fresh data in background
     _loadData();
   }
 
   Future<void> _loadData() async {
-    final user = await _api.getMe();
-    if (user != null) {
-      _myUpi = user['upi_id'];
+    final targetUpi = widget.args['upi'];
+
+    // 0. Instant Cache Load (Zero Latency) - Disk Priority
+    if (_myUpi == null) {
+      final me = await _api.getCachedMe();
+      if (mounted && me != null) {
+        setState(() => _myUpi = me['upi_id']);
+      }
     }
 
-    final targetUpi = widget.args['upi'];
-    // Fetch conversation
+    final cachedHistory = await _api.getCachedConversation(targetUpi);
+    if (mounted && cachedHistory != null) {
+      setState(() {
+        _messages = List.from(cachedHistory); // Copy
+        _isLoading = false; // Show content immediately
+      });
+    }
+
+    // 1. Fetch Fresh Data (Background)
+    // Get current user details for context (Network Verification)
+    final user = await _api.getMe();
+    if (mounted && user != null) {
+      setState(() => _myUpi = user['upi_id']);
+    }
+
+    // Fetch latest messages
     final history = await _api.getConversation(targetUpi);
 
     if (mounted) {
       setState(() {
         if (history != null) {
-          _messages = history;
+          _messages = List.from(history); // Copy
         }
         _isLoading = false;
       });
@@ -116,7 +153,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
       body: Column(
         children: [
           Expanded(
-            child: _isLoading
+            child: _isLoading && _messages.isEmpty
                 ? const Center(child: CircularProgressIndicator())
                 : ListView.builder(
                     reverse: true, // Chat style: bottom up
@@ -137,18 +174,45 @@ class _ConversationScreenState extends State<ConversationScreen> {
     );
   }
 
+  DateTime _parseTimestamp(String? timestamp) {
+    if (timestamp == null || timestamp.isEmpty) return DateTime.now();
+    try {
+      // Handle timestamps correctly
+      // If it ends with Z, it's already ISO UTC.
+      // If not, we assume it's Naive UTC (from backend) and append Z.
+      String ts = timestamp;
+      if (!ts.endsWith('Z')) {
+        ts = '${ts}Z';
+      }
+      return DateTime.parse(ts).toLocal();
+    } catch (_) {
+      return DateTime.now();
+    }
+  }
+
+  String _formatSmartDate(DateTime dt) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final date = DateTime(dt.year, dt.month, dt.day);
+
+    if (date == today) {
+      return "Today, ${DateFormat('h:mm a').format(dt)}";
+    } else if (date == yesterday) {
+      return "Yesterday, ${DateFormat('h:mm a').format(dt)}";
+    } else {
+      return DateFormat('d MMM, h:mm a').format(dt);
+    }
+  }
+
   Widget _buildMessageItem(Map<String, dynamic> tx, bool isDark) {
     final bool isSender = tx['sender_upi_id'] == _myUpi;
     final bool isSuccess = tx['status'] == 'SUCCESS';
     final amount = tx['amount'];
 
-    // Date formatting
-    // If "today", show "Today, HH:mm a"
-    // DateTime timestamp from API is UTC typically, need to handle local.
-    // Assuming backend string is ISO.
-    DateTime dt =
-        DateTime.tryParse(tx['timestamp'] ?? "")?.toLocal() ?? DateTime.now();
-    final timeStr = DateFormat('d MMM, h:mm a').format(dt);
+    // Use smart date formatting handles UTC/Local issues
+    final dt = _parseTimestamp(tx['timestamp']);
+    final timeStr = _formatSmartDate(dt);
 
     return Align(
       alignment: isSender ? Alignment.centerRight : Alignment.centerLeft,
@@ -233,6 +297,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
                         color: isDark ? Colors.white : Colors.black,
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
+                        fontFamily:
+                            'Roboto', // Ensure Rupee symbol renders well
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -376,9 +442,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
   Widget _buildChatBubble(Map<String, dynamic> msg, bool isDark) {
     final bool isSender = msg['sender_upi_id'] == _myUpi;
     final String content = msg['content'] ?? "";
-    DateTime dt =
-        DateTime.tryParse(msg['timestamp'] ?? "")?.toLocal() ?? DateTime.now();
-    final timeStr = DateFormat('h:mm a').format(dt);
+    final dt = _parseTimestamp(msg['timestamp']);
+    // Use smart date to show Today/Yesterday + Time as requested
+    final timeStr = _formatSmartDate(dt);
 
     return Align(
       alignment: isSender ? Alignment.centerRight : Alignment.centerLeft,
@@ -432,11 +498,38 @@ class _ConversationScreenState extends State<ConversationScreen> {
     if (content.isEmpty) return;
 
     final targetUpi = widget.args['upi'];
-    final success = await _api.sendMessage(targetUpi, content);
 
-    if (success) {
+    // 1. Optimistic Update (Zero Latency)
+    final tempMsg = {
+      'id': 'temp-${DateTime.now().millisecondsSinceEpoch}',
+      'sender_upi_id': _myUpi,
+      'receiver_upi_id': targetUpi,
+      'content': content,
+      'timestamp': DateTime.now().toUtc().toIso8601String(), // Correct UTC
+      'type': 'message',
+      'amount': 0.0,
+      'status': 'SUCCESS', // Optimistically assume success
+    };
+
+    setState(() {
+      _messages.insert(0, tempMsg); // Add to UI instantly
       _msgController.clear();
-      _loadData(); // Refresh list to see message
+    });
+
+    // 2. Network Sync (Background)
+    try {
+      // We pass the tempMsg to API so it can cache it immediately too
+      await _api.sendMessageOptimistic(targetUpi, content, tempMsg);
+    } catch (_) {
+      // If failed, mark as failed in UI (optional, for now we keep it simple)
+      if (mounted) {
+        setState(() {
+          final index = _messages.indexWhere((m) => m['id'] == tempMsg['id']);
+          if (index != -1) {
+            _messages[index]['status'] = 'FAILED';
+          }
+        });
+      }
     }
   }
 }
