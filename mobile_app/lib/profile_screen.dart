@@ -31,12 +31,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadUser() async {
-    setState(() => _isLoading = true);
-    final user = await _api.getMe();
-    setState(() {
-      _user = user;
-      _isLoading = false;
-    });
+    // 1. Try to load from cache immediately
+    final cachedUser = await _api.getCachedMe();
+    if (cachedUser != null && mounted) {
+      setState(() {
+        _user = cachedUser;
+        _isLoading = false;
+      });
+    }
+
+    // 2. Fetch fresh data from network in background
+    try {
+      final user = await _api.getMe();
+      if (mounted && user != null) {
+        setState(() {
+          _user = user;
+          _isLoading = false;
+        });
+      } else if (mounted && _user == null) {
+        // Only set error if we have no data at all
+        setState(() => _isLoading = false);
+      }
+    } catch (_) {
+      if (mounted && _user == null) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   @override

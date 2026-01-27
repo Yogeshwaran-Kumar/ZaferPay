@@ -64,7 +64,7 @@ def get_db():
     finally:
         db.close()
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -94,9 +94,14 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
                 headers={"WWW-Authenticate": "Bearer"},
             )
     
-    # Update last_active_at on every authenticated request
-    user.last_active_at = datetime.utcnow()
-    db.commit()
+    # Update last_active_at conservatively (max once per minute) to reduce DB writes
+    now = datetime.utcnow()
+    if not user.last_active_at or (now - user.last_active_at).total_seconds() > 60:
+        user.last_active_at = now
+        db.commit()
+    
+    # Refresh user to ensure latest state is returned
+    # db.refresh(user) # Not strictly needed if we just committed, but good for consistency if fields changed
         
     return user
 

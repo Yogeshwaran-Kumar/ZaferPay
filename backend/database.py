@@ -29,8 +29,8 @@ print(f"🐘 Connected to PostgreSQL database")
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,    # Verify connections before use
-    pool_size=5,           # Connection pool size
-    max_overflow=10,       # Extra connections when pool is exhausted
+    pool_size=20,          # Increased connection pool size
+    max_overflow=40,       # Increased overflow limit
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
