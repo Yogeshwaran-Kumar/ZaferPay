@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import timedelta, datetime
+from typing import List # <--- Added this
 import models, schemas, auth, database, fraud_engine, security
 
 
@@ -95,7 +96,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
             )
     
     # Update last_active_at conservatively (max once per minute) to reduce DB writes
-    now = datetime.utcnow()
+    now = datetime.now()
     if not user.last_active_at or (now - user.last_active_at).total_seconds() > 60:
         user.last_active_at = now
         db.commit()
@@ -154,7 +155,7 @@ def login_for_access_token(
         # Update device_id (either first login or force logout)
         user.device_id_hash = x_device_hash
         user.device_id_encrypted = security.encrypt_value(x_device_id)  # AES-256 encrypted
-        user.last_active_at = datetime.utcnow()  # Mark as active now
+        user.last_active_at = datetime.now()  # Mark as active now
         db.commit()
 
     # Record Login History (New Feature)
@@ -164,18 +165,80 @@ def login_for_access_token(
             # but generally we want to log every login session.
             
             client_ip = get_real_ip(request)
+            device_hash = security.hash_value(x_device_id)
             
-            login_record = models.LoginHistory(
-                user_id=user.id,
-                # Device ID: SECURE - Hash + Encrypt only
-                device_id_hash=security.hash_value(x_device_id),
-                device_id_encrypted=security.encrypt_value(x_device_id),
-                login_time=datetime.utcnow(),
-                # IP: SECURE - Hash + Encrypt only
-                ip_hash=security.hash_value(client_ip) if client_ip else None,
-                ip_encrypted=security.encrypt_value(client_ip) if client_ip else None
-            )
-            db.add(login_record)
+            # 0. FORCE CLOSE ALL OTHER ACTIVE SESSIONS (The "Device A -> Device B" Rule)
+            # If user logs in here, all other devices are dead. History must reflect that.
+            other_active_sessions = db.query(models.LoginHistory).filter(
+                models.LoginHistory.user_id == user.id,
+                models.LoginHistory.device_id_hash != device_hash,
+                models.LoginHistory.is_active == True
+            ).all()
+            
+            for other_session in other_active_sessions:
+                print(f"Force closing remote session {other_session.id} (device switch)")
+                other_session.is_active = False
+                other_session.logout_time = datetime.now()
+                db.add(other_session)
+
+            # 1. Check for Active Session (Current Device)
+            active_session = db.query(models.LoginHistory).filter(
+                models.LoginHistory.user_id == user.id,
+                models.LoginHistory.device_id_hash == device_hash,
+                models.LoginHistory.is_active == True
+            ).first()
+            
+            if active_session:
+                # RESUME existing session (User did not logout)
+                print(f"Resuming existing login session {active_session.id} for user {user.username}")
+                # We do NOTHING here. Usage count does NOT increase.
+                # This ensures "Device A" count stays same until explicit logout.
+            else:
+                # CREATE new session (User logged out previously or new device)
+                print(f"Creating NEW login session for user {user.username}")
+                login_record = models.LoginHistory(
+                    user_id=user.id,
+                    # Device ID: SECURE - Hash + Encrypt only
+                    device_id_hash=device_hash,
+                    device_id_encrypted=security.encrypt_value(x_device_id),
+                    login_time=datetime.now(),
+                    # IP: SECURE - Hash + Encrypt only
+                    ip_hash=security.hash_value(client_ip) if client_ip else None,
+                    ip_encrypted=security.encrypt_value(client_ip) if client_ip else None,
+                    is_active=True
+                )
+                db.add(login_record)
+
+                # 3. UPDATE DEVICE PROFILE (The "Truth" Summary)
+                # Find or Create Profile
+                device_profile = db.query(models.DeviceProfile).filter(
+                    models.DeviceProfile.user_id == user.id,
+                    models.DeviceProfile.device_id_hash == device_hash
+                ).first()
+                
+                if device_profile:
+                    # Increment Count (Only on NEW session)
+                    device_profile.login_count += 1
+                    device_profile.last_login_time = datetime.now()
+                else:
+                    # Create New Device Profile
+                    # Determine new name (Device A, B, C...)
+                    count = db.query(models.DeviceProfile).filter(models.DeviceProfile.user_id == user.id).count()
+                    new_name = f"Device {chr(65+count)}"
+                    
+                    device_profile = models.DeviceProfile(
+                        user_id=user.id,
+                        device_id_hash=device_hash,
+                        device_name=new_name,
+                        login_count=1,
+                        last_login_time=datetime.now()
+                    )
+                    db.add(device_profile)
+                    
+                    # 4. UPDATE USER TOTAL (The "Total" Summary)
+                    user.total_device_count += 1
+                    # Note: We commit once at end of block
+            
             db.commit()
     except Exception as e:
         print(f"Error saving login history: {e}")
@@ -435,7 +498,7 @@ def logout(current_user: models.User = Depends(get_current_user), db: Session = 
             ).first()
             
             if active_history:
-                active_history.logout_time = datetime.utcnow()
+                active_history.logout_time = datetime.now()
                 active_history.is_active = False
                 db.add(active_history)
     except Exception as e:
@@ -455,6 +518,66 @@ def logout(current_user: models.User = Depends(get_current_user), db: Session = 
 @app.get("/users/me", response_model=schemas.UserResponse)
 def read_users_me(current_user: models.User = Depends(get_current_user)):
     return current_user
+
+@app.get("/users/me/devices", response_model=schemas.DeviceSummaryResponse)
+def read_user_devices(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    Returns the "One Truth" about user devices from the Optimized Table:
+    - Total New Devices (Stored in User Table)
+    - Login Count & Timings (Stored in Device Profiles)
+    """
+    # 1. Total (Instant from User Table)
+    total_count = current_user.total_device_count
+    
+    # 2. Details (From Profile Table)
+    profiles = db.query(models.DeviceProfile).filter(models.DeviceProfile.user_id == current_user.id).all()
+    
+    device_stats = []
+    
+    for p in profiles:
+         # Optional: If you want Full History Timings, we join with history.
+         # But user asked for "Count", which is now pre-calculated.
+         # To give the "Timings" array, we still query history for that device.
+         
+         timings = db.query(models.LoginHistory.login_time)\
+             .filter(models.LoginHistory.user_id == current_user.id)\
+             .filter(models.LoginHistory.device_id_hash == p.device_id_hash)\
+             .order_by(models.LoginHistory.login_time.asc()).all()
+         
+         # Convert list of tuples to list of datetimes
+         timings_list = [t[0] for t in timings]
+
+         device_stats.append(schemas.DeviceLoginStats(
+            device_name=p.device_name,
+            login_count=p.login_count, # READ FROM TABLE
+            timings=timings_list
+        ))
+        
+    return schemas.DeviceSummaryResponse(
+        total_new_devices=len(profiles),
+        devices=device_stats
+    )
+
+@app.get("/users/me/devices/{device_hash}/history", response_model=List[schemas.LoginHistoryResponse])
+def read_device_history(device_hash: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    Drill Down Level 3: Specific History for ONE Device
+    """
+    # Verify ownership
+    profile = db.query(models.DeviceProfile).filter(
+        models.DeviceProfile.user_id == current_user.id,
+        models.DeviceProfile.device_id_hash == device_hash
+    ).first()
+    
+    if not profile:
+        raise HTTPException(status_code=404, detail="Device not found")
+        
+    history = db.query(models.LoginHistory).filter(
+        models.LoginHistory.user_id == current_user.id,
+        models.LoginHistory.device_id_hash == device_hash
+    ).order_by(models.LoginHistory.login_time.desc()).all()
+    
+    return history
 
 @app.get("/users/lookup/{upi_id}", response_model=schemas.UserLookupResponse)
 def lookup_user_by_upi(upi_id: str, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -626,7 +749,7 @@ def create_transaction(
              import random
              # Create dummy user for external UPI
              # Use timestamp to ensure uniqueness of "ext" mobile
-             dummy_suffix = f"{int(datetime.utcnow().timestamp())}{random.randint(1000,9999)}"
+             dummy_suffix = f"{int(datetime.now().timestamp())}{random.randint(1000,9999)}"
              dummy_mobile = f"ext{dummy_suffix}" 
              dummy_email = f"ext_{tx.receiver_upi_id}_{dummy_suffix}@external.mock"
              
@@ -673,14 +796,14 @@ def create_transaction(
     if risk_result == "HIGH":
         # Blocked by fraud engine - no need to attempt transfer
         new_tx = models.Transaction(
-            transaction_id=f"TXN{datetime.utcnow().timestamp()}",
+            transaction_id=f"TXN{datetime.now().timestamp()}",
             sender_id=current_user.id,
             receiver_id=receiver.id,
             amount=tx.amount,
             encrypted_amount=security.encrypt_value(tx.amount),
             status="BLOCKED",
             risk_score=risk_result,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now()
         )
         db.add(new_tx)
         db.commit()
@@ -735,7 +858,7 @@ def create_transaction(
             receiver_user.mcc = tx.receiver_mcc
         
         # C. CREATE TRANSACTION RECORD
-        transaction_id = f"TXN{int(datetime.utcnow().timestamp()*1000)}"
+        transaction_id = f"TXN{int(datetime.now().timestamp()*1000)}"
         new_tx = models.Transaction(
             transaction_id=transaction_id,
             sender_id=sender_user.id,
@@ -744,25 +867,37 @@ def create_transaction(
             encrypted_amount=security.encrypt_value(tx.amount),
             status="SUCCESS",
             risk_score=risk_result,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now()
         )
         db.add(new_tx)
 
         # D. UPDATE PROFILES (Best Effort / Part of Transaction)
+        # SELF-HEALING: Auto-create profile if missing
+        if not sender_user.sender_profile:
+            print(f"Healing missing sender profile for user {sender_user.id}")
+            sender_user.sender_profile = models.SenderProfile(user_id=sender_user.id)
+            db.add(sender_user.sender_profile)
+
         if sender_user.sender_profile:
             sender_user.sender_profile.total_transactions_count += 1
             sender_user.sender_profile.total_transactions_amount += tx.amount
-            sender_user.sender_profile.last_transaction_time = datetime.utcnow()
+            sender_user.sender_profile.last_transaction_time = datetime.now()
             if sender_user.sender_profile.total_transactions_count > 0:
                 sender_user.sender_profile.avg_transaction_amount = (
                     sender_user.sender_profile.total_transactions_amount / 
                     sender_user.sender_profile.total_transactions_count
                 )
         
+        # SELF-HEALING: Auto-create receiver profile if missing
+        if not receiver_user.receiver_profile:
+            print(f"Healing missing receiver profile for user {receiver_user.id}")
+            receiver_user.receiver_profile = models.ReceiverProfile(user_id=receiver_user.id)
+            db.add(receiver_user.receiver_profile)
+
         if receiver_user.receiver_profile:
             receiver_user.receiver_profile.total_received_count += 1
             receiver_user.receiver_profile.total_received_amount += tx.amount
-            receiver_user.receiver_profile.last_received_time = datetime.utcnow()
+            receiver_user.receiver_profile.last_received_time = datetime.now()
 
         # E. IDEMPOTENCY KEY
         if tx.idempotency_key:
@@ -827,7 +962,7 @@ def get_home_aggregate(
     # Check Cache
     if current_user.id in HOME_DATA_CACHE:
         ts, cached_data = HOME_DATA_CACHE[current_user.id]
-        if (datetime.utcnow() - ts).total_seconds() < CACHE_TTL:
+        if (datetime.now() - ts).total_seconds() < CACHE_TTL:
             return cached_data
 
     from sqlalchemy.orm import joinedload
@@ -918,7 +1053,7 @@ def get_home_aggregate(
     )
     
     # Update Cache
-    HOME_DATA_CACHE[current_user.id] = (datetime.utcnow(), response_data)
+    HOME_DATA_CACHE[current_user.id] = (datetime.now(), response_data)
     
     return response_data
 
@@ -928,7 +1063,7 @@ def read_history(current_user: models.User = Depends(get_current_user), db: Sess
     CACHE_KEY = f"history_{current_user.id}"
     if CACHE_KEY in HOME_DATA_CACHE:
         ts, cached_data = HOME_DATA_CACHE[CACHE_KEY]
-        if (datetime.utcnow() - ts).total_seconds() < CACHE_TTL:
+        if (datetime.now() - ts).total_seconds() < CACHE_TTL:
             return cached_data
 
     from sqlalchemy.orm import joinedload
@@ -965,7 +1100,7 @@ def read_history(current_user: models.User = Depends(get_current_user), db: Sess
         ))
         
     # Update Cache
-    HOME_DATA_CACHE[CACHE_KEY] = (datetime.utcnow(), results)
+    HOME_DATA_CACHE[CACHE_KEY] = (datetime.now(), results)
         
     return results
 
@@ -979,7 +1114,7 @@ def get_recent_people(
     CACHE_KEY = f"people_{current_user.id}_{limit}"
     if CACHE_KEY in HOME_DATA_CACHE:
         ts, cached_data = HOME_DATA_CACHE[CACHE_KEY]
-        if (datetime.utcnow() - ts).total_seconds() < CACHE_TTL:
+        if (datetime.now() - ts).total_seconds() < CACHE_TTL:
             return cached_data
 
     # FAST SQL QUERY
@@ -1022,7 +1157,7 @@ def get_recent_people(
         ))
         
     # Update Cache
-    HOME_DATA_CACHE[CACHE_KEY] = (datetime.utcnow(), users)
+    HOME_DATA_CACHE[CACHE_KEY] = (datetime.now(), users)
         
     return users
 
@@ -1036,7 +1171,7 @@ def get_recent_merchants(
     CACHE_KEY = f"merchants_{current_user.id}_{limit}"
     if CACHE_KEY in HOME_DATA_CACHE:
         ts, cached_data = HOME_DATA_CACHE[CACHE_KEY]
-        if (datetime.utcnow() - ts).total_seconds() < CACHE_TTL:
+        if (datetime.now() - ts).total_seconds() < CACHE_TTL:
             return cached_data
 
     # FAST SQL QUERY
@@ -1077,7 +1212,7 @@ def get_recent_merchants(
         ))
         
     # Update Cache
-    HOME_DATA_CACHE[CACHE_KEY] = (datetime.utcnow(), users)
+    HOME_DATA_CACHE[CACHE_KEY] = (datetime.now(), users)
         
     return users
 
@@ -1096,7 +1231,7 @@ def send_message(
         receiver_id=receiver.id,
         content=msg.content,  # Keep plain for backward compatibility
         encrypted_content=security.encrypt_value(msg.content),  # AES-256 encrypted
-        timestamp=datetime.utcnow()
+        timestamp=datetime.now()
     )
     db.add(new_msg)
     db.commit()

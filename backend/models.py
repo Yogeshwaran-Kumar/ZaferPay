@@ -96,7 +96,7 @@ class Transaction(Base):
     receiver_id = Column(Integer, ForeignKey("users.id"))
     amount = Column(Float)  # Plain for calculations
     encrypted_amount = Column(String, nullable=True)  # AES-256 encrypted
-    timestamp = Column(DateTime, default=datetime.datetime.utcnow, index=True)
+    timestamp = Column(DateTime, default=datetime.datetime.now, index=True)
     status = Column(String)  # SUCCESS, BLOCKED, FAILED
     risk_score = Column(String)  # SAFE, WARN, HIGH
     
@@ -121,6 +121,7 @@ class SenderProfile(Base):
     user_id = Column(Integer, ForeignKey("users.id"), unique=True)
     avg_transaction_amount = Column(Float, default=0.0)
     total_transactions_count = Column(Integer, default=0)
+    total_transactions_amount = Column(Float, default=0.0) # Added missing column
     monthly_volume = Column(Float, default=0.0)
     last_transaction_time = Column(DateTime, nullable=True)
     
@@ -155,7 +156,7 @@ class Message(Base):
     receiver_id = Column(Integer, ForeignKey("users.id"))
     content = Column(String)  # Plain (backward compatibility)
     encrypted_content = Column(String, nullable=True)  # AES-256 encrypted
-    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+    timestamp = Column(DateTime, default=datetime.datetime.now)
     
     sender = relationship("User", foreign_keys=[sender_id])
     receiver = relationship("User", foreign_keys=[receiver_id])
@@ -191,7 +192,7 @@ class LoginHistory(Base):
     ip_encrypted = Column(String, nullable=True)  # AES-256 encrypted for audit
     
     # Timestamps
-    login_time = Column(DateTime, default=datetime.datetime.utcnow)
+    login_time = Column(DateTime, default=datetime.datetime.now)
     logout_time = Column(DateTime, nullable=True)
     is_active = Column(Boolean, default=True)
     
@@ -213,9 +214,28 @@ class IdempotencyKey(Base):
     transaction_id = Column(String, nullable=True)
     response_status = Column(String, nullable=False)
     response_data = Column(String, nullable=True)  # JSON response
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.datetime.now)
     
     user = relationship("User")
+
+class DeviceProfile(Base): # Changed BaseModel to Base to match existing pattern
+    """
+    Authorized Devices & Usage Stats (The "Summary" Table)
+    Stores the RUNNING COUNT of logins for each unique device.
+    """
+    __tablename__ = "device_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    device_id_hash = Column(String, index=True, nullable=False)
+    device_name = Column(String) # e.g., "Device A", "Device B"
+    
+    # The Counter (What the user wants to see)
+    login_count = Column(Integer, default=1)
+    last_login_time = Column(DateTime, default=datetime.datetime.now)
+    
+    # Relationship
+    user = relationship("User", backref="devices")
 
 
 # Add login_history relationship to User

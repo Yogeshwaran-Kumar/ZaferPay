@@ -97,6 +97,15 @@ class LoginHistoryResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class DeviceLoginStats(BaseModel):
+    device_name: str # "Device A", "Device B" (Derived from hash/order)
+    login_count: int
+    timings: List[datetime]
+
+class DeviceSummaryResponse(BaseModel):
+    total_new_devices: int
+    devices: List[DeviceLoginStats]
+
 # ═══════════════════════════════════════════════════════════════════════════
 # MESSAGE SCHEMAS
 # ═══════════════════════════════════════════════════════════════════════════
