@@ -67,6 +67,18 @@ class User(Base):
     sender_profile = relationship("SenderProfile", back_populates="user", uselist=False)
     receiver_profile = relationship("ReceiverProfile", back_populates="user", uselist=False)
 
+    @property
+    def mobile_number(self):
+        """Decrypt mobile number on the fly for Pydantic serialization"""
+        if not self.mobile_encrypted:
+            return None
+        try:
+            # Local import to avoid circular dependency
+            import security
+            return security.decrypt_value(self.mobile_encrypted)
+        except:
+            return None
+
 
 class Transaction(Base):
     """

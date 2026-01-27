@@ -13,7 +13,7 @@ class ApiService {
   static String get _defaultBaseUrl {
     if (kIsWeb) return 'http://127.0.0.1:8000';
     // Cloudflare Tunnel URL
-    return 'https://much-challenge-simulations-printing.trycloudflare.com';
+    return 'https://associate-estimate-merger-fitted.trycloudflare.com';
   }
 
   static const Duration _timeout = Duration(seconds: 30);
@@ -353,6 +353,9 @@ class ApiService {
     String? mcc,
     String receiverName = 'Unknown',
   }) async {
+    // Generate optimistic ID matching server format style (TXN...)
+    final txnId = 'TXN${DateTime.now().millisecondsSinceEpoch}';
+
     // 1. Local PIN Check (Fast)
     final pinStatus = await verifyPinSmart(pin);
 
@@ -362,18 +365,8 @@ class ApiService {
     if (pinStatus == PinVerificationStatus.lockedOut) {
       return {'detail': 'Account Locked', 'status': 'LOCKED'};
     }
-    // If unknown (no cache), we technically can't be optimistic safely unless we trust the user blindly?
-    // But we usually have cache. If unknown, we proceed to server check below (but we can't do optimistic update safely? or maybe we can?)
-    // Actually, if unknown, we should probably SKIP optimistic update and let server decide.
-    // BUT for now, if unknown, let's assuming it MIGHT be right and just hit server, but do NOT return error yet.
 
     // 2. Local Balance Check & Update
-    // Only do optimistic update if pin is definitely success OR (optional: unknown and we want to risk it)
-    // Let's being strict: Only optimistic if we confirmed PIN or if we really trust.
-    // Given the requirement "reduce it as 0.0s", we want speed.
-    // If status is success, we go ahead.
-    // If status is unknown, we fall through to server.
-
     if (pinStatus == PinVerificationStatus.success) {
       if (_homeRamCache != null && _homeRamCache!['user'] != null) {
         final currentBalance = _homeRamCache!['user']['balance'] as double;
@@ -390,17 +383,15 @@ class ApiService {
           senderName = _homeRamCache!['user']['username'] ?? 'Me';
         }
         final newTx = {
-          'id': 'OPT-${DateTime.now().millisecondsSinceEpoch}', // Temporary ID
+          'id': txnId, // Use generated ID
           'amount': amount,
           'receiver_upi_id': receiverUpi,
           'sender_upi_id': _homeRamCache!['user']['upi_id'],
-          'timestamp': DateTime.now()
-              .toUtc()
-              .toIso8601String(), // Force correct UTC
-          'status': 'SUCCESS', // Assume success
+          'timestamp': DateTime.now().toUtc().toIso8601String(),
+          'status': 'SUCCESS',
           'receiver_mcc': mcc ?? '0000',
-          'receiver_name': receiverName, // Use passed name
-          'sender_name': senderName, // Inject sender name
+          'receiver_name': receiverName,
+          'sender_name': senderName,
         };
 
         if (_historyRamCache != null) {
@@ -409,45 +400,36 @@ class ApiService {
           _historyRamCache = [newTx];
         }
 
-        // OPTIMISTIC UPDATE: Add to Conversation Cache (Specific User)
-        // This ensures when we go back to ConversationScreen, it appears instantly (0.0s)
+        // OPTIMISTIC UPDATE: Add to Conversation Cache
         if (_ramCache.containsKey(receiverUpi)) {
           _ramCache[receiverUpi]!.insert(0, newTx);
-          // Persist this update
           _cacheConversation(receiverUpi, _ramCache[receiverUpi]!);
         } else {
-          // If not in RAM, try to get from disk, update, and save back?
-          // Or just create new entry if we know we are sending to them?
-          // Safest is to just update if it exists or create partial?
-          // Let's create it if missing, so ConversationScreen picks it up.
           _ramCache[receiverUpi] = [newTx];
           _cacheConversation(receiverUpi, [newTx]);
         }
-
-        // Persist the optimistic balance to disk just in case (optional, but good)
         _cacheHomeData(_homeRamCache!);
-      } // End of inner if
-    } // End of outer if
+      }
+    }
 
-    // 3. Fire & Forget Real Transaction (Background)
-    // We don't await this. We let it run.
+    // 3. Fire & Forget Real Transaction
     createTransaction(receiverUpi, amount, pin, mcc: mcc).then((result) async {
       if (result['detail'] != null && result['status'] != 'SUCCESS') {
-        // Transaction FAILED (e.g. server said no).
-        // We must REVERT the optimistic change?
-        // This is complex "Compensation Logic".
-        // For now, we assume success for the "Happy Path" user request.
-        // But ideally we should refresh home data silently here to fix the balance.
-        await getHomeScreenData(); // Silent refresh to "fix" state if wrong
+        // Transaction FAILED - Revert state (complex, simplified here)
+        await getHomeScreenData();
       } else {
-        // Success. The server history is now true.
-        // Maybe refresh quietly to get the real Transaction ID instead of 'OPT-...'
+        // Success - Refresh to get server truth (replacing optimistic data)
         await getHomeScreenData();
       }
     });
 
-    // 4. Return Instant Success
-    return {'status': 'SUCCESS', 'detail': 'Transfer Successful'};
+    // 4. Return Instant Success with details
+    return {
+      'status': 'SUCCESS',
+      'detail': 'Transfer Successful',
+      'transaction_id': txnId,
+      'receiver_name': receiverName,
+    };
   }
 
   Future<Map<String, dynamic>> createTransaction(
@@ -738,6 +720,8 @@ class ApiService {
   // --- Caching Logic ---
   static const String _homeCacheKey = 'home_data_cache';
   static const String _userCachePrefix = 'user_cache_';
+  static const String _phoneCachePrefix =
+      'user_phone_cache_'; // Add persistent phone cache key
 
   // RAM Cache for Home Data (Zero Latency)
   static Map<String, dynamic>? _homeRamCache;
@@ -794,6 +778,19 @@ class ApiService {
       final upiId = user['upi_id'];
       if (upiId != null) {
         await prefs.setString('$_userCachePrefix$upiId', json.encode(user));
+      }
+
+      // Cache by Phone if available (robust check)
+      String? mobile =
+          user['mobile_number'] ?? user['mobile'] ?? user['phone_number'];
+
+      if (mobile != null && mobile.isNotEmpty) {
+        // Clean mobile
+        mobile = mobile.replaceAll(RegExp(r'[^\d]'), '');
+        // Update RAM
+        _phoneRamCache[mobile] = user;
+        // Update Disk
+        await prefs.setString('$_phoneCachePrefix$mobile', json.encode(user));
       }
     } catch (e) {
       // Ignore
@@ -1008,9 +1005,20 @@ class ApiService {
   static final Map<String, Map<String, dynamic>> _phoneRamCache = {};
 
   Future<Map<String, dynamic>?> getCachedUserByPhone(String phone) async {
+    // 1. Try RAM
     if (_phoneRamCache.containsKey(phone)) {
       return _phoneRamCache[phone];
     }
+    // 2. Try Disk
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? jsonString = prefs.getString('$_phoneCachePrefix$phone');
+      if (jsonString != null) {
+        final data = json.decode(jsonString);
+        _phoneRamCache[phone] = data; // Populate RAM
+        return data;
+      }
+    } catch (_) {}
     return null;
   }
 
@@ -1035,6 +1043,16 @@ class ApiService {
         // Cache it!
         // We assume phone number is normalized here or we cache by the input key
         _phoneRamCache[phoneNumber] = data;
+
+        // Persist to Disk
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(
+            '$_phoneCachePrefix$phoneNumber',
+            json.encode(data),
+          );
+        } catch (_) {}
+
         return data;
       }
     } catch (e) {

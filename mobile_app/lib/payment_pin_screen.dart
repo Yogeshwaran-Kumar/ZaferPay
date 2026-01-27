@@ -46,6 +46,7 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
 
   // State for In-Place Success UI
   bool _showSuccess = false;
+  String? _transactionId;
 
   Future<void> _verifyPin() async {
     setState(() => _isLoading = true);
@@ -77,6 +78,7 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
           _handleError(result['detail']);
         } else {
           // Success! Show Success Screen In-Place
+          _transactionId = result['transaction_id']; // Capture ID
           setState(() {
             _showSuccess = true;
           });
@@ -460,69 +462,173 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
 
   Widget _buildSuccessUI() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final color = const Color(0xFF4CAF50); // Success Green
+    final greenColor = const Color(0xFF4CAF50);
+    final bgColor = isDark
+        ? Colors.black
+        : const Color(0xFFE0E0E0); // Grey background for overlay effect
+    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: bgColor,
+      appBar: AppBar(
+        title: Text(
+          'Make Payment',
+          style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        leading: BackButton(
+          color: isDark ? Colors.white : Colors.black87,
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Big Green Check
-            ScaleTransition(
-              scale: const AlwaysStoppedAnimation(
-                1.0,
-              ), // Could animate this later
-              child: Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: color.withValues(alpha: 0.1),
+        child: SingleChildScrollView(
+          child: Container(
+            width:
+                MediaQuery.of(context).size.width *
+                0.85, // 85% width for card look
+            padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
                 ),
-                child: Icon(Icons.check_circle, size: 80, color: color),
-              ),
+              ],
             ),
-            const SizedBox(height: 32),
-            Text(
-              'Payment Successful',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              '₹${widget.amount}',
-              style: TextStyle(
-                fontSize: 40,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : Colors.black,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Paid to ${widget.receiverName}',
-              style: TextStyle(fontSize: 16, color: Colors.grey),
-            ),
-            const SizedBox(height: 64),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 48),
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.of(
-                    context,
-                  ).popUntil((route) => route.settings.name == '/home');
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: isDark ? Colors.grey[800] : Colors.black,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 50),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Green Check Circle
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: greenColor.withValues(alpha: 0.15),
+                  ),
+                  child: Icon(Icons.check, size: 40, color: greenColor),
                 ),
-                child: const Text('Done'),
-              ),
+                const SizedBox(height: 16),
+
+                // "Payment Successful"
+                Text(
+                  'Payment Successful',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: greenColor,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Amount
+                Text(
+                  '₹${widget.amount}',
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 32),
+
+                // Details Box (To & Txn ID)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.grey[900]
+                        : const Color(0xFFF5F5F5), // Very light grey inner box
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    children: [
+                      // "To" Row
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            "To",
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          Text(
+                            widget.receiverName,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white70 : Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Divider(height: 24, color: Colors.grey[300]),
+                      // "Transaction ID" Row
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            "Transaction ID",
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          Text(
+                            _transactionId ?? "Pending",
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white70 : Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 32),
+
+                // Done Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(
+                        context,
+                      ).popUntil((route) => route.settings.name == '/home');
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isDark ? Colors.white : Colors.black,
+                      foregroundColor: isDark ? Colors.black : Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                    ),
+                    child: const Text(
+                      'Done',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

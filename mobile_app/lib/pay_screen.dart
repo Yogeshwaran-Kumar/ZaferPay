@@ -20,7 +20,7 @@ class _PayScreenState extends State<PayScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   List<dynamic> _recentPeople = [];
-  List<dynamic> _recentMerchants = [];
+
   List<Contact> _contacts = [];
   List<Contact> _filteredContacts = [];
   bool _isLoading = true;
@@ -47,11 +47,8 @@ class _PayScreenState extends State<PayScreen> {
       if (homeData['people'] != null) {
         _recentPeople = (homeData['people'] as List).take(6).toList();
       }
-      if (homeData['merchants'] != null) {
-        _recentMerchants = (homeData['merchants'] as List).take(6).toList();
-      }
       // If we have ANY data, show UI immediately (No spinner)
-      if (_recentPeople.isNotEmpty || _recentMerchants.isNotEmpty) {
+      if (_recentPeople.isNotEmpty) {
         _isLoading = false;
       }
     }
@@ -184,11 +181,17 @@ class _PayScreenState extends State<PayScreen> {
     // Normalize phone number
     final normalizedPhone = phoneNumber.replaceAll(RegExp(r'[\s\-\(\)\+]'), '');
 
-    // 1. Check Cache (Try to find by phone if we had a mapping, else skip for now)
-    // Since we only cache by UPI ID currently, we might miss this optimization for pure phone entry
-    // UNLESS we update _api to cache by phone too.
-    // Ideally, we should skip cache for phone unless we're sure.
-    // However, if the user enters a number that resolves to a cached UPI, we wouldn't know the UPI yet.
+    // 1. Check Cache (Zero Latency)
+    final cached = await _api.getCachedUserByPhone(normalizedPhone);
+    if (cached != null) {
+      if (mounted) {
+        setState(() {
+          _databaseUser = cached;
+          _isLookingUp = false;
+        });
+      }
+      return;
+    }
 
     setState(() {
       _isLookingUp = true;
@@ -207,32 +210,20 @@ class _PayScreenState extends State<PayScreen> {
   Future<void> _loadData() async {
     // 1. Instant Cache Load
     final cachedPeople = await _api.getCachedRecents('people_cache');
-    final cachedMerchants = await _api.getCachedRecents('merchants_cache');
 
     if (mounted) {
-      if (cachedPeople != null || cachedMerchants != null) {
+      if (cachedPeople != null) {
         setState(() {
-          if (cachedPeople != null) {
-            _recentPeople = cachedPeople.take(6).toList();
-          }
-          if (cachedMerchants != null) {
-            _recentMerchants = cachedMerchants.take(6).toList();
-          }
+          _recentPeople = cachedPeople.take(6).toList();
+
           // Hide loading if we have initial data to show
-          if (cachedPeople != null) _isLoading = false;
+          _isLoading = false;
         });
       }
     }
 
-    // 2. Fetch Fresh Recents (People + Merchants)
-    // Run in parallel
-    final results = await Future.wait([
-      _api.getRecentPeople(),
-      _api.getRecentMerchants(),
-    ]);
-
-    final people = results[0];
-    final merchants = results[1];
+    // 2. Fetch Fresh Recents (People only)
+    final people = await _api.getRecentPeople();
 
     // 3. Fetch Contacts with proper permission handling
     await _loadContacts();
@@ -240,7 +231,6 @@ class _PayScreenState extends State<PayScreen> {
     if (mounted) {
       setState(() {
         _recentPeople = people?.take(6).toList() ?? _recentPeople;
-        _recentMerchants = merchants?.take(6).toList() ?? _recentMerchants;
         _isLoading = false;
       });
     }
@@ -760,23 +750,6 @@ class _PayScreenState extends State<PayScreen> {
                     ),
                     const SizedBox(height: 16),
                     ..._recentPeople.map((person) => _buildRecentItem(person)),
-                    const SizedBox(height: 24),
-                  ],
-
-                  // Recent Businesses
-                  if (_recentMerchants.isNotEmpty) ...[
-                    Text(
-                      "Recent Businesses",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).textTheme.bodyLarge?.color,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ..._recentMerchants.map(
-                      (merchant) => _buildRecentItem(merchant),
-                    ),
                     const SizedBox(height: 24),
                   ],
 

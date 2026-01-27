@@ -49,6 +49,7 @@ class UserResponse(UserBase):
     upi_id: str
     balance: float
     mcc: Optional[str] = None
+    mobile_number: Optional[str] = None
     # We don't return hashed_password or sensitive fields
     
     class Config:
