@@ -7,13 +7,14 @@ import 'package:http/io_client.dart' as io;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:crypto/crypto.dart';
 
 class ApiService {
   // Default URLs for different environments
   static String get _defaultBaseUrl {
     if (kIsWeb) return 'http://127.0.0.1:8000';
     // Cloudflare Tunnel URL
-    return 'https://experience-area-homeless-colour.trycloudflare.com';
+    return 'https://mic-announcements-middle-illustration.trycloudflare.com';
   }
 
   static const Duration _timeout = Duration(seconds: 30);
@@ -294,6 +295,16 @@ class ApiService {
     }
   }
 
+  /// Simulates SIM Binding (sending silent SMS to verify phone number)
+  /// In a real app, this would use `sms_autofill` or platform channels.
+  Future<bool> verifySimBinding() async {
+    // Simulate network delay for SMS verification
+    await Future.delayed(const Duration(milliseconds: 500));
+    // In this mock environment, we assume the device binding + login is the "SIM Binding"
+    // To make it "fail" for testing, we could check a flag, but for now return true.
+    return true;
+  }
+
   Future<http.Response> _retryRequest(
     Future<http.Response> Function() requestFunc, {
     int retries = 3,
@@ -432,6 +443,53 @@ class ApiService {
     };
   }
 
+  // --- Phase 2: HMAC & Time Sync ---
+
+  static const String _hmacSecret = "fallback-secret-key-change-in-production";
+  static int _serverTimeOffsetMs = 0; // Server - Client
+  static bool _isTimeSynced = false;
+
+  /// Syncs client clock with server clock (Precision: +/- 500ms)
+  Future<void> syncTime() async {
+    try {
+      final url = await baseUrl;
+      final start = DateTime.now().millisecondsSinceEpoch;
+      final response = await _client
+          .get(Uri.parse('$url/time'))
+          .timeout(_timeout);
+      final end = DateTime.now().millisecondsSinceEpoch;
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final serverTimestamp = data['timestamp'] * 1000; // Seconds to Ms
+        final latency = (end - start) ~/ 2;
+
+        // Calculate Offset: (ServerTime + Latency) - ClientTime
+        // If Server says 10:05 and I say 10:00, Offset is +5min. I need to ADD 5min to my time.
+        _serverTimeOffsetMs = (serverTimestamp + latency) - end;
+        _isTimeSynced = true;
+
+        if (kDebugMode)
+          print("🕒 Time Synced. Offset: $_serverTimeOffsetMs ms");
+      }
+    } catch (e) {
+      if (kDebugMode) print("Time Sync Failed: $e");
+    }
+  }
+
+  /// Generates HMAC-SHA256 signature for request integrity
+  String _generateHmac(String body, String timestamp) {
+    // Payload: "Timestamp:Body"
+    final payload = '$timestamp:$body';
+    final key = utf8.encode(_hmacSecret);
+    final bytes = utf8.encode(payload);
+
+    final hmacSha256 = Hmac(sha256, key); // HMAC-SHA256
+    final digest = hmacSha256.convert(bytes);
+
+    return digest.toString();
+  }
+
   Future<Map<String, dynamic>> createTransaction(
     String receiverUpi,
     double amount,
@@ -440,6 +498,9 @@ class ApiService {
   }) async {
     try {
       final url = await baseUrl;
+
+      // Ensure Time is Synced before critical money movement
+      if (!_isTimeSynced) await syncTime();
 
       // Generate unique idempotency key for this transaction request
       final idempotencyKey =
@@ -456,6 +517,17 @@ class ApiService {
         requestBody['receiver_mcc'] = mcc;
       }
 
+      final bodyJson = json.encode(requestBody);
+
+      // SECURITY: Generate Signature using SERVER TIME
+      // 1. Get Corrected Timestamp (Seconds)
+      final correctedTime =
+          DateTime.now().millisecondsSinceEpoch + _serverTimeOffsetMs;
+      final timestampStr = (correctedTime ~/ 1000).toString();
+
+      // 2. Sign
+      final signature = _generateHmac(bodyJson, timestampStr);
+
       final response = await _retryRequest(() async {
         final token = await _storage.read(key: 'token');
         return _client
@@ -464,8 +536,11 @@ class ApiService {
               headers: {
                 'Authorization': 'Bearer $token',
                 'Content-Type': 'application/json',
+                // THE SEAL HEADERS
+                'X-Timestamp': timestampStr,
+                'X-Signature': signature,
               },
-              body: json.encode(requestBody),
+              body: bodyJson,
             )
             .timeout(_timeout);
       });
@@ -487,6 +562,26 @@ class ApiService {
       if (response.statusCode == 409) {
         // Transaction already processed (duplicate request)
         return json.decode(response.body);
+      }
+
+      // Handle Integrity Failures (403)
+      if (response.statusCode == 403) {
+        final error = json.decode(response.body);
+        final detail = (error['detail'] ?? 'Security Check Failed').toString();
+
+        // Phase 2: Integrity/HMAC/Time Sync Failure
+        if (detail.contains('Integrity') ||
+            detail.contains('Signature') ||
+            detail.contains('Time')) {
+          return {
+            'status': 'SECURITY_RISK',
+            'detail': 'Security Integrity Risk: $detail',
+            'amount': amount,
+          };
+        }
+
+        // Phase 1: Fraud Block (Server calls it BLOCKED or FRAUD usually, but just in case)
+        return {'status': 'FRAUD_BLOCKED', 'detail': detail, 'amount': amount};
       }
 
       // If server error (500), try to return body if json, else generic error

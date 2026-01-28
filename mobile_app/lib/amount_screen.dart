@@ -290,6 +290,16 @@ class _AmountScreenState extends State<AmountScreen> {
       color = const Color(0xFFFB8C00); // Orange 600
       icon = Icons.warning_rounded;
       title = "Warning Detected";
+    } else if (status == "SECURITY_RISK") {
+      // PHASE 2 ALERT: Integrity/HMAC Failure
+      color = const Color(0xFFD32F2F); // Darker Red
+      icon = Icons.security_rounded;
+      title = "Security Alert";
+    } else if (status == "FRAUD_BLOCKED") {
+      // PHASE 1 ALERT: AI Block
+      color = const Color(0xFFC62828); // Sharp Red
+      icon = Icons.gpp_bad_rounded;
+      title = "Fraud Detected";
     }
 
     showDialog(

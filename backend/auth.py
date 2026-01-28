@@ -25,7 +25,7 @@ load_dotenv()
 # ═══════════════════════════════════════════════════════════════════════════
 
 SECRET_KEY = os.getenv("SECRET_KEY", "fallback-secret-key-change-in-production")
-HMAC_SECRET = os.getenv("HMAC_SECRET", SECRET_KEY)  # For request signing
+HMAC_SECRET = os.getenv("HMAC_SECRET", "fallback-secret-key-change-in-production") # Force explicit fallback here too
 ALGORITHM = "HS256"
 
 # Token Expiration Times
@@ -159,7 +159,10 @@ def verify_request_signature(data: str, timestamp: str, signature: str, max_age_
     # Check timestamp freshness (prevent replay attacks)
     try:
         request_time = int(timestamp)
-        current_time = int(datetime.utcnow().timestamp())
+        # BUG FIX: datetime.utcnow().timestamp() treats naive UTC as local time!
+        # Use time.time() which is always UTC epoch.
+        import time
+        current_time = int(time.time())
         if abs(current_time - request_time) > max_age_seconds:
             return False
     except (ValueError, TypeError):

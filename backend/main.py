@@ -106,6 +106,70 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         
     return user
 
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE 2: INTEGRITY & TIME SYNC (The Seal)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.get("/time")
+async def get_server_time():
+    """
+    Time Sync Endpoint (Smart Time Drift)
+    Returns current UTC timestamp so client can calculate offset.
+    TRUST NO ONE: Client uses this to sync with server clock.
+    """
+    import time
+    return {"timestamp": int(time.time())}
+
+async def verify_integrity(
+    request: Request, 
+    x_signature: str = Header(None), 
+    x_timestamp: str = Header(None)
+):
+    """
+    HMAC Verification Dependency (The Seal)
+    Ensures body + timestamp + secret matches signature.
+    Prevents tampering and replay attacks.
+    """
+    # Allow missing headers for simple Get requests or if explicitly non-critical
+    # BUT for Phase 2, we enforce it on transactions. 
+    # If used as a dependency, it MUST fail if missing.
+    if request.url.path in ["/docs", "/openapi.json", "/time"]:
+        return
+
+    if not x_signature or not x_timestamp:
+        raise HTTPException(
+            status_code=400, 
+            detail="Missing Security Headers (X-Signature, X-Timestamp)"
+        )
+        
+    try:
+        # Read body without consuming it (FastAPI/Starlette caches it)
+        body_bytes = await request.body()
+        body_str = body_bytes.decode()
+        
+        # Verify
+        is_valid = auth.verify_request_signature(body_str, x_timestamp, x_signature)
+        
+        if not is_valid:
+             expected = auth.generate_request_signature(body_str, x_timestamp)
+             print(f"🛑 INTEGRITY FAILURE DEBUG INFO:")
+             print(f"   Received Sig: {x_signature}")
+             print(f"   Expected Sig: {expected}")
+             print(f"   Timestamp:    {x_timestamp}")
+             print(f"   Body Len:     {len(body_str)}")
+             print(f"   Body Content: {body_str}")
+             
+             raise HTTPException(
+                status_code=403, 
+                detail="Request Integrity Check Failed (HMAC Mismatch or Replay)"
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"⚠️ Integrity Check Error: {e}")
+        raise HTTPException(status_code=403, detail="Integrity Check Failed")
+
 @app.post("/token", response_model=schemas.Token)
 @limiter.limit("5/minute")
 def login_for_access_token(
@@ -681,7 +745,7 @@ def change_pin(
     db.commit()
     return {"msg": "PIN updated successfully"}
 
-@app.post("/transactions/", response_model=schemas.TransactionResponse)
+@app.post("/transactions/", response_model=schemas.TransactionResponse, dependencies=[Depends(verify_integrity)])
 def create_transaction(
     request: Request,
     tx: schemas.TransactionCreate, 
@@ -791,42 +855,58 @@ def create_transaction(
         raise HTTPException(status_code=400, detail="Cannot send money to self")
 
     # 2. Fraud Check (outside lock - informational)
-    risk_result = fraud_engine.evaluate_fraud(db, current_user, receiver, tx.amount)
+    # Level 3 AI Check (F1-F12)
+    # We pass device_id from header if available (simplified here, assumes verified in Depends)
+    device_id = request.headers.get('X-Device-ID')
+    device_hash = security.hash_value(device_id) if device_id else None
     
-    if risk_result == "HIGH":
-        # Blocked by fraud engine - no need to attempt transfer
-        new_tx = models.Transaction(
-            transaction_id=f"TXN{datetime.now().timestamp()}",
-            sender_id=current_user.id,
-            receiver_id=receiver.id,
-            amount=tx.amount,
-            encrypted_amount=security.encrypt_value(tx.amount),
-            status="BLOCKED",
-            risk_score=risk_result,
-            timestamp=datetime.now()
+    risk_label, risk_reason = fraud_engine.evaluate_fraud(
+        db, current_user, receiver, tx.amount, device_id_hash=device_hash
+    )
+    
+    # AI Logic: Decision
+    is_blocked = False
+    status_str = "SUCCESS"
+    
+    if risk_label == "HIGH":
+        is_blocked = True
+        status_str = "BLOCKED"
+    elif risk_label == "WARN":
+        status_str = "FLAGGED" # Still success, but marked
+        
+    # Log to Brain Memory (FraudEvent)
+    # We calculate the raw AI score again for logging if needed, or query it.
+    # For efficiency, we just log the label/reason.
+    fraud_event = models.FraudEvent(
+        user_id=current_user.id,
+        transaction_id=None, # Will update after ID generation
+        amount=tx.amount,
+        ai_score=0.0, # Placeholder, would need refactoring to get raw score out
+        rule_violation=risk_reason,
+        is_blocked=is_blocked,
+        timestamp=datetime.now()
+    )
+    db.add(fraud_event)
+    # Don't commit yet, wait for transaction
+    
+    if is_blocked:
+        db.commit() # Save the blocked event
+        # Return 403 Forbidden
+        raise HTTPException(
+             status_code=403, 
+             detail={
+                 "message": "Transaction Blocked for Security",
+                 "reason": risk_reason,
+                 "risk": risk_label
+             }
         )
-        db.add(new_tx)
-        db.commit()
-        db.refresh(new_tx)
-        return schemas.TransactionResponse(
-            transaction_id=new_tx.transaction_id,
-            sender_upi_id=current_user.upi_id,
-            receiver_upi_id=receiver.upi_id,
-            sender_name=current_user.username,
-            receiver_name=receiver.username,
-            amount=tx.amount,
-            status="BLOCKED",
-            risk_score=risk_result,
-            timestamp=new_tx.timestamp,
-            sender_mcc=current_user.mcc,
-            receiver_mcc=receiver.mcc
-        )
-
-    # 3. Perform Transfer (ATOMIC TRANSACTION)
-    # ═══════════════════════════════════════════════════════════════════════════
-    # Unified Atomic Block: Handles Balance, History, Profiles, and Idempotency
-    # ═══════════════════════════════════════════════════════════════════════════
+    
+    # 3. ATOMIC TRANSACTION BLOCK
     try:
+        # Generate ID inside try block
+        new_tx_id = f"TXN{int(datetime.now().timestamp()*1000)}"
+        fraud_event.transaction_id = new_tx_id
+        
         # PESSIMISTIC LOCKING (Postgres Compatible)
         # We must lock both users to prevent race conditions.
         # DEADLOCK PREVENTION: Always lock users in ID order (smaller ID first)
@@ -845,10 +925,11 @@ def create_transaction(
         sender_user = u1 if u1.id == current_user.id else u2
         receiver_user = u1 if u1.id == receiver.id else u2
         
+        # Re-check balance (Critical!)
         if sender_user.balance < tx.amount:
              raise HTTPException(status_code=400, detail="Insufficient balance")
-
-        # B. UPDATE BALANCES
+             
+        # Execute Transfer
         sender_user.balance -= tx.amount
         receiver_user.balance += tx.amount
 
@@ -866,7 +947,7 @@ def create_transaction(
             amount=tx.amount,
             encrypted_amount=security.encrypt_value(tx.amount),
             status="SUCCESS",
-            risk_score=risk_result,
+            risk_score=risk_label,
             timestamp=datetime.now()
         )
         db.add(new_tx)
@@ -910,7 +991,7 @@ def create_transaction(
                 "receiver_name": receiver_user.username,
                 "amount": tx.amount,
                 "status": "SUCCESS",
-                "risk_score": risk_result,
+                "risk_score": risk_label,
                 "timestamp": new_tx.timestamp.isoformat() 
             }
             new_idemp = models.IdempotencyKey(
@@ -934,7 +1015,7 @@ def create_transaction(
             receiver_name=receiver_user.username,
             amount=new_tx.amount,
             status="SUCCESS",
-            risk_score=risk_result,
+            risk_score=risk_label,
             timestamp=new_tx.timestamp
         )
 

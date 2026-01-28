@@ -50,6 +50,7 @@ dependencies:
   path_provider: ^2.1.5
   device_info_plus: ^10.1.0
   flutter_jailbreak_detection: ^1.10.0  # Root/Jailbreak detection for security
+  crypto: ^3.0.3  # For HMAC-SHA256 Request Signing
 
 dev_dependencies:
   flutter_test:

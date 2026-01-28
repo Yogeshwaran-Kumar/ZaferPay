@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'api_service.dart';
+import 'processing_shield_screen.dart';
 
 class PaymentPinScreen extends StatefulWidget {
   final String receiverUpi;
   final double amount;
   final String receiverName;
-  final String? category; // Add category
+  final String? category;
   final String? mcc;
 
   const PaymentPinScreen({
@@ -22,14 +22,9 @@ class PaymentPinScreen extends StatefulWidget {
 }
 
 class _PaymentPinScreenState extends State<PaymentPinScreen> {
-  final _api = ApiService();
   String _enteredPin = '';
-  bool _isLoading = false;
-  int _failedAttempts = 0;
 
   void _onKeypadTap(String value) {
-    if (_isLoading) return;
-
     setState(() {
       if (value == 'BACK') {
         if (_enteredPin.isNotEmpty) {
@@ -38,102 +33,30 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
       } else {
         if (_enteredPin.length < 4) {
           _enteredPin += value;
-          // Removed auto-verify to allow Pay button usage
         }
       }
     });
   }
 
-  // State for In-Place Success UI
-  bool _showSuccess = false;
-  String? _transactionId;
-
   Future<void> _verifyPin() async {
-    setState(() => _isLoading = true);
-
-    try {
-      final result = await _api.createTransactionOptimistic(
-        widget.receiverUpi,
-        widget.amount,
-        _enteredPin,
-        mcc: widget.mcc,
-        receiverName: widget.receiverName,
-      );
-
-      if (mounted) {
-        setState(() => _isLoading = false);
-
-        if (result.containsKey('detail') &&
-            result['detail'] == 'Incorrect PIN') {
-          // Instant Error (Local or Remote)
-          _handleIncorrectPin();
-        } else if (result['status'] == 'LOCKED') {
-          // Instant Logout
-          Navigator.of(
-            context,
-          ).pushNamedAndRemoveUntil('/login', (route) => false);
-        } else if (result.containsKey('detail') &&
-            result['status'] != 'SUCCESS') {
-          // Other error
-          _handleError(result['detail']);
-        } else {
-          // Success! Show Success Screen In-Place
-          _transactionId = result['transaction_id']; // Capture ID
-          setState(() {
-            _showSuccess = true;
-          });
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        _handleError(e.toString());
-      }
-    }
-  }
-
-  void _handleIncorrectPin() {
-    _failedAttempts++;
-    _enteredPin = ''; // Clear PIN
-
-    if (_failedAttempts >= 2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Payment Cancelled: Too many WRONG PIN attempts!'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
+    // Navigate to Visual Security Flow (Phase 3)
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProcessingShieldScreen(
+          receiverUpi: widget.receiverUpi,
+          amount: widget.amount,
+          receiverName: widget.receiverName,
+          pin: _enteredPin,
+          category: widget.category,
+          mcc: widget.mcc,
         ),
-      );
-      // Navigate to Home
-      Navigator.of(context).popUntil((route) => route.settings.name == '/home');
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Incorrect PIN! 1 Attempt remaining'),
-          backgroundColor: Colors.orange,
-          duration: Duration(milliseconds: 1500),
-        ),
-      );
-    }
-  }
-
-  void _handleError(String error) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Incorrect PIN'),
-        backgroundColor: Colors.red,
       ),
     );
-    _enteredPin = '';
   }
 
   @override
   Widget build(BuildContext context) {
-    // If success, Show Success UI
-    if (_showSuccess) {
-      return _buildSuccessUI();
-    }
-
     // Determine icon based on category (Merchant/Store vs Personal)
     // If category is present, it's likely a merchant.
     final bool isMerchant =
@@ -299,11 +222,6 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
               }),
             ),
 
-            if (_isLoading) ...[
-              const SizedBox(height: 24),
-              const CircularProgressIndicator(strokeWidth: 2),
-            ],
-
             const Expanded(flex: 2, child: SizedBox()),
 
             // Warning Message
@@ -399,23 +317,14 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
                               borderRadius: BorderRadius.circular(24),
                             ),
                             child: Center(
-                              child: _isLoading
-                                  ? const SizedBox(
-                                      width: 24,
-                                      height: 24,
-                                      child: CircularProgressIndicator(
-                                        color: Colors.white,
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Text(
-                                      "Pay",
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
+                              child: const Text(
+                                "Pay",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -457,180 +366,6 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
           ),
         );
       }).toList(),
-    );
-  }
-
-  Widget _buildSuccessUI() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final greenColor = const Color(0xFF4CAF50);
-    final bgColor = isDark
-        ? Colors.black
-        : const Color(0xFFE0E0E0); // Grey background for overlay effect
-    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
-
-    return Scaffold(
-      backgroundColor: bgColor,
-      appBar: AppBar(
-        title: Text(
-          'Make Payment',
-          style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        leading: BackButton(
-          color: isDark ? Colors.white : Colors.black87,
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          child: Container(
-            width:
-                MediaQuery.of(context).size.width *
-                0.85, // 85% width for card look
-            padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Green Check Circle
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: greenColor.withValues(alpha: 0.15),
-                  ),
-                  child: Icon(Icons.check, size: 40, color: greenColor),
-                ),
-                const SizedBox(height: 16),
-
-                // "Payment Successful"
-                Text(
-                  'Payment Successful',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: greenColor,
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // Amount
-                Text(
-                  '₹${widget.amount}',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : Colors.black,
-                  ),
-                ),
-                const SizedBox(height: 32),
-
-                // Details Box (To & Txn ID)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? Colors.grey[900]
-                        : const Color(0xFFF5F5F5), // Very light grey inner box
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    children: [
-                      // "To" Row
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "To",
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          Text(
-                            widget.receiverName,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.white70 : Colors.black87,
-                            ),
-                          ),
-                        ],
-                      ),
-                      Divider(height: 24, color: Colors.grey[300]),
-                      // "Transaction ID" Row
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "Transaction ID",
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          Text(
-                            _transactionId ?? "Pending",
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.white70 : Colors.black87,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 32),
-
-                // Done Button
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(
-                        context,
-                      ).popUntil((route) => route.settings.name == '/home');
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isDark ? Colors.white : Colors.black,
-                      foregroundColor: isDark ? Colors.black : Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(25),
-                      ),
-                    ),
-                    child: const Text(
-                      'Done',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

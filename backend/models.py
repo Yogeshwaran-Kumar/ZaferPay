@@ -52,7 +52,7 @@ class User(Base):
     upi_id = Column(String, unique=True, index=True)  # Plain (designed to be shared)
     upi_id_hash = Column(String, index=True, nullable=True)  # SHA-256 for search
     
-    # Merchant Category Code
+    # Merchant Category Code (MCC)
     mcc = Column(String, nullable=True)
     
     # Device ID (SECURE: Only encrypted stored)
@@ -62,10 +62,15 @@ class User(Base):
     # Timestamps & Balance
     last_active_at = Column(DateTime, nullable=True)
     balance = Column(Float, default=0.0)
+    
+    # New: Total Device Count (Summary)
+    total_device_count = Column(Integer, default=0)
 
     # Relationships
     sender_profile = relationship("SenderProfile", back_populates="user", uselist=False)
     receiver_profile = relationship("ReceiverProfile", back_populates="user", uselist=False)
+    login_history = relationship("LoginHistory", back_populates="user")
+    # trusted_devices relationship removed to avoid AmbiguousForeignKeysError (Logic uses direct queries)
 
     @property
     def mobile_number(self):
@@ -100,6 +105,9 @@ class Transaction(Base):
     status = Column(String)  # SUCCESS, BLOCKED, FAILED
     risk_score = Column(String)  # SAFE, WARN, HIGH
     
+    # Additional Context for Fraud detection
+    receiver_mcc = Column(String, nullable=True)
+    
     # Indexes for faster queries
     __table_args__ = (
         Index('ix_transactions_sender_id', 'sender_id'),
@@ -121,7 +129,7 @@ class SenderProfile(Base):
     user_id = Column(Integer, ForeignKey("users.id"), unique=True)
     avg_transaction_amount = Column(Float, default=0.0)
     total_transactions_count = Column(Integer, default=0)
-    total_transactions_amount = Column(Float, default=0.0) # Added missing column
+    total_transactions_amount = Column(Float, default=0.0)
     monthly_volume = Column(Float, default=0.0)
     last_transaction_time = Column(DateTime, nullable=True)
     
@@ -218,7 +226,8 @@ class IdempotencyKey(Base):
     
     user = relationship("User")
 
-class DeviceProfile(Base): # Changed BaseModel to Base to match existing pattern
+
+class DeviceProfile(Base):
     """
     Authorized Devices & Usage Stats (The "Summary" Table)
     Stores the RUNNING COUNT of logins for each unique device.
@@ -235,8 +244,51 @@ class DeviceProfile(Base): # Changed BaseModel to Base to match existing pattern
     last_login_time = Column(DateTime, default=datetime.datetime.now)
     
     # Relationship
-    user = relationship("User", backref="devices")
+    user = relationship("User", backref="device_profiles") # Fixed back_populates/backref mismatch
 
 
-# Add login_history relationship to User
-User.login_history = relationship("LoginHistory", back_populates="user")
+# ═══════════════════════════════════════════════════════════════════════════
+# NEW AI SECURITY TABLES (Phase 1)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class FraudEvent(Base):
+    """
+    The Memory of the Brain.
+    Stores every suspicious event to train the AI (scikit-learn).
+    """
+    __tablename__ = "fraud_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    transaction_id = Column(String, nullable=True)
+    
+    amount = Column(Float)
+    ai_score = Column(Float) # The raw anomaly score (-1.0 to 1.0)
+    rule_violation = Column(String) # Which rule failed? (e.g., "F1_VELOCITY")
+    
+    # The "Truth" Label (Did we block it? Was it actually fraud?)
+    is_blocked = Column(Boolean, default=False)
+    is_confirmed_fraud = Column(Boolean, nullable=True) # Manual feedback loop
+    
+    timestamp = Column(DateTime, default=datetime.datetime.now)
+    
+    user = relationship("User")
+
+
+class UserTrustGraph(Base):
+    """
+    The User Trust Graph (Social Graph).
+    Tracks who trusts whom. If A pays B often, B is "Trusted" by A.
+    Formerly known as 'TrustedDevice'.
+    """
+    __tablename__ = "user_trust_graph"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id")) # The Payer
+    trusted_user_id = Column(Integer, ForeignKey("users.id")) # The Payee
+    
+    trust_score = Column(Float, default=1.0) # Increases with successful txns
+    last_interaction_at = Column(DateTime, default=datetime.datetime.now)
+    
+    user = relationship("User", foreign_keys=[user_id])
+    trusted_user = relationship("User", foreign_keys=[trusted_user_id])
