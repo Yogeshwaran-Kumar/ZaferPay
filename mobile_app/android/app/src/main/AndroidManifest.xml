@@ -6,9 +6,10 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     
     <application
-        android:label="mobile_app"
+        android:label="SafePay"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@mipmap/launcher_icon"
+        android:enableOnBackInvokedCallback="true"
         android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_jailbreak_detection/flutter_jailbreak_detection.dart';
 import 'api_service.dart';
+import 'utils.dart'; // Add import
 
 class ProcessingShieldScreen extends StatefulWidget {
   final String receiverUpi;
@@ -9,6 +10,7 @@ class ProcessingShieldScreen extends StatefulWidget {
   final String pin;
   final String? category;
   final String? mcc;
+  final String? note;
 
   const ProcessingShieldScreen({
     super.key,
@@ -18,6 +20,7 @@ class ProcessingShieldScreen extends StatefulWidget {
     required this.pin,
     this.category,
     this.mcc,
+    this.note,
   });
 
   @override
@@ -67,81 +70,56 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
   }
 
   Future<void> _startSecurityFlow() async {
-    // STAGE 0: INTEGRITY SCAN (The Bouncer)
-    // Real-time: Check for Root/Jailbreak/Hooks
+    // FAST TRACK: Combine stages to speed up payment
     setState(() {
-      _stage = 0;
-      _statusText = "Verifying Integrity...";
-      _shieldColor = Colors.grey;
-      _shieldIcon = Icons.perm_device_information;
+      _stage = 3; // Jump straight to Processing visualization
+      _statusText = "Securing & Processing...";
+      _shieldColor = Colors.blue;
+      _shieldIcon = Icons.lock_clock;
     });
 
+    // 1. Quick Integrity Check (Background)
     bool isCompromised = false;
     try {
-      // 1. Check Root/Jailbreak
-      bool jailbroken = await FlutterJailbreakDetection.jailbroken;
+      // Run checks in parallel
+      final results = await Future.wait([
+        FlutterJailbreakDetection.jailbroken,
+        _api.checkTamperDetection().then((safe) => !safe),
+        _api.verifySimBinding(),
+      ]);
 
-      // 2. Check Tamper Detection (Debug/Emulator)
-      bool tampered = !await _api.checkTamperDetection();
-
-      // 3. Simulate SIM Binding Check
-      bool simBound = await _api.verifySimBinding();
-
-      if (jailbroken || tampered || !simBound) {
+      if (results[0] || results[1] || !results[2]) {
         isCompromised = true;
       }
     } catch (e) {
-      // Fail open or closed? For high security, fail closed.
+      // Fail closed on error if needed, or open for speed/ux (debugging)
       print("Integrity check failed: $e");
     }
 
-    await Future.delayed(const Duration(milliseconds: 1000)); // Visual pause
-
     if (isCompromised) {
       setState(() {
-        _stage = 4; // Jump to End
+        _stage = 4;
         _result = {
           'status': 'SECURITY_RISK',
-          'detail': 'Device Integrity Failed (Rooted/Jailbroken)',
+          'detail': 'Device Integrity Failed',
         };
       });
       _handleResult();
       return;
     }
 
-    // STAGE 1: ENCRYPTING (The Seal)
-    // Real-time: This is when we sync time & sign request
-    setState(() {
-      _stage = 1;
-      _statusText = "Encrypting Request...";
-      _shieldColor = Colors.blue;
-      _shieldIcon = Icons.lock_outline;
-    });
-    await Future.delayed(const Duration(milliseconds: 800)); // Visual pause
-
-    // STAGE 2: ANALYSING (The Brain)
-    // Real-time: Server is checking F1-F12 rules
-    setState(() {
-      _stage = 2;
-      _statusText = "Analysing Risk...";
-      _shieldColor = Colors.purple; // AI Color
-      _shieldIcon = Icons.network_check;
-    });
-
-    // Start REAL API Call (Not Optimistic)
-    final apiCall = _api.createTransaction(
+    // 2. Immediate API Call (Optimistic for speed)
+    final apiCall = _api.createTransactionOptimistic(
       widget.receiverUpi,
       widget.amount,
       widget.pin,
       mcc: widget.mcc,
+      note: widget.note,
+      receiverName: widget.receiverName,
     );
 
-    // Initial wait to ensure "Analysing" is seen
-    await Future.delayed(const Duration(milliseconds: 1000));
-
-    // STAGE 3: PROCESSING
+    // 3. Show "Processing" state while waiting for network
     setState(() {
-      _stage = 3;
       _statusText = "Processing Payment...";
       _shieldColor = Colors.orange;
       _shieldIcon = Icons.sync;
@@ -158,7 +136,7 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
       _result = {'detail': 'Connection Error', 'status': 'FAILED'};
     }
 
-    // STAGE 4: RESULT
+    // 4. Show Result
     _handleResult();
   }
 
@@ -332,7 +310,7 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
           ],
           const SizedBox(height: 8),
           Text(
-            "₹${widget.amount}",
+            "₹${formatAmount(widget.amount)}",
             style: TextStyle(
               fontSize: 36,
               fontWeight: FontWeight.w900,
@@ -398,10 +376,20 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () {
-                // Ensure we navigate back and refresh
-                Navigator.of(
-                  context,
-                ).pushNamedAndRemoveUntil('/home', (route) => false);
+                if (isSuccess) {
+                  Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    '/conversation',
+                    ModalRoute.withName('/home'),
+                    arguments: {
+                      'upi': widget.receiverUpi,
+                      'name': widget.receiverName,
+                    },
+                  );
+                } else {
+                  // Return the result to the caller (PaymentPinScreen)
+                  Navigator.pop(context, _result);
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: isDark ? Colors.white : Colors.black,
@@ -411,11 +399,35 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: const Text(
-                "Done",
-                style: TextStyle(fontWeight: FontWeight.bold),
+              child: Text(
+                isSuccess ? "Done" : "Close / Retry",
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Powered By Footer
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.shield_outlined,
+                size: 14,
+                color: isDark ? Colors.white54 : Colors.grey,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                "Powered by SafePay",
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: isDark ? Colors.white54 : Colors.grey,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
           ),
         ],
       ),

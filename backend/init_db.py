@@ -11,9 +11,7 @@ def init_db():
     print("Database created.")
     
     # Run seed
-    import seed
-    with database.SessionLocal() as db:
-        seed.seed_data(db)
+    print("Database initialization complete (No seed data found).")
 
 if __name__ == "__main__":
     init_db()

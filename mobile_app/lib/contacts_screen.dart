@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'api_service.dart';
+import 'package:share_plus/share_plus.dart';
+import 'contact_service.dart';
 
 class ContactsScreen extends StatefulWidget {
   const ContactsScreen({super.key});
@@ -16,60 +16,73 @@ class _ContactsScreenState extends State<ContactsScreen> {
   bool _isLoading = true;
   bool _permissionDenied = false;
   final TextEditingController _searchController = TextEditingController();
-  final ApiService _api = ApiService();
+
+  // Contact Verification State
+  final Set<String> _checkedContactIds = {}; // IDs that have been checked
+  final Map<String, String> _contactUpiMap = {}; // ID -> UPI Map (Found users)
 
   @override
   void initState() {
     super.initState();
-    _loadContacts();
     _searchController.addListener(_filterContacts);
+
+    // Subscribe to updates for LIVE UI
+    ContactService.instance.addListener(_applyServiceData);
+
+    // Initial Load Check
+    _initService();
   }
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadContacts() async {
+  void _initService() async {
     setState(() => _isLoading = true);
+    // If loaded, apply now
+    if (ContactService.instance.isLoaded) {
+      _applyServiceData();
+    }
 
-    // Request permission
-    final status = await Permission.contacts.request();
-
-    if (status.isGranted) {
-      try {
-        final contacts = await FlutterContacts.getContacts(
-          withProperties: true,
-          withPhoto: false,
-        );
-
-        // Sort contacts alphabetically
-        contacts.sort(
-          (a, b) => (a.displayName).toLowerCase().compareTo(
-            (b.displayName).toLowerCase(),
-          ),
-        );
-
-        setState(() {
-          _contacts = contacts;
-          _filteredContacts = contacts;
-          _isLoading = false;
-          _permissionDenied = false;
-        });
-      } catch (e) {
-        setState(() {
-          _isLoading = false;
-          _permissionDenied = true;
-        });
-      }
-    } else {
+    // Trigger load if needed (and capable)
+    final success = await ContactService.instance.ensureContactsLoaded();
+    if (!success && mounted && _contacts.isEmpty) {
       setState(() {
         _isLoading = false;
         _permissionDenied = true;
       });
     }
   }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    ContactService.instance.removeListener(_applyServiceData);
+    super.dispose();
+  }
+
+  // Called automatically whenever Service calls notifyListeners()
+  void _applyServiceData() {
+    if (!mounted) return;
+
+    final service = ContactService.instance;
+    setState(() {
+      _contacts = service.contacts;
+      _filteredContacts =
+          _contacts; // Note: this resets search filter on update.
+      // Ideally we should re-apply filter, but this is simple for now.
+
+      _checkedContactIds.addAll(service.checkedContactIds);
+      _contactUpiMap.addAll(service.contactUpiMap);
+
+      _isLoading = false;
+      _permissionDenied = false;
+    });
+
+    // Re-apply filter if searching
+    if (_searchController.text.isNotEmpty) {
+      _filterContacts();
+    }
+  }
+
+  // Legacy method removed/replaced by service call
+  // _startBackgroundVerification and _verifyContact are handled by Service now.
 
   void _filterContacts() {
     final query = _searchController.text.toLowerCase();
@@ -84,100 +97,12 @@ class _ContactsScreenState extends State<ContactsScreen> {
     });
   }
 
-  Future<void> _selectContact(Contact contact) async {
-    if (contact.phones.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('This contact has no phone number')),
-      );
-      return;
-    }
+  void _onPay(Contact contact, String upiId) {
+    Navigator.pop(context, {'upi': upiId, 'name': contact.displayName});
+  }
 
-    // Show loading dialog
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: Card(
-          child: Padding(
-            padding: EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('Looking up contact...'),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-
-    // Try to lookup by phone number
-    String? foundUpi;
-    String? foundName;
-
-    for (var phone in contact.phones) {
-      // Clean phone number (remove spaces, dashes, etc.)
-      String cleanedPhone = phone.number.replaceAll(RegExp(r'[^0-9+]'), '');
-
-      // Try with the original cleaned number first
-      var userInfo = await _api.lookupUserByPhone(cleanedPhone);
-
-      if (userInfo != null) {
-        foundUpi = userInfo['upi_id'];
-        foundName = userInfo['username'];
-        break;
-      }
-
-      // If not found and number starts with +91, try without country code
-      if (cleanedPhone.startsWith('+91')) {
-        String phoneWithoutCountryCode = cleanedPhone.substring(
-          3,
-        ); // Remove +91
-
-        userInfo = await _api.lookupUserByPhone(phoneWithoutCountryCode);
-
-        if (userInfo != null) {
-          foundUpi = userInfo['upi_id'];
-          foundName = userInfo['username'];
-          break;
-        }
-      }
-      // If not found and number doesn't have +91, try WITH country code
-      else if (cleanedPhone.length == 10 && !cleanedPhone.startsWith('+')) {
-        String phoneWithCountryCode = '+91$cleanedPhone';
-
-        userInfo = await _api.lookupUserByPhone(phoneWithCountryCode);
-
-        if (userInfo != null) {
-          foundUpi = userInfo['upi_id'];
-          foundName = userInfo['username'];
-          break;
-        }
-      }
-    }
-
-    if (!mounted) return;
-    Navigator.pop(context); // Close loading dialog
-
-    if (foundUpi != null) {
-      // Found UPI ID, return to home screen
-      Navigator.pop(context, {
-        'upi': foundUpi,
-        'name': foundName ?? contact.displayName,
-      });
-    } else {
-      // Not found in database
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${contact.displayName} is not registered on 2Way'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-    }
+  void _onInvite() {
+    Share.share('Hey! Join me on 2Way app for secure payments.');
   }
 
   @override
@@ -245,36 +170,16 @@ class _ContactsScreenState extends State<ContactsScreen> {
               color: Colors.grey.shade400,
             ),
             const SizedBox(height: 16),
-            Text(
+            const Text(
               'Contact Permission Required',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).textTheme.bodyLarge?.color,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 32.0),
-              child: Text(
-                'Please grant contact permission to select contacts for payment',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey),
-              ),
-            ),
+            const Text('Please grant permission to view contacts'),
             const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _loadContacts,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Grant Permission'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF5F259F),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-              ),
+            ElevatedButton(
+              onPressed: _initService,
+              child: const Text('Grant Permission'),
             ),
           ],
         ),
@@ -282,23 +187,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
     }
 
     if (_filteredContacts.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.search_off, size: 64, color: Colors.grey.shade400),
-            const SizedBox(height: 16),
-            Text(
-              'No contacts found',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.grey.shade400 : Colors.black54,
-              ),
-            ),
-          ],
-        ),
-      );
+      return const Center(child: Text("No contacts found"));
     }
 
     return ListView.builder(
@@ -306,6 +195,10 @@ class _ContactsScreenState extends State<ContactsScreen> {
       itemBuilder: (context, index) {
         final contact = _filteredContacts[index];
         final hasPhone = contact.phones.isNotEmpty;
+
+        final isChecked = _checkedContactIds.contains(contact.id);
+        final upiId = _contactUpiMap[contact.id];
+        final isRegistered = upiId != null;
 
         return ListTile(
           leading: CircleAvatar(
@@ -334,19 +227,54 @@ class _ContactsScreenState extends State<ContactsScreen> {
                     color: isDark ? Colors.grey.shade400 : Colors.black54,
                   ),
                 )
-              : const Text(
-                  'No phone number',
-                  style: TextStyle(color: Colors.grey),
-                ),
+              : const Text("No phone"),
+
           trailing: hasPhone
-              ? Icon(
-                  Icons.arrow_forward_ios,
-                  size: 16,
-                  color: isDark ? Colors.grey.shade600 : Colors.grey,
-                )
+              ? (isChecked
+                    ? (isRegistered
+                          ? ElevatedButton(
+                              onPressed: () => _onPay(contact, upiId!),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(
+                                  0xFF5F259F,
+                                ), // Purple
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                elevation: 0,
+                              ),
+                              child: const Text("Pay"),
+                            )
+                          : OutlinedButton(
+                              onPressed: _onInvite,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: isDark
+                                    ? Colors.grey.shade400
+                                    : Colors.grey.shade700,
+                                side: BorderSide(
+                                  color: isDark
+                                      ? Colors.grey.shade700
+                                      : Colors.grey.shade300,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                              ),
+                              child: const Text("Invite"),
+                            ))
+                    : const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ))
               : null,
-          enabled: hasPhone,
-          onTap: hasPhone ? () => _selectContact(contact) : null,
         );
       },
     );

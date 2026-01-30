@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:mobile_app/main.dart';
+import 'utils.dart'; // Add import
 
 class TransactionDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> transaction;
@@ -178,7 +179,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                 const SizedBox(height: 8),
                 // Amount
                 Text(
-                  '₹$amount',
+                  '₹${formatAmount(amount)}',
                   style: GoogleFonts.outfit(
                     fontSize: 48,
                     fontWeight: FontWeight.w400,
@@ -285,9 +286,8 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                   ),
                 ),
                 const SizedBox(height: 30),
-                // Footer branding/text (Optional, but adds to the look)
                 Text(
-                  'Powered by 2Way',
+                  'Powered by SafePay',
                   style: GoogleFonts.outfit(
                     color: Colors.grey.shade400,
                     fontWeight: FontWeight.bold,
@@ -337,15 +337,8 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
 
   String _formatDate(String timestamp) {
     try {
-      // Backend returns UTC (e.g. "2026-01-24T12:00:00") but potentially without 'Z'.
-      // If we parse directly, Dart might treat it as local.
-      // We force it to be parsed as UTC by appending 'Z' if missing.
-      String timeStr = timestamp;
-      if (!timeStr.endsWith('Z')) {
-        timeStr += 'Z';
-      }
-
-      final dt = DateTime.parse(timeStr).toLocal();
+      // Backend returns Local Time (naive). Do NOT force UTC 'Z'.
+      final dt = DateTime.parse(timestamp).toLocal();
       // Format: "9 Jan 2026, 6:22 pm"
       return DateFormat('d MMM yyyy, h:mm a').format(dt);
     } catch (e) {

@@ -42,6 +42,10 @@ app = FastAPI(title="Application-2 Mock Bank")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
 # Add CORS middleware to allow connections from mobile apps
 app.add_middleware(
     CORSMiddleware,
@@ -735,6 +739,59 @@ def lookup_user_by_phone(phone_number: str, db: Session = Depends(get_db), curre
         raise HTTPException(status_code=404, detail="Phone number not found")
     return user
 
+@app.post("/users/lookup-contacts", response_model=schemas.ContactLookupResponse)
+def lookup_contacts(
+    req: schemas.ContactLookupRequest, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
+    matches = []
+    
+    # 1. Pre-calculate all hashes for all numbers to do a single DB query
+    # Map hash -> original phone number (to map back)
+    hash_to_phone = {}
+    
+    for phone in req.phone_numbers:
+        # Normalize
+        normalized = ''.join(filter(str.isdigit, phone))
+        variations = [normalized]
+        if len(normalized) == 10:
+            variations.append(f"91{normalized}")
+            variations.append(f"+91{normalized}")
+        elif len(normalized) == 12 and normalized.startswith("91"):
+            variations.append(normalized[2:])
+            variations.append(f"+91{normalized[2:]}")
+            
+        for v in variations:
+            h = security.hash_value(v)
+            # We map hash to the ORIGINAL input phone number so frontend knows which contact matched
+            hash_to_phone[h] = phone 
+            
+    # 2. Bulk Query
+    all_hashes = list(hash_to_phone.keys())
+    found_users = db.query(models.User).filter(models.User.mobile_hash.in_(all_hashes)).all()
+    
+    # 3. Map results
+    for user in found_users:
+        # We need to find which original phone number this user corresponds to.
+        # Since we have the user's mobile_hash, we can look it up in our map?
+        # WAIT: The user table stores ONE mobile_hash (of the normalized version usually).
+        # But we queried for variations.
+        
+        # We need to know WHICH hash matched. 
+        # But SQL Alchemy doesn't tell us "this row matched because of this value in the IN clause" easily short of raw SQL.
+        # BUT: The user.mobile_hash IS the value that matched.
+        
+        if user.mobile_hash in hash_to_phone:
+            original_phone = hash_to_phone[user.mobile_hash]
+            matches.append(schemas.ContactMatch(
+                phone_number=original_phone,
+                upi_id=user.upi_id,
+                username=user.username
+            ))
+            
+    return schemas.ContactLookupResponse(matches=matches)
+
 @app.put("/users/me/change-pin")
 def change_pin(
     req: schemas.ChangePinRequest,
@@ -948,7 +1005,8 @@ def create_transaction(
             encrypted_amount=security.encrypt_value(tx.amount),
             status="SUCCESS",
             risk_score=risk_label,
-            timestamp=datetime.now()
+            timestamp=datetime.now(),
+            note=tx.note  # Save Note
         )
         db.add(new_tx)
 
@@ -1071,7 +1129,8 @@ def get_home_aggregate(
             risk_score=t.risk_score,
             timestamp=t.timestamp,
             sender_mcc=t.sender.mcc,
-            receiver_mcc=t.receiver.mcc
+            receiver_mcc=t.receiver.mcc,
+            note=t.note
         ))
 
     # 2. Get Recent People (Limit 16)
@@ -1383,7 +1442,8 @@ def get_conversation(
                 "risk_score": t.risk_score,
                 "timestamp": t.timestamp,
                 "sender_mcc": t.sender.mcc,
-                "receiver_mcc": t.receiver.mcc
+                "receiver_mcc": t.receiver.mcc,
+                "note": t.note
             })
             
     # Process Messages

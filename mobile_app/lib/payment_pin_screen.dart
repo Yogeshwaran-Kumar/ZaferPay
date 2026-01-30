@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_app/api_service.dart';
 import 'processing_shield_screen.dart';
+import 'utils.dart'; // Add import
 
 class PaymentPinScreen extends StatefulWidget {
   final String receiverUpi;
@@ -7,6 +9,7 @@ class PaymentPinScreen extends StatefulWidget {
   final String receiverName;
   final String? category;
   final String? mcc;
+  final String? note;
 
   const PaymentPinScreen({
     super.key,
@@ -15,6 +18,7 @@ class PaymentPinScreen extends StatefulWidget {
     required this.receiverName,
     this.category,
     this.mcc,
+    this.note,
   });
 
   @override
@@ -23,6 +27,8 @@ class PaymentPinScreen extends StatefulWidget {
 
 class _PaymentPinScreenState extends State<PaymentPinScreen> {
   String _enteredPin = '';
+  int _pinAttempts = 0;
+  final ApiService _api = ApiService();
 
   void _onKeypadTap(String value) {
     setState(() {
@@ -39,8 +45,22 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
   }
 
   Future<void> _verifyPin() async {
-    // Navigate to Visual Security Flow (Phase 3)
-    Navigator.pushReplacement(
+    // 1. FAST Local Check (Avoids navigation if PIN is definitely wrong)
+    final pinStatus = await _api.verifyPinSmart(_enteredPin);
+
+    if (pinStatus == PinVerificationStatus.lockedOut) {
+      _handleLockedOut();
+      return;
+    }
+    if (pinStatus == PinVerificationStatus.incorrect) {
+      _handleIncorrectPin();
+      return;
+    }
+
+    // 2. Navigate to Visual Security Flow (if PIN is Correct or Unknown)
+    if (!mounted) return;
+
+    final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => ProcessingShieldScreen(
@@ -50,9 +70,92 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
           pin: _enteredPin,
           category: widget.category,
           mcc: widget.mcc,
+          note: widget.note,
         ),
       ),
     );
+
+    if (!mounted) return;
+
+    // 3. Handle Server-Side Rejection (e.g. outdated local cache or unknown)
+    if (result != null && result is Map) {
+      if (result['status'] == 'FAILED' &&
+          (result['detail'] == 'Incorrect PIN' ||
+              result['detail'] == 'Session expired')) {
+        _handleIncorrectPin();
+      } else if (result['status'] == 'SUCCESS') {
+        // Navigate to Conversation Screen on Success
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/conversation',
+          ModalRoute.withName('/home'),
+          arguments: {
+            'upi': widget.receiverUpi,
+            'name': widget.receiverName,
+            'username': widget.receiverName,
+          },
+        );
+      } else {
+        if (mounted) Navigator.pop(context, result);
+      }
+    }
+  }
+
+  Future<void> _handleIncorrectPin() async {
+    setState(() {
+      _pinAttempts++;
+      _enteredPin = ''; // Reset PIN field
+    });
+
+    if (_pinAttempts == 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Incorrect PIN. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } else if (_pinAttempts == 2) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Security Warning"),
+          content: const Text(
+            "Warning: You have tried too many times. One more failed attempt will log you out.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("I Understand"),
+            ),
+          ],
+        ),
+      );
+    } else if (_pinAttempts >= 3) {
+      _handleLockedOut();
+    }
+  }
+
+  Future<void> _handleLockedOut() async {
+    // 3rd Strike -> Logout with Dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false, // User cannot close this
+      builder: (ctx) => const AlertDialog(
+        title: Text("Account Locked"),
+        content: Text(
+          "Too many incorrect attempts so your account has been logged out.",
+        ),
+      ),
+    );
+
+    // Wait for user to read it
+    await Future.delayed(const Duration(seconds: 4));
+
+    await _api.logout();
+
+    if (!mounted) return;
+    Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
   }
 
   @override
@@ -110,7 +213,7 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
                             ),
                           ),
                           Text(
-                            "₹${widget.amount}",
+                            "₹${formatAmount(widget.amount)}",
                             style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'main.dart'; // import for themeNotifier
 import 'api_service.dart';
@@ -128,6 +129,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
                 child: ExpansionTile(
+                  shape: const Border(), // Remove expanded border
+                  collapsedShape: const Border(), // Remove collapsed border
                   leading: const Icon(
                     Icons.brightness_6,
                     color: Color(0xFF00B9F1),
@@ -227,6 +230,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   side: BorderSide(color: Colors.red.withValues(alpha: 0.1)),
                 ),
               ),
+              const SizedBox(height: 30),
+              Center(
+                child: Text(
+                  'Powered by SafePay',
+                  style: GoogleFonts.outfit(
+                    color: Colors.grey.shade400,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 30),
             ],
           ),
         ),

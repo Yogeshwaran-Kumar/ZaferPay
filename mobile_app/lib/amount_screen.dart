@@ -1,3 +1,4 @@
+import 'utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'api_service.dart';
@@ -12,7 +13,8 @@ class AmountScreen extends StatefulWidget {
 
 class _AmountScreenState extends State<AmountScreen> {
   late String _receiverUpi;
-  String? _receiverName;
+  String? _contactName; // Name from Contacts/Args
+  String? _bankingName; // Name from Banking (API)
   String? _category; // Domain/Category for merchants
   double? _balance; // User's current balance
   String? _currentUserUpi; // Current user's UPI ID
@@ -21,6 +23,7 @@ class _AmountScreenState extends State<AmountScreen> {
 
   final ApiService _api = ApiService();
   final _amountController = TextEditingController();
+  final _noteController = TextEditingController(); // Add this
   bool _isLoadingName = true;
   bool _userNotFound = false;
   bool _isAmountTooHigh = false;
@@ -35,6 +38,7 @@ class _AmountScreenState extends State<AmountScreen> {
   void dispose() {
     _amountController.removeListener(_validateAmount);
     _amountController.dispose();
+    _noteController.dispose(); // Add this
     super.dispose();
   }
 
@@ -70,7 +74,7 @@ class _AmountScreenState extends State<AmountScreen> {
     super.didChangeDependencies();
     final args = ModalRoute.of(context)?.settings.arguments as Map?;
     _receiverUpi = args?['upi'] ?? '';
-    _receiverName = args?['name']; // Can be passed directly
+    _contactName = args?['name']; // Store Contact Name from Args
     _category = args?['category'];
     if (args != null) {
       if (args['senderBalance'] != null) {
@@ -156,10 +160,8 @@ class _AmountScreenState extends State<AmountScreen> {
           debugPrint('DEBUG AMOUNT: Found UPI ID: ${info['upi_id']}');
           setState(() {
             _receiverUpi = info!['upi_id'];
-            // Also update name if not already set
-            if (_receiverName == null || _receiverName!.isEmpty) {
-              _receiverName = info['username'];
-            }
+            // Store banking name
+            _bankingName = info['username'];
             _userNotFound = false; // User confirmed found
           });
           // cache this user for future UPI lookups
@@ -190,11 +192,9 @@ class _AmountScreenState extends State<AmountScreen> {
     if (mounted) {
       setState(() {
         if (info != null) {
-          // Set name if not already set
+          // Set banking name
+          _bankingName = info['username'];
 
-          if (_receiverName == null || _receiverName!.isEmpty) {
-            _receiverName = info['username'];
-          }
           if (info['mcc'] != null && info['mcc'] != '0000') {
             _rawMcc = info['mcc'];
             _category = MccHelper.getDomain(info['mcc']);
@@ -219,10 +219,10 @@ class _AmountScreenState extends State<AmountScreen> {
     if (_isSelfTransfer || _isAmountTooHigh) return;
 
     final amount = double.tryParse(_amountController.text);
-    if (amount == null || amount <= 0) {
+    if (amount == null || amount < 1) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text("Enter valid amount")));
+      ).showSnackBar(const SnackBar(content: Text("Minimum amount is ₹1")));
       return;
     }
 
@@ -231,7 +231,7 @@ class _AmountScreenState extends State<AmountScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            "Insufficient balance. Available: ₹${_balance!.toStringAsFixed(2)}",
+            "Insufficient balance. Available: ₹${formatAmount(_balance)}",
           ),
           backgroundColor: Colors.red,
         ),
@@ -241,13 +241,19 @@ class _AmountScreenState extends State<AmountScreen> {
 
     final result = await Navigator.pushNamed(
       context,
-      '/payment-pin',
+      '/risk-analysis', // Go to Risk Analysis first
       arguments: {
         'receiverUpi': _receiverUpi,
         'amount': amount,
-        'name': _receiverName ?? _receiverUpi, // Pass name or fallback to UPI
-        'category': _category, // Pass category
+        'name':
+            _bankingName ??
+            _contactName ??
+            _receiverUpi, // Prefer Banking > Contact for Risk? Or Display?
+        // Risk screen likely wants the "True" name, which is Banking.
+        // But keeping logical consistency.
+        'category': _category,
         'mcc': _rawMcc,
+        'note': _noteController.text.trim(), // Pass Note
       },
     );
 
@@ -355,7 +361,7 @@ class _AmountScreenState extends State<AmountScreen> {
               const SizedBox(height: 8),
               if (status == "SUCCESS") ...[
                 Text(
-                  "₹${result['amount']}",
+                  "₹${formatAmount(result['amount'])}",
                   style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.w900,
@@ -386,7 +392,7 @@ class _AmountScreenState extends State<AmountScreen> {
                             ),
                           ),
                           Text(
-                            _receiverName ?? _receiverUpi,
+                            _contactName ?? _bankingName ?? _receiverUpi,
                             style: TextStyle(
                               color: isDark ? Colors.white70 : Colors.black87,
                               fontWeight: FontWeight.bold,
@@ -467,187 +473,278 @@ class _AmountScreenState extends State<AmountScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Determine Theme Colors to match "Safe Pay" aesthetic
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    // Background: Deep Slate Blue (like screenshot) or White
+    final bgColor = isDark ? const Color(0xFF0F1115) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black;
+    final secondaryTextColor = isDark ? Colors.grey[400] : Colors.grey[600];
+
+    // Logic for Name Display
+    final displayContactName = _contactName ?? _bankingName ?? _receiverUpi;
+    final displayBankingName =
+        _bankingName ??
+        (!_userNotFound && _bankingName != null ? _bankingName : null);
+
+    // Initial for Avatar
+    final initial = displayContactName.isNotEmpty
+        ? displayContactName[0].toUpperCase()
+        : "?";
+
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: bgColor,
       appBar: AppBar(
-        title: Text(
-          "Make Payment",
-          style: TextStyle(
-            color: Theme.of(context).textTheme.titleLarge?.color,
-          ),
+        backgroundColor: bgColor,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.close, color: textColor),
+          onPressed: () => Navigator.pop(context),
         ),
-        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
-        iconTheme: Theme.of(context).iconTheme,
-      ),
-      resizeToAvoidBottomInset: true,
-      body: ListView(
-        padding: const EdgeInsets.all(24.0),
-        children: [
-          CircleAvatar(
-            radius: 40,
-            backgroundColor: isDark
-                ? Colors.grey.shade800
-                : Colors.grey.shade200,
-            child: Text(
-              _receiverName != null && _receiverName!.isNotEmpty
-                  ? _receiverName![0].toUpperCase()
-                  : (_receiverUpi.isNotEmpty
-                        ? _receiverUpi[0].toUpperCase()
-                        : '?'),
-              style: TextStyle(
-                fontSize: 32,
-                color: isDark ? Colors.white : Colors.black87,
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Center(
-            child: Text(
-              "Paying to",
-              style: TextStyle(color: Colors.grey.shade600),
-            ),
-          ),
-          Center(
-            child: Text(
-              _receiverName ?? _receiverUpi,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : Colors.black,
-              ),
-            ),
-          ),
-          if (_category != null)
-            Center(
-              child: Container(
-                margin: const EdgeInsets.only(top: 8),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.blue.withValues(alpha: 0.2)
-                      : Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isDark ? Colors.blue.shade400 : Colors.blue.shade200,
-                  ),
-                ),
-                child: Text(
-                  _category!,
-                  style: TextStyle(
-                    color: isDark ? Colors.blue.shade200 : Colors.blue.shade800,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            )
-          else if (_receiverName != null)
-            Center(
-              child: Text(
-                _receiverUpi,
-                style: TextStyle(
-                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-
-          // Show error if user not found
-          if (_userNotFound)
-            Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Center(
-                child: Text(
-                  "External UPI ID",
-                  style: TextStyle(
-                    color: Colors.orange.shade700,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-
-          // Show error if self-transfer
-          if (_isSelfTransfer)
-            Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Center(
-                child: Text(
-                  "can't able to self transfer",
-                  style: TextStyle(
-                    color: Colors.red.shade700,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-
-          const SizedBox(height: 40),
-          TextField(
-            controller: _amountController,
-            keyboardType: TextInputType.number,
-            inputFormatters: [
-              MaxValueTextInputFormatter(
-                500000,
-                onMaxValueExceeded: () {
-                  if (!_isAmountTooHigh) {
-                    setState(() {
-                      _isAmountTooHigh = true;
-                    });
-                  }
-                },
-              ),
-            ], // Block > 500k
-            readOnly: _isSelfTransfer, // Allow input for userNotFound
-            style: TextStyle(
-              fontSize: 40,
-              fontWeight: FontWeight.bold,
-              color: (_isSelfTransfer)
-                  ? Colors.grey
-                  : (isDark ? Colors.white : Colors.black),
-            ),
-            textAlign: TextAlign.center,
-            decoration: const InputDecoration(
-              prefixText: "₹ ",
-              hintText: "0",
-              border: InputBorder.none,
-            ),
-          ),
-          if (_isAmountTooHigh)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Center(
-                child: Text(
-                  "Amount can't be more than 500000",
-                  style: TextStyle(
-                    color: Colors.red.shade700,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          const SizedBox(height: 40),
-          ElevatedButton.icon(
-            onPressed: (_isSelfTransfer || _isAmountTooHigh)
-                ? null
-                : _onPayPressed,
-            icon: const Icon(Icons.send),
-            label: const Text("Pay Now"),
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 56),
-              backgroundColor: isDark ? Colors.white : Colors.black,
-              foregroundColor: isDark ? Colors.black : Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
+        actions: [
+          // Optional: Help/Feedback icon if needed, usually top right
         ],
+      ),
+      // Use floating action button for the 'Proceed' action to match screenshot style
+      floatingActionButton: FloatingActionButton(
+        onPressed: (_isSelfTransfer || _isAmountTooHigh) ? null : _onPayPressed,
+        backgroundColor: (_isSelfTransfer || _isAmountTooHigh)
+            ? Colors.grey
+            : const Color(0xFF00B9F1), // Brand Cyan/Blue
+        elevation: 4,
+        child: const Icon(Icons.arrow_forward, color: Colors.white),
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            const SizedBox(height: 20),
+
+            // 1. Receiver Info Section (Top)
+            Center(
+              child: Column(
+                children: [
+                  // Avatar
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: const Color(
+                        0xFF0078FF,
+                      ), // Google Blue style avatar
+                      shape: BoxShape.circle,
+                      border: Border.all(color: bgColor, width: 2),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      initial,
+                      style: const TextStyle(
+                        fontSize: 28,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // "Paying [Name]" (Contact Name preferred)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        "Paying ",
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        displayContactName,
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+
+                  // "Banking name: [Name]" + Verified Tick
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (!_userNotFound) ...[
+                        Text(
+                          "Banking name: ${displayBankingName ?? 'Verified Merchant'}",
+                          style: TextStyle(
+                            color: secondaryTextColor,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.verified,
+                          color: Colors.greenAccent, // Verified tick
+                          size: 14,
+                        ),
+                      ] else ...[
+                        Text(
+                          "Banking name: Unknown",
+                          style: TextStyle(
+                            color: secondaryTextColor,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+
+                  // Mobile / UPI ID
+                  Text(
+                    _receiverUpi, // e.g. "PhonePe • ...@ibl"
+                    style: TextStyle(color: secondaryTextColor, fontSize: 13),
+                  ),
+
+                  // Self-transfer warning
+                  if (_isSelfTransfer)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        "Cannot transfer to self",
+                        style: TextStyle(color: Colors.red[300], fontSize: 13),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+            // 2. Amount Input Section (Middle - Expanded)
+            Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Amount TextField
+                    IntrinsicWidth(
+                      child: TextField(
+                        controller: _amountController,
+                        keyboardType: TextInputType.number,
+                        autofocus: true, // Open keyboard immediately
+                        inputFormatters: [
+                          MaxValueTextInputFormatter(
+                            500000,
+                            onMaxValueExceeded: () {
+                              if (!_isAmountTooHigh) {
+                                setState(() => _isAmountTooHigh = true);
+                              }
+                            },
+                          ),
+                        ],
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize: 64, // Large text like screenshot
+                          fontWeight: FontWeight.normal,
+                        ),
+                        decoration: InputDecoration(
+                          filled:
+                              false, // Prevent theme from adding background color
+                          prefixText: "₹ ",
+                          prefixStyle: TextStyle(
+                            color: textColor,
+                            fontSize: 64,
+                            fontWeight: FontWeight.normal,
+                          ),
+                          hintText: "0",
+                          hintStyle: TextStyle(
+                            color: isDark ? Colors.grey[700] : Colors.grey[300],
+                            fontSize: 64,
+                          ),
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ),
+
+                    // Amount Too High Warning
+                    if (_isAmountTooHigh)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          "Max limit: ₹5,00,000",
+                          style: TextStyle(
+                            color: Colors.red[300],
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+
+                    const SizedBox(height: 20),
+
+                    // "Add note" Pill Button
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? const Color(0xFF1E2630)
+                            : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: IntrinsicWidth(
+                        child: TextField(
+                          controller: _noteController,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: textColor,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          decoration: InputDecoration(
+                            filled: false,
+                            isDense: true,
+                            hintText: "Add note",
+                            hintStyle: TextStyle(
+                              color: secondaryTextColor,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // 3. Security Badge / Bottom Info (Always Visible)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.shield_outlined,
+                    color: Colors.blue[300],
+                    size: 14,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    "Powered by SafePay",
+                    style: TextStyle(color: Colors.blue[300], fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -666,6 +763,11 @@ class MaxValueTextInputFormatter extends TextInputFormatter {
   ) {
     if (newValue.text.isEmpty) {
       return newValue;
+    }
+
+    // Block leading '0' or '.' to enforce amount >= 1
+    if (newValue.text.startsWith('0') || newValue.text.startsWith('.')) {
+      return oldValue;
     }
 
     final newDouble = double.tryParse(newValue.text);

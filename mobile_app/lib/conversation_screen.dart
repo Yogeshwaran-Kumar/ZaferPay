@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'api_service.dart';
 import 'package:intl/intl.dart';
 import 'transaction_details_screen.dart';
+import 'utils.dart'; // Add import
 
 class ConversationScreen extends StatefulWidget {
   final Map<String, dynamic> args;
@@ -103,10 +104,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
     ];
     final color = avatarColors[name.hashCode.abs() % avatarColors.length];
 
+    // Ensure consistent background color for seamless merging
+    final bgColor = isDark ? const Color(0xFF0F1115) : Colors.white;
+
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: bgColor,
       appBar: AppBar(
-        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+        backgroundColor: bgColor,
         elevation: 0.5,
         leading: BackButton(color: Theme.of(context).iconTheme.color),
         title: Row(
@@ -180,11 +184,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
       // Handle timestamps correctly
       // If it ends with Z, it's already ISO UTC.
       // If not, we assume it's Naive UTC (from backend) and append Z.
-      String ts = timestamp;
-      if (!ts.endsWith('Z')) {
-        ts = '${ts}Z';
-      }
-      return DateTime.parse(ts).toLocal();
+      return DateTime.parse(timestamp).toLocal();
     } catch (_) {
       return DateTime.now();
     }
@@ -218,18 +218,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
       alignment: isSender ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
         onTap: () {
-          // Inject the known contact name into the transaction data so details screen shows name instead of UPI ID
           final transaction = Map<String, dynamic>.from(tx);
           final contactName = widget.args['name'];
-
           if (isSender) {
-            // I sent money TO the contact
             transaction['receiver_name'] = contactName;
           } else {
-            // The contact sent money FROM themselves
             transaction['sender_name'] = contactName;
           }
-
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -241,23 +236,29 @@ class _ConversationScreenState extends State<ConversationScreen> {
           );
         },
         child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 8),
-          padding: const EdgeInsets.all(16),
-          width:
-              MediaQuery.of(context).size.width *
-              0.75, // Slightly wider for better fit
+          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+          padding: const EdgeInsets.all(20),
+          width: MediaQuery.of(context).size.width * 0.65, // Decreased width
           decoration: BoxDecoration(
-            color: isDark ? Colors.grey.shade800 : Colors.white,
-            borderRadius: BorderRadius.only(
-              topLeft: const Radius.circular(16),
-              topRight: const Radius.circular(16),
-              bottomLeft: isSender ? const Radius.circular(16) : Radius.zero,
-              bottomRight: isSender ? Radius.zero : const Radius.circular(16),
-            ),
+            color: isDark ? const Color(0xFF1E2630) : const Color(0xFFF0F0F0),
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              if (!isDark)
+                BoxShadow(
+                  color: Colors.grey.withOpacity(
+                    0.05,
+                  ), // Reduced shadow since we have color
+                  blurRadius: 5,
+                  offset: const Offset(0, 2),
+                ),
+            ],
+            border: isDark
+                ? Border.all(color: Colors.white10)
+                : Border.all(color: Colors.grey.shade300),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min, // Wrap content
+            mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 isSender
@@ -265,79 +266,91 @@ class _ConversationScreenState extends State<ConversationScreen> {
                     : "Payment to you",
                 style: TextStyle(
                   color: isDark ? Colors.white : Colors.black87,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 4),
-              if (!isSuccess)
-                Text(
-                  "Payment Failed",
-                  style: TextStyle(color: Colors.red[300], fontSize: 13),
-                )
-              else
-                // Payment mode indicator visual
-                Text(
-                  "Paid via 2Way",
-                  style: TextStyle(
-                    color: isDark ? Colors.grey.shade400 : Colors.grey,
-                    fontSize: 12,
+              if (tx['note'] != null && tx['note'].toString().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text(
+                    tx['note'].toString().toUpperCase(),
+                    style: TextStyle(
+                      color: isDark ? Colors.white70 : Colors.black87,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Flexible(
-                    child: Text(
-                      "₹$amount",
-                      style: TextStyle(
-                        color: isDark ? Colors.white : Colors.black,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        fontFamily:
-                            'Roboto', // Ensure Rupee symbol renders well
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (isSuccess) ...[
-                    const SizedBox(width: 8),
-                    const Icon(
-                      Icons.check_circle,
-                      color: Colors.greenAccent,
-                      size: 18,
-                    ),
-                  ] else ...[
-                    const SizedBox(width: 8),
-                    const Icon(Icons.error, color: Colors.redAccent, size: 18),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Flexible(
-                    child: Text(
-                      isSuccess ? "Paid • $timeStr" : "Failed • $timeStr",
-                      style: TextStyle(
-                        color: isDark ? Colors.grey.shade400 : Colors.grey,
-                        fontSize: 11,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+                  Text(
+                    "₹",
+                    style: TextStyle(
+                      color: isDark ? Colors.white : Colors.black,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   const SizedBox(width: 4),
-                  Icon(
-                    Icons.chevron_right,
-                    color: isDark ? Colors.grey.shade400 : Colors.grey,
-                    size: 16,
+                  Text(
+                    "${formatAmount(amount)}", // Smart Amount
+                    style: TextStyle(
+                      color: isDark ? Colors.white : Colors.black,
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
+              if (!isSuccess)
+                Row(
+                  children: [
+                    const Icon(Icons.error, color: Colors.redAccent, size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      "Payment Failed",
+                      style: TextStyle(color: Colors.red[300], fontSize: 13),
+                    ),
+                  ],
+                )
+              else
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.check_circle,
+                          color: Colors.greenAccent,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          "Paid • $timeStr",
+                          style: TextStyle(
+                            color: isDark ? Colors.grey.shade400 : Colors.grey,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Icon(
+                      Icons.chevron_right,
+                      color: isDark
+                          ? Colors.grey.shade600
+                          : Colors.grey.shade400,
+                      size: 20,
+                    ),
+                  ],
+                ),
             ],
           ),
         ),
@@ -347,93 +360,85 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   Widget _buildBottomBar(bool isDark) {
     return Container(
-      color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      color: isDark ? const Color(0xFF0F1115) : Colors.white,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       child: SafeArea(
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(
-            16,
-            16,
-            16,
-            24,
-          ), // Extra bottom padding
-          child: Row(
-            children: [
-              Expanded(
-                child: Container(
-                  constraints: const BoxConstraints(
-                    minHeight: 50,
-                    maxHeight: 100,
-                  ), // Dynamic height
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.grey.shade800 : Colors.grey[100],
-                    borderRadius: BorderRadius.circular(25),
-                    border: Border.all(
-                      color: isDark ? Colors.grey.shade700 : Colors.grey[300]!,
-                    ),
+        child: Row(
+          children: [
+            ElevatedButton(
+              onPressed: () {
+                final upi = widget.args['upi'];
+                final name = widget.args['name'];
+                Navigator.pushNamed(
+                  context,
+                  '/amount',
+                  arguments: {'upi': upi, 'name': name},
+                ).then((_) => _loadData());
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00B9F1),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 14,
+                ),
+                elevation: 0,
+              ),
+              child: const Text(
+                "Pay",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                decoration: BoxDecoration(
+                  // Transparent background in dark mode as requested
+                  color: isDark ? Colors.transparent : Colors.grey[100],
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: isDark ? Colors.white10 : Colors.grey[300]!,
                   ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _msgController,
-                          style: TextStyle(
-                            color: isDark ? Colors.white : Colors.black87,
-                          ),
-                          maxLines: null, // Allow multiline
-                          keyboardType: TextInputType.multiline,
-                          decoration: InputDecoration(
-                            hintText: "Message...",
-                            hintStyle: TextStyle(
-                              color: isDark
-                                  ? Colors.grey.shade400
-                                  : Colors.grey,
-                            ),
-                            border: InputBorder.none,
-                          ),
-                          onSubmitted: (_) => _handleSendMessage(),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _msgController,
+                        style: TextStyle(
+                          color: isDark ? Colors.white : Colors.black87,
                         ),
+                        decoration: InputDecoration(
+                          hintText: "Message...",
+                          hintStyle: TextStyle(
+                            color: isDark ? Colors.grey.shade500 : Colors.grey,
+                          ),
+                          border: InputBorder.none,
+                          filled: true,
+                          fillColor: Colors.transparent,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 14,
+                          ),
+                        ),
+                        onSubmitted: (_) => _handleSendMessage(),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.send, color: Color(0xFF00B9F1)),
-                        onPressed: _handleSendMessage,
-                        constraints: const BoxConstraints(), // Compact
-                        padding: EdgeInsets.zero,
-                      ),
-                    ],
-                  ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.send_rounded, size: 20),
+                      color: const Color(0xFF00B9F1),
+                      onPressed: _handleSendMessage,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 12),
-              ElevatedButton(
-                onPressed: () {
-                  final upi = widget.args['upi'];
-                  final name = widget.args['name'];
-                  Navigator.pushNamed(
-                    context,
-                    '/amount',
-                    arguments: {'upi': upi, 'name': name},
-                  ).then((_) => _loadData()); // Refresh on return
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00B9F1), // Brand Blue
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(25),
-                  ),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 12,
-                  ),
-                  elevation: 2,
-                ),
-                child: const Text(
-                  "Pay",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -443,30 +448,47 @@ class _ConversationScreenState extends State<ConversationScreen> {
     final bool isSender = msg['sender_upi_id'] == _myUpi;
     final String content = msg['content'] ?? "";
     final dt = _parseTimestamp(msg['timestamp']);
-    // Use smart date to show Today/Yesterday + Time as requested
     final timeStr = _formatSmartDate(dt);
 
     return Align(
       alignment: isSender ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.7,
+          maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
         decoration: BoxDecoration(
           color: isSender
               ? const Color(0xFF00B9F1)
-              : (isDark ? Colors.grey.shade800 : Colors.white),
+              : (isDark ? const Color(0xFF1E2630) : Colors.white),
           borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: isSender ? const Radius.circular(16) : Radius.zero,
-            bottomRight: isSender ? Radius.zero : const Radius.circular(16),
+            topLeft: const Radius.circular(20),
+            topRight: const Radius.circular(20),
+            bottomLeft: isSender
+                ? const Radius.circular(20)
+                : const Radius.circular(4),
+            bottomRight: isSender
+                ? const Radius.circular(4)
+                : const Radius.circular(20),
           ),
+          boxShadow: (!isSender && !isDark)
+              ? [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.1),
+                    blurRadius: 2,
+                    offset: const Offset(0, 1),
+                  ),
+                ]
+              : null,
+          border: isDark && !isSender
+              ? Border.all(color: Colors.white10)
+              : null,
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: isSender
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.start,
           children: [
             Text(
               content,
@@ -474,10 +496,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 color: isSender
                     ? Colors.white
                     : (isDark ? Colors.white : Colors.black87),
-                fontSize: 14,
+                fontSize: 15,
               ),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 4),
             Text(
               timeStr,
               style: TextStyle(

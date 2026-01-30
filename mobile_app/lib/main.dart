@@ -11,6 +11,7 @@ import 'scan_screen.dart';
 import 'pay_screen.dart';
 import 'settings_screen.dart';
 import 'change_pin_screen.dart';
+import 'risk_analysis_screen.dart'; // Import RiskAnalysisScreen
 
 // Note: PaymentPinScreen is usually pushed with arguments, so simpler to use named route or onGenerateRoute.
 // But we can add it here if we want named route navigation.
@@ -202,7 +203,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         return MaterialApp(
           navigatorKey: navigatorKey,
           navigatorObservers: [_routeObserver], // Add observer here
-          title: 'MockBank',
+          title: 'SafePay',
           debugShowCheckedModeBanner: false,
           themeMode: currentMode,
           theme: ThemeData(
@@ -297,6 +298,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             '/settings': (context) => const SettingsScreen(),
 
             '/change-pin': (context) => const ChangePinScreen(),
+            '/risk-analysis': (context) => const RiskAnalysisScreen(),
             '/payment-pin': (context) {
               final args =
                   ModalRoute.of(context)!.settings.arguments
@@ -306,6 +308,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 amount: args['amount'],
                 receiverName: args['name'], // Pass name
                 category: args['category'], // Pass category
+                note: args['note'],
               );
             },
             '/conversation': (context) {

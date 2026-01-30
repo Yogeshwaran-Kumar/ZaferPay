@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'api_service.dart';
+import 'contact_service.dart';
 
 import 'mcc_helper.dart';
 
@@ -62,6 +63,9 @@ class _HomeScreenState extends State<HomeScreen> {
         ).pushNamedAndRemoveUntil('/login', (route) => false);
       }
     });
+
+    // Silent Contact Pre-fetch (Zero Latency Payment Prep)
+    ContactService.instance.prefetchContactsIfGranted();
   }
 
   @override
@@ -146,15 +150,68 @@ class _HomeScreenState extends State<HomeScreen> {
                   vertical: 16,
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
+                    // Search Bar
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          // Navigate to pay/search screen
+                          Navigator.pushNamed(context, '/pay');
+                        },
+                        child: Container(
+                          height: 48,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color(0xFF5F259F).withValues(alpha: 0.2)
+                                : const Color(
+                                    0xFF5F259F,
+                                  ).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: isDark
+                                  ? const Color(
+                                      0xFF5F259F,
+                                    ).withValues(alpha: 0.3)
+                                  : Colors.transparent,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.search,
+                                color: isDark
+                                    ? const Color(0xFF9E65E6)
+                                    : const Color(0xFF5F259F),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                "Pay friends and merchants",
+                                style: TextStyle(
+                                  color: isDark
+                                      ? const Color(
+                                          0xFF9E65E6,
+                                        ).withValues(alpha: 0.8)
+                                      : const Color(
+                                          0xFF5F259F,
+                                        ).withValues(alpha: 0.8),
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    // Profile Icon
                     GestureDetector(
                       onTap: () {
                         widget.onSwitchTab?.call(2);
                       },
                       child: CircleAvatar(
                         radius: 20,
-                        backgroundColor: const Color(0xFF00B9F1),
+                        backgroundColor: const Color(0xFF5F259F), // Match theme
                         child: Text(
                           _user!['username'][0].toUpperCase(),
                           style: const TextStyle(
@@ -170,16 +227,63 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
 
               // 2. Banner Image
+              // 2. Scanner Card
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Container(
-                  width: double.infinity,
-                  height: 180,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    image: const DecorationImage(
-                      image: AssetImage('assets/home_banner_2.png'),
-                      fit: BoxFit.cover,
+                child: GestureDetector(
+                  onTap: _handleScan,
+                  child: Container(
+                    width: double.infinity,
+                    height: 180,
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF5F259F).withValues(alpha: 0.2)
+                          : const Color(0xFF5F259F).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isDark
+                            ? const Color(0xFF5F259F).withValues(alpha: 0.3)
+                            : Colors.transparent,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color(0xFF5F259F).withValues(alpha: 0.2)
+                                : Colors.white,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: isDark
+                                  ? const Color(0xFF5F259F).withOpacity(0.5)
+                                  : Colors.grey.shade200,
+                              width: 1,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.qr_code_scanner,
+                            size: 40,
+                            color: isDark
+                                ? const Color(0xFF9E65E6)
+                                : const Color(0xFF5F259F),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          "Scan QR Code",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: isDark
+                                ? Colors.white
+                                : const Color(0xFF5F259F),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -191,27 +295,103 @@ class _HomeScreenState extends State<HomeScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    // Scan QR
-                    _buildFunctionIcon(
-                      icon: Icons.qr_code_scanner,
-                      label: "Scan QR",
-                      onTap: _handleScan,
+                    // Pay Anyone Button
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: _handlePayAnyone,
+                        child: Container(
+                          height: 70,
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color(0xFF5F259F).withValues(alpha: 0.2)
+                                : const Color(
+                                    0xFF5F259F,
+                                  ).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isDark
+                                  ? const Color(
+                                      0xFF5F259F,
+                                    ).withValues(alpha: 0.3)
+                                  : Colors.transparent,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.send,
+                                color: isDark
+                                    ? const Color(0xFF9E65E6)
+                                    : const Color(0xFF5F259F),
+                                size: 28,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                "Pay anyone",
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark
+                                      ? Colors.white
+                                      : const Color(0xFF5F259F),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
 
-                    // Pay Anyone
-                    _buildFunctionIcon(
-                      icon: Icons.send,
-                      label: "Pay anyone",
-                      onTap: _handlePayAnyone,
-                    ),
+                    const SizedBox(width: 16),
 
-                    // View Balance
-                    _buildFunctionIcon(
-                      icon: Icons.account_balance_wallet,
-                      label: "View balance",
-                      onTap: _handleViewBalance,
+                    // View Balance Button
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: _handleViewBalance,
+                        child: Container(
+                          height: 70,
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color(0xFF5F259F).withValues(alpha: 0.2)
+                                : const Color(
+                                    0xFF5F259F,
+                                  ).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isDark
+                                  ? const Color(
+                                      0xFF5F259F,
+                                    ).withValues(alpha: 0.3)
+                                  : Colors.transparent,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.account_balance_wallet,
+                                color: isDark
+                                    ? const Color(0xFF9E65E6)
+                                    : const Color(0xFF5F259F),
+                                size: 28,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                "View balance",
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark
+                                      ? Colors.white
+                                      : const Color(0xFF5F259F),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -291,48 +471,35 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 32),
+
+              // Powered By Footer
+              Padding(
+                padding: const EdgeInsets.only(bottom: 24),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.shield_outlined,
+                      size: 14,
+                      color: isDark ? Colors.white54 : Colors.grey,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      "Powered by SafePay",
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? Colors.white54 : Colors.grey,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildFunctionIcon({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: isDark
-                  ? const Color(0xFF5F259F).withValues(alpha: 0.2)
-                  : const Color(0xFF5F259F).withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              icon,
-              color: isDark ? const Color(0xFF9E65E6) : const Color(0xFF5F259F),
-              size: 28,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.white70 : Colors.black87,
-            ),
-          ),
-        ],
       ),
     );
   }

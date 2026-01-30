@@ -14,7 +14,7 @@ class ApiService {
   static String get _defaultBaseUrl {
     if (kIsWeb) return 'http://127.0.0.1:8000';
     // Cloudflare Tunnel URL
-    return 'https://mic-announcements-middle-illustration.trycloudflare.com';
+    return 'https://decision-least-titten-zoo.trycloudflare.com';
   }
 
   static const Duration _timeout = Duration(seconds: 30);
@@ -52,7 +52,9 @@ class ApiService {
 
   void _handleUnauthorized() {
     _storage.delete(key: 'token');
-    removeSavedMobile(); // Ensure we clear the saved session to avoid PIN loop
+    // Do NOT remove saved mobile here.
+    // We want to remember the user (show PIN screen) even if token expires.
+    // Only explicit logout() should clear the user binding.
     _authStateController.add(null);
   }
 
@@ -119,6 +121,48 @@ class ApiService {
     } catch (e) {
       if (kDebugMode) print("Login Error: $e");
       return 'CONNECTION_ERROR';
+    }
+  }
+
+  // Batch Check Contacts (Fast)
+  Future<Map<String, String>> checkRegisteredUsers(
+    List<String> phoneNumbers,
+  ) async {
+    try {
+      final url = await baseUrl;
+      final token = await _storage.read(key: 'token');
+      if (token == null) return {};
+
+      // Chunking if too many (e.g. 50 at a time)
+      final Map<String, String> results = {};
+
+      // Send all at once (Backend handles it, but let's be safe with 100 chunks if needed)
+      // For now, assuming < 2000 contacts, one request might be fine if payload size is okay.
+      // But let's verify. 1000 numbers * 12 bytes = 12KB. Fine.
+
+      final response = await _client
+          .post(
+            Uri.parse('$url/users/lookup-contacts'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+            body: json.encode({'phone_numbers': phoneNumbers}),
+          )
+          .timeout(_timeout);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final matches = data['matches'] as List;
+        for (var match in matches) {
+          // Map: Original Phone -> UPI ID
+          results[match['phone_number']] = match['upi_id'];
+        }
+      }
+      return results;
+    } catch (e) {
+      if (kDebugMode) print("Batch Contact Check Error: $e");
+      return {};
     }
   }
 
@@ -295,13 +339,8 @@ class ApiService {
     }
   }
 
-  /// Simulates SIM Binding (sending silent SMS to verify phone number)
-  /// In a real app, this would use `sms_autofill` or platform channels.
   Future<bool> verifySimBinding() async {
-    // Simulate network delay for SMS verification
-    await Future.delayed(const Duration(milliseconds: 500));
-    // In this mock environment, we assume the device binding + login is the "SIM Binding"
-    // To make it "fail" for testing, we could check a flag, but for now return true.
+    // Immediate success for instant integrity checks (Mock Only)
     return true;
   }
 
@@ -362,6 +401,7 @@ class ApiService {
     double amount,
     String pin, {
     String? mcc,
+    String? note,
     String receiverName = 'Unknown',
   }) async {
     // Generate optimistic ID matching server format style (TXN...)
@@ -403,6 +443,7 @@ class ApiService {
           'receiver_mcc': mcc ?? '0000',
           'receiver_name': receiverName,
           'sender_name': senderName,
+          'note': note ?? '', // Optimistic Note
         };
 
         if (_historyRamCache != null) {
@@ -424,7 +465,9 @@ class ApiService {
     }
 
     // 3. Fire & Forget Real Transaction
-    createTransaction(receiverUpi, amount, pin, mcc: mcc).then((result) async {
+    createTransaction(receiverUpi, amount, pin, mcc: mcc, note: note).then((
+      result,
+    ) async {
       if (result['detail'] != null && result['status'] != 'SUCCESS') {
         // Transaction FAILED - Revert state (complex, simplified here)
         await getHomeScreenData();
@@ -495,6 +538,7 @@ class ApiService {
     double amount,
     String pin, {
     String? mcc,
+    String? note,
   }) async {
     try {
       final url = await baseUrl;
@@ -512,6 +556,10 @@ class ApiService {
         'pin': pin,
         'idempotency_key': idempotencyKey, // Prevent duplicate transactions
       };
+
+      if (note != null && note.isNotEmpty) {
+        requestBody['note'] = note;
+      }
 
       if (mcc != null && mcc.isNotEmpty && mcc != '0000') {
         requestBody['receiver_mcc'] = mcc;
@@ -1329,6 +1377,8 @@ class ApiService {
     }
     return null;
   }
+
+  // --- Local PIN Verification (Smart Check) ---
 }
 
 enum PinVerificationStatus { success, incorrect, unknown, lockedOut }

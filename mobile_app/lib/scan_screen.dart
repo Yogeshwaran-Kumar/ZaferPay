@@ -598,79 +598,85 @@ class ScannerOverlayPainter extends CustomPainter {
     final double top = (size.height - scanAreaSize) / 2;
     final double right = left + scanAreaSize;
     final double bottom = top + scanAreaSize;
+    final double radius = 24.0; // Rounded corners
 
-    // Draw dark overlay
+    // Draw dark overlay with rounded cutout
+    final Path path = Path()
+      ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTRB(left, top, right, bottom),
+          Radius.circular(radius),
+        ),
+      );
+
+    path.fillType = PathFillType.evenOdd;
+
     final overlayPaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.5)
+      ..color = Colors.black.withOpacity(0.5)
       ..style = PaintingStyle.fill;
 
-    canvas.drawPath(
-      Path()
-        ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))
-        ..addRect(Rect.fromLTRB(left, top, right, bottom))
-        ..fillType = PathFillType.evenOdd,
-      overlayPaint,
-    );
+    canvas.drawPath(path, overlayPaint);
 
-    // Corner length and thickness
+    // Corner Configuration
     final double cornerLength = 40;
-    final double cornerThickness = 6;
+    final Paint cornerPaint = Paint()
+      ..color =
+          const Color(0xFF5F259F) // App Purple
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 6.0
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
 
-    // Define corner colors
-    final color = const Color(0xFF00B9F1); // Single UI Color (Blue)
+    // Draw Rounded Corners
 
-    // Draw colored corners
-    // Top-left
-    canvas.drawPath(
-      Path()
-        ..moveTo(left, top)
-        ..lineTo(left + cornerLength, top)
-        ..lineTo(left + cornerLength, top + cornerThickness)
-        ..lineTo(left + cornerThickness, top + cornerThickness)
-        ..lineTo(left + cornerThickness, top + cornerLength)
-        ..lineTo(left, top + cornerLength)
-        ..close(),
-      Paint()..color = color,
+    // Top-Left
+    final Path tlPath = Path();
+    tlPath.moveTo(left, top + cornerLength);
+    tlPath.lineTo(left, top + radius);
+    tlPath.arcToPoint(
+      Offset(left + radius, top),
+      radius: Radius.circular(radius),
+      clockwise: true,
     );
+    tlPath.lineTo(left + cornerLength, top);
+    canvas.drawPath(tlPath, cornerPaint);
 
-    // Top-right
-    canvas.drawPath(
-      Path()
-        ..moveTo(right, top)
-        ..lineTo(right - cornerLength, top)
-        ..lineTo(right - cornerLength, top + cornerThickness)
-        ..lineTo(right - cornerThickness, top + cornerThickness)
-        ..lineTo(right - cornerThickness, top + cornerLength)
-        ..lineTo(right, top + cornerLength)
-        ..close(),
-      Paint()..color = color,
+    // Top-Right
+    final Path trPath = Path();
+    trPath.moveTo(right - cornerLength, top);
+    trPath.lineTo(right - radius, top);
+    trPath.arcToPoint(
+      Offset(right, top + radius),
+      radius: Radius.circular(radius),
+      clockwise: true,
     );
+    trPath.lineTo(right, top + cornerLength);
+    canvas.drawPath(trPath, cornerPaint);
 
-    // Bottom-left
-    canvas.drawPath(
-      Path()
-        ..moveTo(left, bottom)
-        ..lineTo(left + cornerLength, bottom)
-        ..lineTo(left + cornerLength, bottom - cornerThickness)
-        ..lineTo(left + cornerThickness, bottom - cornerThickness)
-        ..lineTo(left + cornerThickness, bottom - cornerLength)
-        ..lineTo(left, bottom - cornerLength)
-        ..close(),
-      Paint()..color = color,
+    // Bottom-Right
+    final Path brPath = Path();
+    brPath.moveTo(right, bottom - cornerLength);
+    brPath.lineTo(right, bottom - radius);
+    brPath.arcToPoint(
+      Offset(right - radius, bottom),
+      radius: Radius.circular(radius),
+      clockwise: true,
     );
+    brPath.lineTo(right - cornerLength, bottom);
+    canvas.drawPath(brPath, cornerPaint);
 
-    // Bottom-right
-    canvas.drawPath(
-      Path()
-        ..moveTo(right, bottom)
-        ..lineTo(right - cornerLength, bottom)
-        ..lineTo(right - cornerLength, bottom - cornerThickness)
-        ..lineTo(right - cornerThickness, bottom - cornerThickness)
-        ..lineTo(right - cornerThickness, bottom - cornerLength)
-        ..lineTo(right, bottom - cornerLength)
-        ..close(),
-      Paint()..color = color,
+    // Bottom-Left
+    final Path blPath = Path();
+    blPath.moveTo(left + cornerLength, bottom);
+    blPath.lineTo(left + radius, bottom);
+    blPath.arcToPoint(
+      Offset(left, bottom - radius),
+      radius: Radius.circular(radius),
+      clockwise: true,
     );
+    blPath.lineTo(left, bottom - cornerLength);
+    canvas.drawPath(blPath, cornerPaint);
   }
 
   @override

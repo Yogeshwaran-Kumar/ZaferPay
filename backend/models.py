@@ -107,6 +107,7 @@ class Transaction(Base):
     
     # Additional Context for Fraud detection
     receiver_mcc = Column(String, nullable=True)
+    note = Column(String, nullable=True)  # Payment Note (e.g. "Rent")
     
     # Indexes for faster queries
     __table_args__ = (
@@ -132,6 +133,18 @@ class SenderProfile(Base):
     total_transactions_amount = Column(Float, default=0.0)
     monthly_volume = Column(Float, default=0.0)
     last_transaction_time = Column(DateTime, nullable=True)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # ADAPTIVE LEARNING FIELDS (The "Memory")
+    # ═══════════════════════════════════════════════════════════════════════════
+    # The learned safe limit for this user (Starts at regular rule 5000)
+    personal_trust_limit = Column(Float, default=5000.0)
+    
+    # How many times consistently they verified a high-value tx?
+    override_streak_count = Column(Integer, default=0)
+    
+    # What was the last amount they verified? (To ensure consistency)
+    last_override_amount = Column(Float, default=0.0)
     
     user = relationship("User", back_populates="sender_profile")
 

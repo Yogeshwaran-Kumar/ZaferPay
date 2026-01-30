@@ -7,6 +7,7 @@ import 'transaction_history_screen.dart';
 import 'transaction_details_screen.dart';
 import 'balance_check_screen.dart';
 import 'mcc_helper.dart';
+import 'utils.dart';
 
 class MoneyScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -209,7 +210,7 @@ class _MoneyScreenState extends State<MoneyScreen> {
                       const SizedBox(height: 12),
                       Text(
                         _isBalanceVisible
-                            ? '₹ ${_user!['balance'].toStringAsFixed(2)}'
+                            ? '₹ ${formatAmount(_user!['balance'])}'
                             : '₹ ••••••',
                         style: GoogleFonts.outfit(
                           fontSize: 36,
@@ -486,7 +487,7 @@ class _MoneyScreenState extends State<MoneyScreen> {
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
-                                '${isDebit ? '-' : '+'} ₹${tx['amount']}',
+                                '${isDebit ? '-' : '+'} ₹${formatAmount(tx['amount'])}',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'api_service.dart';
 import 'transaction_details_screen.dart';
+import 'utils.dart'; // Add import
 
 class TransactionHistoryScreen extends StatefulWidget {
   const TransactionHistoryScreen({super.key});
@@ -864,9 +865,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                                     ],
                                   ),
                                   Text(
-                                    NumberFormat.currency(
-                                      symbol: '₹',
-                                    ).format(total),
+                                    "₹${formatAmount(total)}",
                                     style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
@@ -1053,7 +1052,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  "${isDebit ? '-' : '+'}₹$amount",
+                  "${isDebit ? '-' : '+'}₹${formatAmount(amount)}",
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,

@@ -58,6 +58,17 @@ class UserResponse(UserBase):
 class UserLookupResponse(UserResponse):
     pass
 
+class ContactLookupRequest(BaseModel):
+    phone_numbers: List[str]
+
+class ContactMatch(BaseModel):
+    phone_number: str
+    upi_id: str
+    username: str
+
+class ContactLookupResponse(BaseModel):
+    matches: List[ContactMatch]
+
 # ═══════════════════════════════════════════════════════════════════════════
 # TRANSACTION SCHEMAS
 # ═══════════════════════════════════════════════════════════════════════════
@@ -68,6 +79,7 @@ class TransactionCreate(BaseModel):
     pin: str
     idempotency_key: Optional[str] = None
     receiver_mcc: Optional[str] = None
+    note: Optional[str] = None
 
 class TransactionResponse(BaseModel):
     transaction_id: str
@@ -81,6 +93,7 @@ class TransactionResponse(BaseModel):
     timestamp: datetime
     sender_mcc: Optional[str] = None
     receiver_mcc: Optional[str] = None
+    note: Optional[str] = None
 
     class Config:
         from_attributes = True

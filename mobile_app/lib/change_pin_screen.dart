@@ -19,6 +19,7 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
   int _step = 0;
   bool _isLoading = false;
   String _upiId = '';
+  int _pinAttempts = 0;
 
   @override
   void initState() {
@@ -94,6 +95,60 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
     }
   }
 
+  Future<void> _handleIncorrectPin() async {
+    setState(() {
+      _pinAttempts++;
+      _enteredPin = ''; // Reset
+    });
+
+    if (_pinAttempts == 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Incorrect Current PIN'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } else if (_pinAttempts == 2) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Security Warning"),
+          content: const Text(
+            "Warning: You have tried too many times. One more failed attempt will log you out.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("I Understand"),
+            ),
+          ],
+        ),
+      );
+    } else if (_pinAttempts >= 3) {
+      _handleLockedOut();
+    }
+  }
+
+  Future<void> _handleLockedOut() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // User cannot close this
+      builder: (ctx) => const AlertDialog(
+        title: Text("Account Locked"),
+        content: Text(
+          "Too many incorrect attempts so your account has been logged out.",
+        ),
+      ),
+    );
+
+    await Future.delayed(const Duration(seconds: 4));
+    await _api.logout();
+
+    if (!mounted) return;
+    Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+  }
+
   Future<void> _verifyCurrentPin() async {
     if (_username.isEmpty) {
       // Should catch this edge case
@@ -118,18 +173,7 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
       });
     } else {
       // Failed
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Incorrect Current PIN'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-      setState(() {
-        _enteredPin = '';
-        // Stay on Step 0
-      });
+      if (mounted) _handleIncorrectPin();
     }
   }
 

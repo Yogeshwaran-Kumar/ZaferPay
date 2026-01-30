@@ -16,6 +16,7 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
   String _enteredPin = '';
   bool _isLoading = false;
   bool _isSuccess = false;
+  int _pinAttempts = 0;
 
   @override
   void initState() {
@@ -53,6 +54,63 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
     }
   }
 
+  Future<void> _handleIncorrectPin() async {
+    setState(() {
+      _pinAttempts++;
+      _enteredPin = ''; // Reset PIN field
+    });
+
+    if (_pinAttempts == 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Incorrect PIN. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } else if (_pinAttempts == 2) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Security Warning"),
+          content: const Text(
+            "Warning: You have tried too many times. One more failed attempt will log you out.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("I Understand"),
+            ),
+          ],
+        ),
+      );
+    } else if (_pinAttempts >= 3) {
+      _handleLockedOut();
+    }
+  }
+
+  Future<void> _handleLockedOut() async {
+    // 3rd Strike -> Logout with Dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false, // User cannot close this
+      builder: (ctx) => const AlertDialog(
+        title: Text("Account Locked"),
+        content: Text(
+          "Too many incorrect attempts so your account has been logged out.",
+        ),
+      ),
+    );
+
+    // Wait for user to read it
+    await Future.delayed(const Duration(seconds: 4));
+
+    await _api.logout();
+
+    if (!mounted) return;
+    Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+  }
+
   Future<void> _verifyPin() async {
     if (_enteredPin.length != 4) return;
 
@@ -69,26 +127,11 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
       }
     } else if (status == PinVerificationStatus.incorrect) {
       // Instant Fail (0.0s)
-      if (mounted) {
-        setState(() {
-          _enteredPin = ''; // Clear PIN
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Incorrect PIN!"),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 1),
-          ),
-        );
-      }
+      if (mounted) _handleIncorrectPin();
       return;
     } else if (status == PinVerificationStatus.lockedOut) {
       // Instant Logout (0.0s)
-      if (mounted) {
-        Navigator.of(
-          context,
-        ).pushNamedAndRemoveUntil('/login', (route) => false);
-      }
+      if (mounted) _handleLockedOut();
       return;
     }
 
@@ -114,20 +157,21 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
         Navigator.pop(context, true);
       }
     } else {
-      // Clear PIN and show error
+      if (error == 'INCORRECT_PIN') {
+        _handleIncorrectPin();
+        return;
+      }
+
+      // Other errors
       setState(() => _enteredPin = '');
 
-      String msg = 'Incorrect PIN';
-      if (error == 'INCORRECT_PIN') {
-        msg = 'Incorrect PIN';
-      } else if (error == 'RATE_LIMIT_EXCEEDED') {
+      String msg = error;
+      if (error == 'RATE_LIMIT_EXCEEDED') {
         msg = 'Too many attempts. Try again later.';
       } else if (error == 'LOGGED_IN_ELSEWHERE') {
         msg = 'Logged in on another device';
       } else if (error == 'CONNECTION_ERROR') {
         msg = 'Network connection failed';
-      } else {
-        msg = error; // Show server error details
       }
 
       ScaffoldMessenger.of(
@@ -188,10 +232,10 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
                           : Colors.grey.shade300,
                     ),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.currency_rupee,
                     size: 20,
-                    color: Color(0xFF5F259F),
+                    color: isDark ? Colors.white : const Color(0xFF5F259F),
                   ),
                 ),
               ],
