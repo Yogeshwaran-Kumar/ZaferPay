@@ -7,6 +7,10 @@ from sqlalchemy import text
 from datetime import timedelta, datetime
 from typing import List # <--- Added this
 import models, schemas, auth, database, fraud_engine, security
+import random
+import json
+import traceback
+from sqlalchemy.orm import joinedload
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -833,7 +837,6 @@ def create_transaction(
         
         if existing_key:
             # Key already processed - return cached response
-            import json
             if existing_key.response_data:
                 cached_response = json.loads(existing_key.response_data)
                 return schemas.TransactionResponse(**cached_response)
@@ -867,7 +870,6 @@ def create_transaction(
         # AUTO-REGISTER EXTERNAL USER
         # This allows payments to UPI IDs not yet in our system (Interop simulation)
         try:
-             import random
              # Create dummy user for external UPI
              # Use timestamp to ensure uniqueness of "ext" mobile
              dummy_suffix = f"{int(datetime.now().timestamp())}{random.randint(1000,9999)}"
@@ -1040,7 +1042,6 @@ def create_transaction(
 
         # E. IDEMPOTENCY KEY
         if tx.idempotency_key:
-            import json
             response_obj = {
                 "transaction_id": transaction_id,
                 "sender_upi_id": sender_user.upi_id,
@@ -1083,7 +1084,6 @@ def create_transaction(
     except Exception as e:
         db.rollback()
         print(f"Transaction Logic Error: {e}")
-        import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Transaction failed due to system error")
 
@@ -1396,8 +1396,11 @@ def get_conversation(
     if not target_user:
         raise HTTPException(status_code=404, detail="Target user not found")
 
-    # 1. Fetch Transactions
-    txs = db.query(models.Transaction).filter(
+    # 1. Fetch Transactions (Optimized)
+    txs = db.query(models.Transaction).options(
+        joinedload(models.Transaction.sender), 
+        joinedload(models.Transaction.receiver)
+    ).filter(
         (
             (models.Transaction.sender_id == current_user.id) & 
             (models.Transaction.receiver_id == target_user.id)
@@ -1408,8 +1411,11 @@ def get_conversation(
         )
     ).order_by(models.Transaction.timestamp.desc()).limit(50).all()
     
-    # 2. Fetch Messages
-    msgs = db.query(models.Message).filter(
+    # 2. Fetch Messages (Optimized)
+    msgs = db.query(models.Message).options(
+        joinedload(models.Message.sender),
+        joinedload(models.Message.receiver)
+    ).filter(
         (
             (models.Message.sender_id == current_user.id) & 
             (models.Message.receiver_id == target_user.id)

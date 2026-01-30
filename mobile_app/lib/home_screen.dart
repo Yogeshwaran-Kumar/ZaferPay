@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'api_service.dart';
@@ -96,7 +97,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final data = await _api.getHomeScreenData();
       _updateStateWithData(data);
     } catch (e) {
-      // Ignore error if we have cache, otherwise stop loading
+      if (kDebugMode) print("Home Screen Load Error: $e");
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -111,8 +112,19 @@ class _HomeScreenState extends State<HomeScreen> {
     final people = data['people'];
     final merchants = data['merchants'];
 
+    if (user == null) {
+      // If user is null, it likely means the request failed or returned empty/error structure
+      // DO NOT clear existing data (cache) with empty lists.
+      if (kDebugMode)
+        print(
+          "Skipping state update: User data is null (Request likely failed)",
+        );
+      return;
+    }
+
     setState(() {
-      if (user != null) _user = user;
+      _user = user;
+      // Only update lists if we have a valid user response (robustness)
       if (history != null) _history = history;
       if (people != null) _recentPeople = people;
       if (merchants != null) _recentMerchants = merchants;

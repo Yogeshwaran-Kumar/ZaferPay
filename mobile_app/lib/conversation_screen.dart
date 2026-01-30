@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'api_service.dart';
 import 'package:intl/intl.dart';
@@ -71,15 +72,20 @@ class _ConversationScreenState extends State<ConversationScreen> {
     }
 
     // Fetch latest messages
-    final history = await _api.getConversation(targetUpi);
+    try {
+      final history = await _api.getConversation(targetUpi);
 
-    if (mounted) {
-      setState(() {
-        if (history != null) {
-          _messages = List.from(history); // Copy
-        }
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          if (history != null) {
+            _messages = List.from(history); // Copy
+          }
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (kDebugMode) print("Conversation Load Error: $e");
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

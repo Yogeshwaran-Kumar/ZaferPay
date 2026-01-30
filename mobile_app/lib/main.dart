@@ -19,6 +19,7 @@ import 'risk_analysis_screen.dart'; // Import RiskAnalysisScreen
 import 'payment_pin_screen.dart';
 import 'amount_screen.dart';
 import 'conversation_screen.dart';
+import 'money_screen.dart'; // For RouteObserver
 
 // Global Key to access Navigator without Context
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -214,7 +215,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       builder: (context, currentMode, _) {
         return MaterialApp(
           navigatorKey: navigatorKey,
-          navigatorObservers: [_routeObserver], // Add observer here
+          navigatorObservers: [
+            _routeObserver,
+            moneyScreenRouteObserver,
+          ], // Add observer here
           title: 'SafePay',
           debugShowCheckedModeBanner: false,
           themeMode: currentMode,

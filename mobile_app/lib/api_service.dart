@@ -14,7 +14,7 @@ class ApiService {
   static String get _defaultBaseUrl {
     if (kIsWeb) return 'http://127.0.0.1:8000';
     // Cloudflare Tunnel URL
-    return 'https://membership-word-graphic-estates.trycloudflare.com';
+    return 'https://reprints-anime-chubby-banner.trycloudflare.com';
   }
 
   static const Duration _timeout = Duration(seconds: 30);

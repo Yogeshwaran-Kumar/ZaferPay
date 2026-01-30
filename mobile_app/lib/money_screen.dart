@@ -15,16 +15,27 @@ class MoneyScreen extends StatefulWidget {
   const MoneyScreen({super.key, this.onBack});
 
   @override
-  State<MoneyScreen> createState() => _MoneyScreenState();
+  State<MoneyScreen> createState() => MoneyScreenState();
 }
 
-class _MoneyScreenState extends State<MoneyScreen> {
+/// Global RouteObserver for balance auto-lock feature
+final RouteObserver<ModalRoute<void>> moneyScreenRouteObserver =
+    RouteObserver<ModalRoute<void>>();
+
+class MoneyScreenState extends State<MoneyScreen> with RouteAware {
   final _api = ApiService();
   Map<String, dynamic>? _user;
   List<dynamic> _history = [];
   bool _isLoading = true;
   bool _isBalanceVisible = false;
   Timer? _timer;
+
+  /// Public method to lock (hide) the balance - called when tab switches away
+  void lockBalance() {
+    if (_isBalanceVisible && mounted) {
+      setState(() => _isBalanceVisible = false);
+    }
+  }
 
   @override
   void initState() {
@@ -39,7 +50,27 @@ class _MoneyScreenState extends State<MoneyScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Subscribe to route changes using global observer
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      moneyScreenRouteObserver.subscribe(this, route);
+    }
+  }
+
+  /// Called when user navigates AWAY from this screen (pushes a new route)
+  @override
+  void didPushNext() {
+    // Auto-lock balance when navigating away
+    if (_isBalanceVisible && mounted) {
+      setState(() => _isBalanceVisible = false);
+    }
+  }
+
+  @override
   void dispose() {
+    moneyScreenRouteObserver.unsubscribe(this);
     _timer?.cancel();
     super.dispose();
   }

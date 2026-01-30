@@ -13,7 +13,15 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
 
+  // GlobalKey to access MoneyScreen state for locking balance
+  final GlobalKey<MoneyScreenState> _moneyScreenKey =
+      GlobalKey<MoneyScreenState>();
+
   void _switchToTab(int index) {
+    // Lock balance when switching away from Money tab (index 1)
+    if (_currentIndex == 1 && index != 1) {
+      _moneyScreenKey.currentState?.lockBalance();
+    }
     setState(() {
       _currentIndex = index;
     });
@@ -23,7 +31,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Widget build(BuildContext context) {
     final List<Widget> screens = [
       HomeScreen(onSwitchTab: _switchToTab),
-      MoneyScreen(onBack: () => _switchToTab(0)),
+      MoneyScreen(key: _moneyScreenKey, onBack: () => _switchToTab(0)),
       ProfileScreen(onBack: () => _switchToTab(0)),
     ];
 
@@ -95,7 +103,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         : Colors.grey.shade600;
 
     return GestureDetector(
-      onTap: () => setState(() => _currentIndex = index),
+      onTap: () {
+        // Lock balance when switching away from Money tab (index 1)
+        if (_currentIndex == 1 && index != 1) {
+          _moneyScreenKey.currentState?.lockBalance();
+        }
+        setState(() => _currentIndex = index);
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
