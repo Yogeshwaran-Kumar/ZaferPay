@@ -94,9 +94,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // Fetch fresh data
     try {
       final data = await _api.getHomeScreenData();
-      if (data != null) {
-        _updateStateWithData(data);
-      }
+      _updateStateWithData(data);
     } catch (e) {
       // Ignore error if we have cache, otherwise stop loading
     } finally {

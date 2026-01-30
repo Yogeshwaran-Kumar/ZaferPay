@@ -14,7 +14,7 @@ class ApiService {
   static String get _defaultBaseUrl {
     if (kIsWeb) return 'http://127.0.0.1:8000';
     // Cloudflare Tunnel URL
-    return 'https://safepay-i97t.onrender.com';
+    return 'https://membership-word-graphic-estates.trycloudflare.com';
   }
 
   static const Duration _timeout = Duration(seconds: 30);
@@ -995,7 +995,7 @@ class ApiService {
   }
 
   /// Fetches all home screen data in a single request for maximum speed
-  Future<Map<String, dynamic>?> getHomeScreenData() async {
+  Future<Map<String, dynamic>> getHomeScreenData() async {
     // OPTIMIZED: Single Request to reduce network latency (RTT)
     try {
       final url = await baseUrl;
@@ -1021,8 +1021,8 @@ class ApiService {
       if (kDebugMode) print("Home Data Aggregate Error: $e");
     }
 
-    // Return null on failure so UI doesn't overwrite cache with empty data
-    return null;
+    // Return empty structure on failure to prevent UI crash
+    return {'user': null, 'history': [], 'people': [], 'merchants': []};
   }
 
   // History Caching (Updated with RAM)

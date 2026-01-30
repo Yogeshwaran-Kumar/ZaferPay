@@ -84,9 +84,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
       if (mounted) {
         setState(() {
           _user = user;
-          if (history != null) {
-            _allHistory = history;
-          }
+          _allHistory = history ?? [];
           _applyFilters();
           _isLoading = false;
         });
