@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_app/api_service.dart';
-import 'package:lottie/lottie.dart';
+
 import 'fraud_scanning_animation.dart';
 import 'utils.dart'; // Add import
+import 'package:flutter/foundation.dart'; // For kDebugMode
 
 class RiskAnalysisScreen extends StatefulWidget {
   const RiskAnalysisScreen({super.key});
@@ -25,7 +26,7 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
   String? _note; // Add this
 
   // Analysis Parameters
-  final String _modelType = "Random Forest V1";
+
   bool _inContacts = false;
   bool _isNewReceiver = true;
 
@@ -49,16 +50,18 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
   }
 
   Future<void> _analyzeRisk() async {
-    print('----------------------------------------------------------------');
-    print('🔍 STARTING RISK ANALYSIS for transaction...');
-    print('💵 Amount: ₹${formatAmount(_amount)}');
-    print('👤 Receiver: $_receiverName ($_receiverUpi)');
+    if (kDebugMode) {
+      print('----------------------------------------------------------------');
+      print('🔍 STARTING RISK ANALYSIS for transaction...');
+      print('💵 Amount: ₹${formatAmount(_amount)}');
+      print('👤 Receiver: $_receiverName ($_receiverUpi)');
+    }
 
     // Simulate Analysis Delay
     await Future.delayed(const Duration(milliseconds: 1500));
 
     // 1. Check if New Receiver (Check Recent People)
-    print('🛠️  Step 1: Checking Receiver History...');
+    if (kDebugMode) print('🛠️  Step 1: Checking Receiver History...');
     final recentPeople = await _api.getRecentPeople();
     bool foundInRecents = false;
     if (recentPeople != null) {
@@ -70,16 +73,20 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
       }
     }
     _isNewReceiver = !foundInRecents;
-    print('   -> New Receiver? ${_isNewReceiver ? "YES" : "NO"}');
+    if (kDebugMode) {
+      print('   -> New Receiver? ${_isNewReceiver ? "YES" : "NO"}');
+    }
 
     // 2. Check In Contacts
     // For demo purposes, if it's a mobile number based UPI, assume in contacts if resolved
-    print('🛠️  Step 2: Checking Contacts Book...');
+    if (kDebugMode) print('🛠️  Step 2: Checking Contacts Book...');
     _inContacts = _receiverUpi.contains(RegExp(r'\d{10}'));
-    print('   -> In Contacts? ${_inContacts ? "YES (Heuristic)" : "NO"}');
+    if (kDebugMode) {
+      print('   -> In Contacts? ${_inContacts ? "YES (Heuristic)" : "NO"}');
+    }
 
     // 3. Determine Risk Pattern (F1, F2, F3, S1)
-    print('🛠️  Step 3: Determining Fraud Pattern...');
+    if (kDebugMode) print('🛠️  Step 3: Determining Fraud Pattern...');
 
     // Pattern Logic
     if (_amount > 10000) {
@@ -110,11 +117,13 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
       }
     }
 
-    print('✅ ANALYSIS COMPLETE');
-    print('   -> Risk Detected: ${_isRisk ? "YES" : "NO"}');
-    print('   -> Pattern Code: $_riskCode');
-    print('   -> Explanation: $_riskExplanation');
-    print('----------------------------------------------------------------');
+    if (kDebugMode) {
+      print('✅ ANALYSIS COMPLETE');
+      print('   -> Risk Detected: ${_isRisk ? "YES" : "NO"}');
+      print('   -> Pattern Code: $_riskCode');
+      print('   -> Explanation: $_riskExplanation');
+      print('----------------------------------------------------------------');
+    }
 
     if (mounted) {
       setState(() {

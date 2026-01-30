@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_jailbreak_detection/flutter_jailbreak_detection.dart';
 import 'api_service.dart';
 import 'utils.dart'; // Add import
+import 'package:flutter/foundation.dart';
 
 class ProcessingShieldScreen extends StatefulWidget {
   final String receiverUpi;
@@ -93,7 +94,7 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
       }
     } catch (e) {
       // Fail closed on error if needed, or open for speed/ux (debugging)
-      print("Integrity check failed: $e");
+      if (kDebugMode) print("Integrity check failed: $e");
     }
 
     if (isCompromised) {

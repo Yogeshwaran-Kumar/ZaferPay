@@ -83,7 +83,7 @@ class ContactService extends ChangeNotifier {
 
       _isLoaded = true;
     } catch (e) {
-      print("Contact Pre-fetch Error: $e");
+      if (kDebugMode) print("Contact Pre-fetch Error: $e");
     } finally {
       _isFetching = false;
       notifyListeners();
@@ -151,7 +151,7 @@ class ContactService extends ChangeNotifier {
         notifyListeners(); // <--- LIVE UPDATE UI HERE
       }
     } catch (e) {
-      print("Batch Verify Failed: $e");
+      if (kDebugMode) print("Batch Verify Failed: $e");
     }
   }
 }

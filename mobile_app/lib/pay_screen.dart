@@ -303,13 +303,15 @@ class _PayScreenState extends State<PayScreen> {
     if (mounted) {
       setState(() {
         _checkedContactIds.add(contact.id);
-        if (foundUpi != null) _contactUpiMap[contact.id] = foundUpi!;
+        if (foundUpi != null) _contactUpiMap[contact.id] = foundUpi;
       });
     }
   }
 
   void _onInvite() {
-    Share.share('Hey! Join me on 2Way app for secure payments.');
+    SharePlus.instance.share(
+      ShareParams(text: 'Hey! Join me on 2Way app for secure payments.'),
+    );
   }
 
   Future<void> _onPay(String upi, String? name, {String? category}) async {
@@ -844,7 +846,7 @@ class _PayScreenState extends State<PayScreen> {
                             ? (isRegistered
                                   ? GestureDetector(
                                       onTap: () =>
-                                          _onPay(upiId!, contact.displayName),
+                                          _onPay(upiId, contact.displayName),
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 12,

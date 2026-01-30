@@ -102,7 +102,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   void _onInvite() {
-    Share.share('Hey! Join me on 2Way app for secure payments.');
+    SharePlus.instance.share(
+      ShareParams(text: 'Hey! Join me on 2Way app for secure payments.'),
+    );
   }
 
   @override
@@ -233,7 +235,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
               ? (isChecked
                     ? (isRegistered
                           ? ElevatedButton(
-                              onPressed: () => _onPay(contact, upiId!),
+                              onPressed: () => _onPay(contact, upiId),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(
                                   0xFF5F259F,

@@ -14,7 +14,7 @@ class ApiService {
   static String get _defaultBaseUrl {
     if (kIsWeb) return 'http://127.0.0.1:8000';
     // Cloudflare Tunnel URL
-    return 'https://decision-least-titten-zoo.trycloudflare.com';
+    return 'https://safepay-i97t.onrender.com';
   }
 
   static const Duration _timeout = Duration(seconds: 30);
@@ -512,8 +512,9 @@ class ApiService {
         _serverTimeOffsetMs = (serverTimestamp + latency) - end;
         _isTimeSynced = true;
 
-        if (kDebugMode)
+        if (kDebugMode) {
           print("🕒 Time Synced. Offset: $_serverTimeOffsetMs ms");
+        }
       }
     } catch (e) {
       if (kDebugMode) print("Time Sync Failed: $e");
@@ -994,7 +995,7 @@ class ApiService {
   }
 
   /// Fetches all home screen data in a single request for maximum speed
-  Future<Map<String, dynamic>> getHomeScreenData() async {
+  Future<Map<String, dynamic>?> getHomeScreenData() async {
     // OPTIMIZED: Single Request to reduce network latency (RTT)
     try {
       final url = await baseUrl;
@@ -1020,8 +1021,8 @@ class ApiService {
       if (kDebugMode) print("Home Data Aggregate Error: $e");
     }
 
-    // Return empty structure on failure to prevent UI crash
-    return {'user': null, 'history': [], 'people': [], 'merchants': []};
+    // Return null on failure so UI doesn't overwrite cache with empty data
+    return null;
   }
 
   // History Caching (Updated with RAM)

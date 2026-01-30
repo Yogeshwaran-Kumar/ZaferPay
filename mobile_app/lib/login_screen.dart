@@ -417,7 +417,7 @@ class _LoginScreenState extends State<LoginScreen> {
           children: [
             Text(
               'You are currently logged in on another device.',
-              style: TextStyle(color: Colors.white.withOpacity(0.8)),
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
             ),
             const SizedBox(height: 12),
             const Text(
@@ -480,7 +480,7 @@ class _LoginScreenState extends State<LoginScreen> {
             },
             style: OutlinedButton.styleFrom(
               foregroundColor: Colors.white70,
-              side: BorderSide(color: Colors.white.withOpacity(0.3)),
+              side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
             child: const Text('No, Keep Other Device'),
@@ -563,7 +563,7 @@ class _LoginScreenState extends State<LoginScreen> {
               Text(
                 'Enter your phone number to continue',
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.6),
+                  color: Colors.white.withValues(alpha: 0.6),
                   fontSize: 16,
                 ),
               ),
@@ -575,7 +575,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E2032), // Dark card bg
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white.withOpacity(0.1)),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.1),
+                  ),
                 ),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -599,7 +601,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Container(
                       height: 24,
                       width: 1,
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                     ),
                     const SizedBox(width: 16),
                     // Input
@@ -618,7 +620,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           border: InputBorder.none,
                           hintText: 'Phone Number',
                           hintStyle: TextStyle(
-                            color: Colors.white.withOpacity(0.4),
+                            color: Colors.white.withValues(alpha: 0.4),
                           ),
                           counterText: '',
                         ),
@@ -644,7 +646,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   borderRadius: BorderRadius.circular(28),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF8B5CF6).withOpacity(0.3),
+                      color: const Color(0xFF8B5CF6).withValues(alpha: 0.3),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -688,7 +690,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.white.withOpacity(0.4),
+                  color: Colors.white.withValues(alpha: 0.4),
                   height: 1.5,
                 ),
               ),
@@ -759,7 +761,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: const Color(0xFF8B5CF6).withOpacity(0.2),
+                                color: const Color(
+                                  0xFF8B5CF6,
+                                ).withValues(alpha: 0.2),
                                 border: Border.all(
                                   color: const Color(0xFF8B5CF6),
                                   width: 2,
@@ -777,12 +781,12 @@ class _LoginScreenState extends State<LoginScreen> {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: _hasError
-                                    ? Colors.red.withOpacity(0.1)
-                                    : Colors.white.withOpacity(0.05),
+                                    ? Colors.red.withValues(alpha: 0.1)
+                                    : Colors.white.withValues(alpha: 0.05),
                                 border: Border.all(
                                   color: _hasError
                                       ? Colors.redAccent
-                                      : Colors.white.withOpacity(0.2),
+                                      : Colors.white.withValues(alpha: 0.2),
                                   width: 2,
                                 ),
                               ),
@@ -837,11 +841,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         shape: BoxShape.circle,
                         color: filled
                             ? const Color(0xFF8B5CF6) // Purple filled
-                            : Colors.white.withOpacity(0.1), // Empty
+                            : Colors.white.withValues(alpha: 0.1), // Empty
                         border: Border.all(
                           color: filled
                               ? const Color(0xFF8B5CF6)
-                              : Colors.white.withOpacity(0.3),
+                              : Colors.white.withValues(alpha: 0.3),
                           width: 2,
                         ),
                       ),

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
 
 class FraudScanningAnimation extends StatefulWidget {
   final bool isDark;
@@ -69,7 +68,7 @@ class _FraudScanningAnimationState extends State<FraudScanningAnimation>
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: color.withOpacity(0.1 - (index * 0.02)),
+                        color: color.withValues(alpha: 0.1 - (index * 0.02)),
                         width: 2,
                       ),
                     ),
@@ -89,8 +88,8 @@ class _FraudScanningAnimationState extends State<FraudScanningAnimation>
                   gradient: SweepGradient(
                     colors: [
                       Colors.transparent,
-                      color.withOpacity(0.2),
-                      color.withOpacity(0.6),
+                      color.withValues(alpha: 0.2),
+                      color.withValues(alpha: 0.6),
                     ],
                     stops: const [0.5, 0.8, 1.0],
                   ),
@@ -114,12 +113,15 @@ class _FraudScanningAnimationState extends State<FraudScanningAnimation>
                   color: bgColor,
                   boxShadow: [
                     BoxShadow(
-                      color: color.withOpacity(0.4),
+                      color: color.withValues(alpha: 0.4),
                       blurRadius: 20,
                       spreadRadius: 5,
                     ),
                   ],
-                  border: Border.all(color: color.withOpacity(0.5), width: 2),
+                  border: Border.all(
+                    color: color.withValues(alpha: 0.5),
+                    width: 2,
+                  ),
                 ),
                 child: Icon(Icons.shield_outlined, size: 50, color: color),
               ),
@@ -139,7 +141,7 @@ class _FraudScanningAnimationState extends State<FraudScanningAnimation>
       width: 8,
       height: 8,
       decoration: BoxDecoration(
-        color: color.withOpacity(0.6),
+        color: color.withValues(alpha: 0.6),
         shape: BoxShape.circle,
       ),
     );

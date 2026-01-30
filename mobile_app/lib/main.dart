@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io'; // Import dart:io for HttpOverrides
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -30,6 +31,17 @@ bool _isDeviceCompromised = false;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Load Saved Theme
+  final prefs = await SharedPreferences.getInstance();
+  final isDark = prefs.getBool('is_dark_theme') ?? false;
+  themeNotifier.value = isDark ? ThemeMode.dark : ThemeMode.light;
+
+  // Persist Theme Changes
+  themeNotifier.addListener(() {
+    prefs.setBool('is_dark_theme', themeNotifier.value == ThemeMode.dark);
+  });
+
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   HttpOverrides.global = MyHttpOverrides(); // Bypass SSL verification
 

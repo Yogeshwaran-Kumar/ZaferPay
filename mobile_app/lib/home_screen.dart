@@ -94,7 +94,9 @@ class _HomeScreenState extends State<HomeScreen> {
     // Fetch fresh data
     try {
       final data = await _api.getHomeScreenData();
-      _updateStateWithData(data);
+      if (data != null) {
+        _updateStateWithData(data);
+      }
     } catch (e) {
       // Ignore error if we have cache, otherwise stop loading
     } finally {
@@ -258,7 +260,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: isDark
-                                  ? const Color(0xFF5F259F).withOpacity(0.5)
+                                  ? const Color(
+                                      0xFF5F259F,
+                                    ).withValues(alpha: 0.5)
                                   : Colors.grey.shade200,
                               width: 1,
                             ),

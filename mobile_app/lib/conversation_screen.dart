@@ -245,8 +245,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
             boxShadow: [
               if (!isDark)
                 BoxShadow(
-                  color: Colors.grey.withOpacity(
-                    0.05,
+                  color: Colors.grey.withValues(
+                    alpha: 0.05,
                   ), // Reduced shadow since we have color
                   blurRadius: 5,
                   offset: const Offset(0, 2),
@@ -300,7 +300,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    "${formatAmount(amount)}", // Smart Amount
+                    formatAmount(amount), // Smart Amount
                     style: TextStyle(
                       color: isDark ? Colors.white : Colors.black,
                       fontSize: 32,
@@ -475,7 +475,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
           boxShadow: (!isSender && !isDark)
               ? [
                   BoxShadow(
-                    color: Colors.grey.withOpacity(0.1),
+                    color: Colors.grey.withValues(alpha: 0.1),
                     blurRadius: 2,
                     offset: const Offset(0, 1),
                   ),
