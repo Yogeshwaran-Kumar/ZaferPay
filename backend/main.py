@@ -1085,7 +1085,7 @@ def create_transaction(
         print(f"Transaction Logic Error: {e}")
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail="Transaction failed due to system error")
+        raise HTTPException(status_code=500, detail=f"Transaction failed: {str(e)}")
 
 
 # Simple In-Memory Cache for Home Data
