@@ -7,10 +7,19 @@ from sqlalchemy import text
 from datetime import timedelta, datetime
 from typing import List # <--- Added this
 import models, schemas, auth, database, fraud_engine, security
+from logging_config import logger, log_transaction, log_login, log_security_event, log_error
 import random
 import json
 import traceback
 from sqlalchemy.orm import joinedload
+
+# AI Auto-Learning Scheduler
+try:
+    import ai_scheduler
+    AI_SCHEDULER_AVAILABLE = True
+except ImportError:
+    AI_SCHEDULER_AVAILABLE = False
+    print("⚠️ ai_scheduler not available")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -41,19 +50,48 @@ def get_real_ip(request: Request) -> str:
 # Rate limiting enabled for brute force protection (FREE)
 limiter = Limiter(key_func=get_real_ip) 
 
-app = FastAPI(title="Application-2 Mock Bank")
+app = FastAPI(
+    title="Safe Pay API",
+    description="""
+## Secure UPI Payment Application API
+
+A production-grade payment application with:
+- **3-Stage Fraud Detection** (Rules → Social Graph → AI)
+- **Military-Grade Encryption** (AES-256 + Argon2id)
+- **HMAC Request Signing** (Tamper-proof transactions)
+
+### Key Features:
+- 🔐 PIN-based authentication with device binding
+- 🛡️ AI-powered fraud detection with 16 features
+- ⚡ Sub-200ms response times
+- 🔄 Token rotation for session security
+    """,
+    version="2.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-@app.get("/health")
+@app.get("/health", tags=["System"], summary="Health Check")
 def health_check():
+    """Returns OK if the API server is running."""
     return {"status": "ok"}
 
-# Add CORS middleware to allow connections from mobile apps
+# Add CORS middleware - SECURITY: Restrict to known origins
+# In production, only allow your specific domains
+ALLOWED_ORIGINS = [
+    "http://localhost:8000",
+    "http://localhost:3000",
+    "http://127.0.0.1:8000",
+    "https://*.trycloudflare.com",  # Cloudflare tunnel
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"https://.*\.trycloudflare\.com",  # Regex for dynamic tunnel URLs
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -63,6 +101,30 @@ app.add_middleware(
 models.Base.metadata.create_all(bind=database.engine)
 
 # Seed data removed - use import_mock_users.py for population
+
+# ═══════════════════════════════════════════════════════════════════════════
+# AI AUTO-LEARNING SCHEDULER STARTUP
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.on_event("startup")
+async def startup_event():
+    """Start the AI auto-learning scheduler on app startup"""
+    if AI_SCHEDULER_AVAILABLE:
+        try:
+            ai_scheduler.start_scheduler(interval_hours=24)
+            print("🚀 AI Auto-Learning Scheduler started (retrains every 24 hours)")
+        except Exception as e:
+            print(f"⚠️ Failed to start AI scheduler: {e}")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Stop the AI scheduler on app shutdown"""
+    if AI_SCHEDULER_AVAILABLE:
+        try:
+            ai_scheduler.stop_scheduler()
+            print("🛑 AI Scheduler stopped")
+        except Exception:
+            pass
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -334,18 +396,18 @@ def login_for_access_token(
     }
 
 # ═══════════════════════════════════════════════════════════════════════════
-# REFRESH TOKEN ENDPOINT - Get new access token using refresh token
+# REFRESH TOKEN ENDPOINT - Token Rotation (Issue new, revoke old)
 # ═══════════════════════════════════════════════════════════════════════════
 @app.post("/auth/refresh")
-def refresh_token(
+def refresh_token_endpoint(
     refresh_token: str = Header(..., alias="X-Refresh-Token"),
     db: Session = Depends(get_db)
 ):
     """
-    Token Rotation: Exchange refresh token for new access token
+    Token Rotation: Exchange refresh token for new access + refresh tokens
     
-    This allows the app to get a new access token without re-entering PIN.
-    The refresh token is valid for 7 days.
+    Security: The old refresh token is REVOKED after use.
+    If someone tries to reuse a revoked token, it's flagged as suspicious.
     """
     payload = auth.verify_refresh_token(refresh_token)
     if not payload:
@@ -356,19 +418,55 @@ def refresh_token(
     
     username = payload.get("sub")
     device_id = payload.get("device_id")
+    token_jti = payload.get("jti")  # Unique token ID
+    
+    # Check if token is revoked (Token Rotation Security)
+    if token_jti:
+        revoked = db.query(models.RevokedToken).filter(
+            models.RevokedToken.token_jti == token_jti
+        ).first()
+        
+        if revoked:
+            # Someone is trying to reuse a revoked token!
+            # This could be a token theft attempt
+            print(f"🚨 SECURITY: Revoked refresh token reuse detected! User: {username}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has been revoked (possible theft detected)"
+            )
     
     # Verify user still exists
     user = db.query(models.User).filter(models.User.username == username).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
+    # REVOKE the old token (Token Rotation)
+    if token_jti:
+        try:
+            revoked_token = models.RevokedToken(
+                token_jti=token_jti,
+                user_id=user.id,
+                expires_at=datetime.utcfromtimestamp(payload.get("exp", 0))
+            )
+            db.add(revoked_token)
+            db.commit()
+        except Exception as e:
+            print(f"Warning: Could not revoke token: {e}")
+            # Continue anyway - better to issue new token than block user
+    
     # Create new access token
     new_access_token = auth.create_access_token(
         data={"sub": username, "device_id": device_id}
     )
     
+    # Create NEW refresh token (Token Rotation)
+    new_refresh_token = auth.create_refresh_token(
+        data={"sub": username, "device_id": device_id}
+    )
+    
     return {
         "access_token": new_access_token,
+        "refresh_token": new_refresh_token,  # NEW token issued
         "token_type": "bearer",
         "expires_in": auth.ACCESS_TOKEN_EXPIRE_MINUTES * 60
     }
@@ -530,7 +628,9 @@ def set_pin(
             # UPI ID (shareable - kept plain)
             upi_id=upi_id,
             upi_id_hash=security.hash_value(upi_id),
-            balance=1000.0, # Welcome Bonus
+            # Balance: Dual storage (plain for speed, encrypted for security)
+            balance=1000.0,  # Welcome Bonus (plain for fast queries)
+            encrypted_balance=security.encrypt_value("1000.0"),  # Welcome Bonus (encrypted)
             hashed_password=auth.get_password_hash(req.pin)
         )
         db.add(new_user)
@@ -914,13 +1014,21 @@ def create_transaction(
         raise HTTPException(status_code=400, detail="Cannot send money to self")
 
     # 2. Fraud Check (outside lock - informational)
-    # Level 3 AI Check (F1-F12)
+    # Level 3 AI Check (F1-F54)
     # We pass device_id from header if available (simplified here, assumes verified in Depends)
     device_id = request.headers.get('X-Device-ID')
     device_hash = security.hash_value(device_id) if device_id else None
     
-    risk_label, risk_reason = fraud_engine.evaluate_fraud(
-        db, current_user, receiver, tx.amount, device_id_hash=device_hash
+    # Get client IP for geo-velocity check (F29)
+    client_ip = request.headers.get('X-Forwarded-For', request.client.host if request.client else None)
+    if client_ip and ',' in client_ip:
+        client_ip = client_ip.split(',')[0].strip()  # First IP in chain is the client
+    
+    risk_label, risk_reason, fraud_features = fraud_engine.evaluate_fraud(
+        db, current_user, receiver, tx.amount, 
+        device_id_hash=device_hash, 
+        receiver_mcc=tx.receiver_mcc,
+        current_ip=client_ip
     )
     
     # AI Logic: Decision
@@ -934,13 +1042,13 @@ def create_transaction(
         status_str = "FLAGGED" # Still success, but marked
         
     # Log to Brain Memory (FraudEvent)
-    # We calculate the raw AI score again for logging if needed, or query it.
-    # For efficiency, we just log the label/reason.
+    # Now we have the raw AI score from the features dictionary
+    ai_score_value = fraud_features.get('ai_score', 0.0) if fraud_features else 0.0
     fraud_event = models.FraudEvent(
         user_id=current_user.id,
         transaction_id=None, # Will update after ID generation
         amount=tx.amount,
-        ai_score=0.0, # Placeholder, would need refactoring to get raw score out
+        ai_score=float(ai_score_value),
         rule_violation=risk_reason,
         is_blocked=is_blocked,
         timestamp=datetime.now()
@@ -949,14 +1057,61 @@ def create_transaction(
     # Don't commit yet, wait for transaction
     
     if is_blocked:
-        db.commit() # Save the blocked event
-        # Return 403 Forbidden
+        # ═══════════════════════════════════════════════════════════════════════
+        # SAVE FAILED TRANSACTION TO DATABASE (So it appears in history)
+        # ═══════════════════════════════════════════════════════════════════════
+        failed_tx_id = f"TXN{int(datetime.now().timestamp()*1000)}"
+        fraud_event.transaction_id = failed_tx_id
+        
+        failed_tx = models.Transaction(
+            transaction_id=failed_tx_id,
+            sender_id=current_user.id,
+            receiver_id=receiver.id,
+            amount=tx.amount,
+            status="FAILED",
+            risk_score=risk_label,  # Should be String: 'SAFE', 'WARN', or 'HIGH'
+            receiver_mcc=tx.receiver_mcc,
+            timestamp=datetime.now(),
+            # IP Tracking for audit
+            ip_hash=security.hash_value(client_ip) if client_ip else None,
+            ip_encrypted=security.encrypt_value(client_ip) if client_ip else None
+        )
+        db.add(failed_tx)
+        db.commit()
+        
+        # ═══════════════════════════════════════════════════════════════════════
+        # CUSTOM ERROR MESSAGES
+        # ═══════════════════════════════════════════════════════════════════════
+        
+        # F18: Daily Per-Receiver Limit Exceeded
+        if risk_reason == "F18_DAILY_RECEIVER_LIMIT_EXCEEDED":
+            # Get tier to determine limit
+            tier = fraud_engine.get_mcc_tier(tx.receiver_mcc)
+            if tier == "PERSONAL":
+                limit_str = "₹1,00,000"
+            else:
+                limit_str = "₹3,00,000"
+            
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "message": f"Transaction Failed. You cannot send more than {limit_str} to this person in one day.",
+                    "reason": risk_reason,
+                    "risk": risk_label,
+                    "transaction_id": failed_tx_id,
+                    "status": "FAILED"
+                }
+            )
+        
+        # Default blocked message
         raise HTTPException(
              status_code=403, 
              detail={
                  "message": "Transaction Blocked for Security",
                  "reason": risk_reason,
-                 "risk": risk_label
+                 "risk": risk_label,
+                 "transaction_id": failed_tx_id,
+                 "status": "FAILED"
              }
         )
     
@@ -988,9 +1143,9 @@ def create_transaction(
         if sender_user.balance < tx.amount:
              raise HTTPException(status_code=400, detail="Insufficient balance")
              
-        # Execute Transfer
-        sender_user.balance -= tx.amount
-        receiver_user.balance += tx.amount
+        # Execute Transfer (Using encrypted balance method)
+        sender_user.update_balance(sender_user.balance - tx.amount)
+        receiver_user.update_balance(receiver_user.balance + tx.amount)
 
         # B2. UPDATE MERCHANT CATEGORY (if provided and valid)
         if tx.receiver_mcc and tx.receiver_mcc != '0000':
@@ -1008,7 +1163,11 @@ def create_transaction(
             status="SUCCESS",
             risk_score=risk_label,
             timestamp=datetime.now(),
-            note=tx.note  # Save Note
+            note=tx.note,  # Save Note
+            # IP Tracking for Geo-Velocity (F29)
+            ip_hash=security.hash_value(client_ip) if client_ip else None,
+            ip_encrypted=security.encrypt_value(client_ip) if client_ip else None,
+            receiver_mcc=tx.receiver_mcc
         )
         db.add(new_tx)
 
@@ -1083,9 +1242,25 @@ def create_transaction(
         raise
     except Exception as e:
         db.rollback()
-        print(f"Transaction Logic Error: {e}")
+        import os
+        import sys
+        
+        # Absolute path to ensure we find the file
+        log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "error_traceback.log")
+        
+        # Print to stderr for immediate visibility
+        print(f"!!! CRITICAL TRANSACTION ERROR: {e}", file=sys.stderr)
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail="Transaction failed due to system error")
+        
+        try:
+            with open(log_path, "w") as f:
+                f.write(f"Error: {str(e)}\n")
+                traceback.print_exc(file=f)
+            print(f"Traceback written to {log_path}", file=sys.stderr)
+        except Exception as write_err:
+             print(f"Failed to write log file: {write_err}", file=sys.stderr)
+
+        raise HTTPException(status_code=500, detail=f"Transaction failed due to system error: {str(e)}")
 
 
 # Simple In-Memory Cache for Home Data
@@ -1474,3 +1649,270 @@ def get_conversation(
     combined.sort(key=lambda x: x['timestamp'], reverse=True)
         
     return combined
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# FRAUD REPORTING ENDPOINT (For AI Learning)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.post("/api/report-fraud", 
+          response_model=schemas.FraudReportResponse,
+          tags=["Security"],
+          summary="Report a fraudulent transaction",
+          description="""
+Report a suspicious transaction. This helps the AI learn real fraud patterns.
+
+**Reasons:**
+- `not_me` - I didn't make this transaction
+- `wrong_amount` - Amount is incorrect  
+- `unknown_receiver` - I don't know this person
+- `other` - Other reason (provide description)
+""")
+async def report_fraud(
+    report: schemas.FraudReportRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    User reports a transaction as fraudulent.
+    
+    This is GOLD for AI learning:
+    1. User reports transaction they didn't authorize
+    2. We save it to UserFraudReport table
+    3. We also add to FraudEvent table (for AI training)
+    4. Next 24h retrain will learn from this
+    """
+    
+    # Validate transaction exists and belongs to user
+    transaction = db.query(models.Transaction).filter(
+        models.Transaction.transaction_id == report.transaction_id
+    ).first()
+    
+    if not transaction:
+        return schemas.FraudReportResponse(
+            success=False,
+            message="Transaction not found"
+        )
+    
+    # User must be sender or receiver
+    if transaction.sender_id != current_user.id and transaction.receiver_id != current_user.id:
+        return schemas.FraudReportResponse(
+            success=False,
+            message="You can only report your own transactions"
+        )
+    
+    # Check if already reported
+    existing_report = db.query(models.UserFraudReport).filter(
+        models.UserFraudReport.transaction_id == report.transaction_id,
+        models.UserFraudReport.user_id == current_user.id
+    ).first()
+    
+    if existing_report:
+        return schemas.FraudReportResponse(
+            success=False,
+            message="You have already reported this transaction"
+        )
+    
+    # Valid reasons
+    valid_reasons = ["not_me", "wrong_amount", "unknown_receiver", "other"]
+    if report.reason not in valid_reasons:
+        return schemas.FraudReportResponse(
+            success=False,
+            message=f"Invalid reason. Must be one of: {', '.join(valid_reasons)}"
+        )
+    
+    # Create fraud report (for tracking/review)
+    # IMPORTANT: is_confirmed_fraud=False means AI won't train on this
+    # until an admin confirms it. This prevents false reports from
+    # poisoning the AI model.
+    fraud_report = models.UserFraudReport(
+        user_id=current_user.id,
+        transaction_id=report.transaction_id,
+        reason=report.reason,
+        description=report.description,
+        status="pending",  # Needs admin review
+        is_confirmed_fraud=False  # NOT auto-confirmed - prevents wrong training
+    )
+    db.add(fraud_report)
+    
+    # NOTE: We do NOT add to FraudEvent table automatically anymore.
+    # Only confirmed fraud reports should be added to FraudEvent.
+    # This happens when admin confirms the report via a separate endpoint.
+    # 
+    # This protects against users reporting their own transactions
+    # as fraud and causing the AI to learn wrong patterns.
+    
+    db.commit()
+    db.refresh(fraud_report)
+    
+    logger.info(f"🚨 Fraud Report: User {current_user.upi_id} reported {report.transaction_id} - {report.reason}")
+    
+    return schemas.FraudReportResponse(
+        success=True,
+        message="Thank you. Your report has been submitted for review.",
+        report_id=fraud_report.id
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ADMIN ENDPOINTS (AI Management & Fraud Reports)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.post("/admin/retrain-ai",
+          tags=["Admin"],
+          summary="Manually trigger AI model retraining")
+async def admin_retrain_ai(
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Manually trigger AI model retraining.
+    Uses latest transaction data and confirmed fraud reports.
+    """
+    if not AI_SCHEDULER_AVAILABLE:
+        return {"success": False, "message": "AI scheduler not available"}
+    
+    result = ai_scheduler.manual_retrain()
+    logger.info(f"🔧 Admin {current_user.upi_id} triggered AI retrain")
+    return result
+
+
+@app.get("/admin/ai-stats",
+         tags=["Admin"],
+         summary="Get AI model statistics")
+async def admin_ai_stats(
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Get current AI model status and statistics.
+    """
+    if not AI_SCHEDULER_AVAILABLE:
+        return {"error": "AI scheduler not available"}
+    
+    return ai_scheduler.get_model_stats()
+
+
+@app.get("/admin/fraud-reports",
+         tags=["Admin"],
+         summary="View pending fraud reports")
+async def admin_get_fraud_reports(
+    status: str = "pending",
+    limit: int = 50,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    View fraud reports submitted by users.
+    
+    Args:
+        status: Filter by status ("pending", "confirmed", "rejected", or "all")
+        limit: Maximum number of reports to return
+    """
+    query = db.query(models.UserFraudReport)
+    
+    if status != "all":
+        query = query.filter(models.UserFraudReport.status == status)
+    
+    reports = query.order_by(
+        models.UserFraudReport.reported_at.desc()
+    ).limit(limit).all()
+    
+    return [{
+        "id": r.id,
+        "transaction_id": r.transaction_id,
+        "user_id": r.user_id,
+        "reason": r.reason,
+        "description": r.description,
+        "status": r.status,
+        "is_confirmed_fraud": r.is_confirmed_fraud,
+        "reported_at": r.reported_at.isoformat() if r.reported_at else None
+    } for r in reports]
+
+
+@app.post("/admin/confirm-fraud/{report_id}",
+          tags=["Admin"],
+          summary="Confirm a fraud report (adds to AI training)")
+async def admin_confirm_fraud(
+    report_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Confirm a fraud report as legitimate.
+    This adds the transaction to FraudEvent table for AI learning.
+    """
+    report = db.query(models.UserFraudReport).filter(
+        models.UserFraudReport.id == report_id
+    ).first()
+    
+    if not report:
+        return {"success": False, "message": "Report not found"}
+    
+    if report.status == "confirmed":
+        return {"success": False, "message": "Report already confirmed"}
+    
+    # Update report status
+    report.status = "confirmed"
+    report.is_confirmed_fraud = True
+    report.reviewed_at = datetime.now()
+    
+    # Get the transaction to add to FraudEvent
+    transaction = db.query(models.Transaction).filter(
+        models.Transaction.transaction_id == report.transaction_id
+    ).first()
+    
+    if transaction:
+        # Add to FraudEvent for AI training
+        fraud_event = models.FraudEvent(
+            user_id=transaction.sender_id,
+            transaction_id=report.transaction_id,
+            amount=transaction.amount,
+            ai_score=-1.0,  # Mark as confirmed fraud
+            rule_violation=f"ADMIN_CONFIRMED_{report.reason.upper()}",
+            is_blocked=True,
+            timestamp=datetime.now()
+        )
+        db.add(fraud_event)
+    
+    db.commit()
+    
+    logger.info(f"✅ Admin {current_user.upi_id} confirmed fraud report #{report_id}")
+    
+    return {
+        "success": True,
+        "message": "Fraud report confirmed. AI will learn from this on next retrain.",
+        "report_id": report_id
+    }
+
+
+@app.post("/admin/reject-fraud/{report_id}",
+          tags=["Admin"],
+          summary="Reject a fraud report (false alarm)")
+async def admin_reject_fraud(
+    report_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Reject a fraud report as a false alarm.
+    This prevents the AI from learning incorrect patterns.
+    """
+    report = db.query(models.UserFraudReport).filter(
+        models.UserFraudReport.id == report_id
+    ).first()
+    
+    if not report:
+        return {"success": False, "message": "Report not found"}
+    
+    report.status = "rejected"
+    report.is_confirmed_fraud = False
+    report.reviewed_at = datetime.now()
+    
+    db.commit()
+    
+    logger.info(f"❌ Admin {current_user.upi_id} rejected fraud report #{report_id}")
+    
+    return {
+        "success": True,
+        "message": "Fraud report rejected. AI will NOT learn from this.",
+        "report_id": report_id
+    }

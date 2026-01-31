@@ -115,19 +115,26 @@ class _HomeScreenState extends State<HomeScreen> {
     if (user == null) {
       // If user is null, it likely means the request failed or returned empty/error structure
       // DO NOT clear existing data (cache) with empty lists.
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           "Skipping state update: User data is null (Request likely failed)",
         );
+      }
       return;
     }
 
     setState(() {
       _user = user;
       // Only update lists if we have a valid user response (robustness)
-      if (history != null) _history = history;
-      if (people != null) _recentPeople = people;
-      if (merchants != null) _recentMerchants = merchants;
+      if (history != null) {
+        _history = history;
+      }
+      if (people != null) {
+        _recentPeople = people;
+      }
+      if (merchants != null) {
+        _recentMerchants = merchants;
+      }
     });
   }
 

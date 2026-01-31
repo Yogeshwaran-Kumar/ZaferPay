@@ -10,6 +10,7 @@ Security Features:
 import os
 import hmac
 import hashlib
+import uuid
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
@@ -21,11 +22,18 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ═══════════════════════════════════════════════════════════════════════════
-# CONFIGURATION
+# CONFIGURATION - FAIL HARD IF NOT SET
 # ═══════════════════════════════════════════════════════════════════════════
 
-SECRET_KEY = os.getenv("SECRET_KEY", "fallback-secret-key-change-in-production")
-HMAC_SECRET = os.getenv("HMAC_SECRET", "fallback-secret-key-change-in-production") # Force explicit fallback here too
+SECRET_KEY = os.getenv("SECRET_KEY")
+HMAC_SECRET = os.getenv("HMAC_SECRET")
+
+# SECURITY: No fallbacks allowed - fail immediately if not configured
+if not SECRET_KEY:
+    raise ValueError("❌ SECRET_KEY environment variable is required. Add to .env file.")
+if not HMAC_SECRET:
+    raise ValueError("❌ HMAC_SECRET environment variable is required. Add to .env file.")
+
 ALGORITHM = "HS256"
 
 # Token Expiration Times
@@ -97,16 +105,21 @@ def verify_access_token(token: str) -> Optional[dict]:
 
 def create_refresh_token(data: dict) -> str:
     """
-    Create long-lived refresh token (7 days)
+    Create long-lived refresh token (7 days) with unique JTI
     Used to get new access tokens without re-login
+    
+    Security: Each refresh token has a unique ID (jti) that is revoked
+    after single use to prevent token replay attacks.
     """
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    token_id = str(uuid.uuid4())  # Unique token ID for revocation tracking
     
     to_encode.update({
         "exp": expire,
         "type": "refresh",
-        "iat": datetime.utcnow()
+        "iat": datetime.utcnow(),
+        "jti": token_id  # JWT ID for token rotation
     })
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 

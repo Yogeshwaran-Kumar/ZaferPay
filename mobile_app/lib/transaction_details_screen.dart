@@ -9,7 +9,8 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:mobile_app/main.dart';
-import 'utils.dart'; // Add import
+import 'api_service.dart';
+import 'utils.dart';
 
 class TransactionDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> transaction;
@@ -108,6 +109,44 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
+          // Report Flag - Subtle but accessible
+          if (status == 'SUCCESS')
+            PopupMenuButton<String>(
+              icon: Icon(
+                Icons.more_vert,
+                color: Theme.of(context).iconTheme.color,
+              ),
+              onSelected: (value) {
+                if (value == 'report') {
+                  _showReportDialog(context, transaction);
+                }
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem<String>(
+                  value: 'report',
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.flag_outlined,
+                        color: isDark
+                            ? Colors.red.shade300
+                            : Colors.red.shade600,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Report issue',
+                        style: TextStyle(
+                          color: isDark
+                              ? Colors.red.shade300
+                              : Colors.red.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           IconButton(
             icon: Icon(Icons.share, color: Theme.of(context).iconTheme.color),
             onPressed: _captureAndShare,
@@ -286,6 +325,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                   ),
                 ),
                 const SizedBox(height: 30),
+
                 Text(
                   'Powered by SafePay',
                   style: GoogleFonts.outfit(
@@ -301,6 +341,163 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         ),
       ),
     );
+  }
+
+  void _showReportDialog(
+    BuildContext context,
+    Map<String, dynamic> transaction,
+  ) {
+    String? selectedReason;
+    final descriptionController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Report as Fraud'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Why are you reporting this transaction?',
+                  style: TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 16),
+                _buildReasonOption(
+                  context,
+                  'not_me',
+                  'I didn\'t make this transaction',
+                  selectedReason,
+                  (value) => setState(() => selectedReason = value),
+                ),
+                _buildReasonOption(
+                  context,
+                  'wrong_amount',
+                  'Amount is incorrect',
+                  selectedReason,
+                  (value) => setState(() => selectedReason = value),
+                ),
+                _buildReasonOption(
+                  context,
+                  'unknown_receiver',
+                  'I don\'t know this person',
+                  selectedReason,
+                  (value) => setState(() => selectedReason = value),
+                ),
+                _buildReasonOption(
+                  context,
+                  'other',
+                  'Other reason',
+                  selectedReason,
+                  (value) => setState(() => selectedReason = value),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: descriptionController,
+                  decoration: const InputDecoration(
+                    labelText: 'Additional details (optional)',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 2,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: selectedReason == null
+                  ? null
+                  : () async {
+                      Navigator.pop(context);
+                      await _submitFraudReport(
+                        context,
+                        transaction['transaction_id'],
+                        selectedReason!,
+                        descriptionController.text,
+                      );
+                    },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text(
+                'Submit Report',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReasonOption(
+    BuildContext context,
+    String value,
+    String label,
+    String? selectedReason,
+    Function(String) onChanged,
+  ) {
+    return RadioListTile<String>(
+      value: value,
+      groupValue: selectedReason,
+      onChanged: (v) => onChanged(v!),
+      title: Text(label, style: const TextStyle(fontSize: 14)),
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+    );
+  }
+
+  Future<void> _submitFraudReport(
+    BuildContext context,
+    String transactionId,
+    String reason,
+    String description,
+  ) async {
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      // Use ApiService to report fraud
+      final apiService = ApiService();
+      final result = await apiService.reportFraud(
+        transactionId: transactionId,
+        reason: reason,
+        description: description.isEmpty ? null : description,
+      );
+
+      // Hide loading
+      if (context.mounted) Navigator.pop(context);
+
+      // Show result
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? 'Report submitted'),
+            backgroundColor: result['success'] == true
+                ? Colors.green
+                : Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) Navigator.pop(context);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to submit report'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildDetailRow(

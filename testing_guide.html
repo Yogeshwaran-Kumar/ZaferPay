@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafePay - Complete Testing Guide (A to Z)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0a0a12;
+            --bg-card: #14141f;
+            --bg-hover: #1e1e2e;
+            --text-primary: #ffffff;
+            --text-secondary: #8888a0;
+            --accent-purple: #a55eea;
+            --accent-blue: #3742fa;
+            --accent-green: #2ed573;
+            --accent-orange: #ffa502;
+            --accent-red: #ff4757;
+            --accent-cyan: #1dd1a1;
+            --border: #2a2a40;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            line-height: 1.7;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            text-align: center;
+            padding: 3rem 2rem;
+            background: linear-gradient(180deg, rgba(165, 94, 234, 0.15) 0%, transparent 100%);
+            border-bottom: 1px solid var(--border);
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #a55eea 0%, #3742fa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .section {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 2rem;
+            margin: 2rem 0;
+            border: 1px solid var(--border);
+        }
+
+        h2 {
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        h2 .icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-blue) 100%);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+
+        h3 {
+            margin: 1.5rem 0 0.75rem 0;
+            color: var(--accent-cyan);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            font-size: 0.9rem;
+        }
+
+        th,
+        td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: rgba(165, 94, 234, 0.1);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 0.5px;
+            position: sticky;
+            top: 0;
+        }
+
+        tr:hover {
+            background: var(--bg-hover);
+        }
+
+        code {
+            font-family: 'Fira Code', monospace;
+            background: var(--bg-hover);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            color: var(--accent-green);
+        }
+
+        .cmd-block {
+            font-family: 'Fira Code', monospace;
+            background: #0d0d15;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin: 1rem 0;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            line-height: 1.8;
+        }
+
+        .cmd-block .comment {
+            color: #666;
+        }
+
+        .cmd-block .command {
+            color: var(--accent-green);
+        }
+
+        .cmd-block .output {
+            color: var(--text-secondary);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge.auto {
+            background: rgba(46, 213, 115, 0.2);
+            color: var(--accent-green);
+        }
+
+        .badge.manual {
+            background: rgba(55, 66, 250, 0.2);
+            color: var(--accent-blue);
+        }
+
+        .badge.api {
+            background: rgba(165, 94, 234, 0.2);
+            color: var(--accent-purple);
+        }
+
+        .badge.fraud {
+            background: rgba(255, 71, 87, 0.2);
+            color: var(--accent-red);
+        }
+
+        .badge.pass {
+            background: rgba(46, 213, 115, 0.3);
+            color: var(--accent-green);
+        }
+
+        .badge.block {
+            background: rgba(255, 71, 87, 0.3);
+            color: var(--accent-red);
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+
+        .summary-card {
+            background: var(--bg-hover);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.25rem;
+            text-align: center;
+        }
+
+        .summary-card .number {
+            font-size: 2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-purple) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .summary-card .label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--border);
+            margin-top: 2rem;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>🧪 SafePay Testing Guide</h1>
+        <p style="margin-top: 0.5rem; color: var(--text-secondary);">Complete A to Z Testing Methods with Examples</p>
+    </header>
+
+    <div class="container">
+        <!-- SUMMARY -->
+        <section class="section"
+            style="background: linear-gradient(135deg, rgba(165, 94, 234, 0.1), rgba(55, 66, 250, 0.1));">
+            <h2>📊 Testing Summary</h2>
+
+            <div class="summary-grid">
+                <div class="summary-card">
+                    <div class="number">6</div>
+                    <div class="label">Testing Methods</div>
+                </div>
+                <div class="summary-card">
+                    <div class="number">24</div>
+                    <div class="label">Unit Tests</div>
+                </div>
+                <div class="summary-card">
+                    <div class="number">20+</div>
+                    <div class="label">API Endpoints</div>
+                </div>
+                <div class="summary-card">
+                    <div class="number">54</div>
+                    <div class="label">Fraud Rules</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- METHOD 1: UNIT TESTS -->
+        <section class="section">
+            <h2><span class="icon">1</span> Unit Tests (Automated)</h2>
+            <p>Pre-written Python tests that verify individual functions work correctly.</p>
+
+            <h3>📁 Test Files Available</h3>
+            <table>
+                <tr>
+                    <th>File</th>
+                    <th>Tests</th>
+                    <th>What It Tests</th>
+                </tr>
+                <tr>
+                    <td><code>tests/test_security.py</code></td>
+                    <td>14 tests</td>
+                    <td>Geo-velocity, Tokens, Passwords, HMAC, Encryption, MCC Tiers</td>
+                </tr>
+                <tr>
+                    <td><code>tests/test_fraud_engine.py</code></td>
+                    <td>10 tests</td>
+                    <td>Feature extraction, Fraud rules, Trust graph, AI scoring</td>
+                </tr>
+            </table>
+
+            <h3>🚀 How to Run</h3>
+            <div class="cmd-block">
+                <span class="comment"># Navigate to backend folder and activate venv</span>
+                <span class="command">cd "C:\Users\dhanu\Downloads\Safe Pay\backend"</span>
+                <span class="command">.\venv\Scripts\activate</span>
+
+                <span class="comment"># Run ALL tests</span>
+                <span class="command">pytest tests/ -v</span>
+
+                <span class="comment"># Run specific test file</span>
+                <span class="command">pytest tests/test_security.py -v</span>
+
+                <span class="comment"># Run specific test class</span>
+                <span class="command">pytest tests/test_security.py::TestPasswordSecurity -v</span>
+
+                <span class="comment"># Run single test with output</span>
+                <span class="command">pytest tests/test_security.py::TestPasswordSecurity::test_password_hashing -v
+                    -s</span>
+            </div>
+
+            <h3>✅ Expected Output</h3>
+            <div class="cmd-block">
+                <span class="output">========================= test session starts =========================
+                    tests/test_security.py::TestGeoVelocity::test_calculate_distance_km PASSED
+                    tests/test_security.py::TestAuthTokens::test_access_token_creation PASSED
+                    tests/test_security.py::TestPasswordSecurity::test_password_hashing PASSED
+                    ...
+                    ========================= 24 passed in 2.45s =========================</span>
+            </div>
+        </section>
+
+        <!-- METHOD 2: SWAGGER UI -->
+        <section class="section">
+            <h2><span class="icon">2</span> Swagger UI (Interactive API Testing)</h2>
+            <p>Browser-based interface to test ALL API endpoints visually.</p>
+
+            <h3>🌐 How to Access</h3>
+            <table>
+                <tr>
+                    <th>URL</th>
+                    <th>What It Shows</th>
+                </tr>
+                <tr>
+                    <td><code>http://localhost:8000/docs</code></td>
+                    <td>Swagger UI - Interactive API documentation</td>
+                </tr>
+                <tr>
+                    <td><code>http://localhost:8000/redoc</code></td>
+                    <td>ReDoc - Alternative API docs (read-only)</td>
+                </tr>
+                <tr>
+                    <td><code>http://localhost:8000/openapi.json</code></td>
+                    <td>Raw OpenAPI specification (JSON)</td>
+                </tr>
+            </table>
+
+            <h3>📝 Testable Endpoints</h3>
+            <table>
+                <tr>
+                    <th>Category</th>
+                    <th>Endpoint</th>
+                    <th>Method</th>
+                    <th>Example Test</th>
+                </tr>
+                <tr>
+                    <td><span class="badge manual">Auth</span></td>
+                    <td><code>/register</code></td>
+                    <td>POST</td>
+                    <td><code>{"mobile":"9999999999","pin":"1234","name":"Test"}</code></td>
+                </tr>
+                <tr>
+                    <td><span class="badge manual">Auth</span></td>
+                    <td><code>/login</code></td>
+                    <td>POST</td>
+                    <td><code>{"mobile":"9999999999","pin":"1234","device_id":"abc"}</code></td>
+                </tr>
+                <tr>
+                    <td><span class="badge api">User</span></td>
+                    <td><code>/user/me</code></td>
+                    <td>GET</td>
+                    <td>Requires Bearer token in Authorization header</td>
+                </tr>
+                <tr>
+                    <td><span class="badge api">User</span></td>
+                    <td><code>/user/balance</code></td>
+                    <td>GET</td>
+                    <td>Returns encrypted balance</td>
+                </tr>
+                <tr>
+                    <td><span class="badge fraud">Payment</span></td>
+                    <td><code>/transfer</code></td>
+                    <td>POST</td>
+                    <td><code>{"receiver_mobile":"8888888888","amount":100}</code></td>
+                </tr>
+                <tr>
+                    <td><span class="badge api">History</span></td>
+                    <td><code>/user/history</code></td>
+                    <td>GET</td>
+                    <td>Returns transaction history</td>
+                </tr>
+                <tr>
+                    <td><span class="badge auto">Health</span></td>
+                    <td><code>/health</code></td>
+                    <td>GET</td>
+                    <td>Returns {"status": "healthy"}</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- METHOD 3: MANUAL CURL -->
+        <section class="section">
+            <h2><span class="icon">3</span> cURL Commands (Terminal Testing)</h2>
+            <p>Command-line API testing for scripting and automation.</p>
+
+            <h3>🔧 Example Commands</h3>
+            <div class="cmd-block">
+                <span class="comment"># 1. Health Check</span>
+                <span class="command">curl http://localhost:8000/health</span>
+                <span class="output">{"status":"healthy","database":"connected"}</span>
+
+                <span class="comment"># 2. Register New User</span>
+                <span class="command">curl -X POST http://localhost:8000/register \
+                    -H "Content-Type: application/json" \
+                    -d '{"mobile_number":"9999999999","pin":"1234","full_name":"Test User"}'</span>
+
+                <span class="comment"># 3. Login</span>
+                <span class="command">curl -X POST http://localhost:8000/login \
+                    -H "Content-Type: application/json" \
+                    -d '{"mobile_number":"9999999999","pin":"1234","device_id":"test123"}'</span>
+                <span
+                    class="output">{"access_token":"eyJhbG...","refresh_token":"eyJhbG...","token_type":"bearer"}</span>
+
+                <span class="comment"># 4. Get Balance (with token)</span>
+                <span class="command">curl http://localhost:8000/user/balance \
+                    -H "Authorization: Bearer eyJhbG..."</span>
+
+                <span class="comment"># 5. Transfer Money</span>
+                <span class="command">curl -X POST http://localhost:8000/transfer \
+                    -H "Authorization: Bearer eyJhbG..." \
+                    -H "Content-Type: application/json" \
+                    -d '{"receiver_mobile":"8888888888","amount":100,"pin":"1234"}'</span>
+            </div>
+        </section>
+
+        <!-- METHOD 4: MOBILE APP -->
+        <section class="section">
+            <h2><span class="icon">4</span> Mobile App Testing (End-to-End)</h2>
+            <p>Test the full user flow on device or emulator.</p>
+
+            <h3>📱 Test Scenarios</h3>
+            <table>
+                <tr>
+                    <th>Test Case</th>
+                    <th>Steps</th>
+                    <th>Expected Result</th>
+                    <th>Status</th>
+                </tr>
+                <tr>
+                    <td>Registration</td>
+                    <td>Enter mobile, PIN, name → Submit</td>
+                    <td>Account created, home screen loads</td>
+                    <td><span class="badge pass">PASS</span></td>
+                </tr>
+                <tr>
+                    <td>Login</td>
+                    <td>Enter mobile, PIN → Submit</td>
+                    <td>Home screen with balance</td>
+                    <td><span class="badge pass">PASS</span></td>
+                </tr>
+                <tr>
+                    <td>Balance Display</td>
+                    <td>Check home screen</td>
+                    <td>Shows ₹10,000 (default)</td>
+                    <td><span class="badge pass">PASS</span></td>
+                </tr>
+                <tr>
+                    <td>Normal Transfer</td>
+                    <td>Send ₹100 to registered user</td>
+                    <td>Processing shield → Success</td>
+                    <td><span class="badge pass">PASS</span></td>
+                </tr>
+                <tr>
+                    <td>QR Code Scan</td>
+                    <td>Scan another user's QR</td>
+                    <td>Payment screen with receiver info</td>
+                    <td><span class="badge pass">PASS</span></td>
+                </tr>
+                <tr>
+                    <td>Transaction History</td>
+                    <td>View history tab</td>
+                    <td>List of past transactions</td>
+                    <td><span class="badge pass">PASS</span></td>
+                </tr>
+                <tr>
+                    <td>Wrong PIN</td>
+                    <td>Enter wrong PIN on transfer</td>
+                    <td>Error: "Invalid PIN"</td>
+                    <td><span class="badge pass">PASS</span></td>
+                </tr>
+                <tr>
+                    <td>Insufficient Balance</td>
+                    <td>Send more than balance</td>
+                    <td>Error: "Insufficient balance"</td>
+                    <td><span class="badge pass">PASS</span></td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- METHOD 5: FRAUD TESTING -->
+        <section class="section">
+            <h2><span class="icon">5</span> Fraud Detection Testing</h2>
+            <p>Test all 54 fraud rules to verify they trigger correctly.</p>
+
+            <h3>🚨 Fraud Trigger Examples</h3>
+            <table>
+                <tr>
+                    <th>Rule</th>
+                    <th>How to Trigger</th>
+                    <th>Expected Result</th>
+                    <th>Status</th>
+                </tr>
+                <tr>
+                    <td>F1: Velocity Limit</td>
+                    <td>Send 6+ transactions in 10 minutes</td>
+                    <td><span class="badge block">BLOCKED</span></td>
+                    <td>HIGH Risk</td>
+                </tr>
+                <tr>
+                    <td>F2: Circular Loop</td>
+                    <td>A sends to B, B sends back to A within 2 min</td>
+                    <td>+40 risk points</td>
+                    <td>MEDIUM Risk</td>
+                </tr>
+                <tr>
+                    <td>F3: Dormant Account</td>
+                    <td>Inactive 30+ days, then send >₹500</td>
+                    <td><span class="badge block">BLOCKED</span></td>
+                    <td>HIGH Risk</td>
+                </tr>
+                <tr>
+                    <td>F4: First TX High Value</td>
+                    <td>First transaction >₹2000</td>
+                    <td>+45 risk points</td>
+                    <td>MEDIUM Risk</td>
+                </tr>
+                <tr>
+                    <td>F5: Amount Spike</td>
+                    <td>Send 5x your average amount</td>
+                    <td>+50 risk points</td>
+                    <td>MEDIUM Risk</td>
+                </tr>
+                <tr>
+                    <td>F9: Unusual Time</td>
+                    <td>Transact between 3-5 AM</td>
+                    <td>+25 risk points</td>
+                    <td>LOW Risk</td>
+                </tr>
+                <tr>
+                    <td>F10: Split Transaction</td>
+                    <td>Send 3+ small payments (<₹500) same receiver</td>
+                    <td>+35 risk points</td>
+                    <td>MEDIUM Risk</td>
+                </tr>
+                <tr>
+                    <td>F11: Daily Limit</td>
+                    <td>Try to exceed ₹1 Lakh/day P2P</td>
+                    <td><span class="badge block">BLOCKED</span></td>
+                    <td>FAILED status</td>
+                </tr>
+                <tr>
+                    <td>F13: New Receiver Burst</td>
+                    <td>Send to 5+ NEW receivers in one day</td>
+                    <td>+25 risk points</td>
+                    <td>MEDIUM Risk</td>
+                </tr>
+                <tr>
+                    <td>F14: Suspicious Round Amount</td>
+                    <td>Send exactly ₹10,000, ₹50,000, ₹1,00,000</td>
+                    <td>+15 risk points</td>
+                    <td>LOW Risk</td>
+                </tr>
+                <tr>
+                    <td>F15: Rapid Balance Drain</td>
+                    <td>Spend >50% balance in 1 hour</td>
+                    <td>+40 risk points</td>
+                    <td>MEDIUM Risk</td>
+                </tr>
+                <tr>
+                    <td>F29: Geo-Velocity</td>
+                    <td>Login from Mumbai, then Delhi in 30 min</td>
+                    <td><span class="badge block">BLOCKED</span></td>
+                    <td>HIGH Risk</td>
+                </tr>
+                <tr>
+                    <td>AI: Strong Anomaly</td>
+                    <td>Combine 3+ suspicious patterns</td>
+                    <td>+65 risk points</td>
+                    <td>HIGH Risk</td>
+                </tr>
+            </table>
+
+            <h3>📊 Risk Score Thresholds</h3>
+            <table>
+                <tr>
+                    <th>Total Score</th>
+                    <th>Risk Level</th>
+                    <th>Action</th>
+                </tr>
+                <tr>
+                    <td>0-30</td>
+                    <td><span class="badge pass">LOW</span></td>
+                    <td>Transaction passes</td>
+                </tr>
+                <tr>
+                    <td>31-60</td>
+                    <td><span class="badge"
+                            style="background: rgba(255, 165, 2, 0.2); color: var(--accent-orange);">MEDIUM</span></td>
+                    <td>Transaction passes with warning</td>
+                </tr>
+                <tr>
+                    <td>61+</td>
+                    <td><span class="badge block">HIGH</span></td>
+                    <td>Transaction BLOCKED</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- METHOD 6: POSTMAN -->
+        <section class="section">
+            <h2><span class="icon">6</span> Postman Collection (Optional)</h2>
+            <p>Import into Postman for organized API testing with saved requests.</p>
+
+            <h3>🔧 Quick Setup</h3>
+            <ol style="margin-left: 2rem; color: var(--text-secondary);">
+                <li>Download Postman from <code>postman.com</code></li>
+                <li>Create new collection: "SafePay API"</li>
+                <li>Add environment variable: <code>baseUrl = http://localhost:8000</code></li>
+                <li>Add environment variable: <code>token = (leave empty, fill after login)</code></li>
+            </ol>
+
+            <h3>📋 Request Examples</h3>
+            <table>
+                <tr>
+                    <th>Name</th>
+                    <th>Method</th>
+                    <th>URL</th>
+                    <th>Body</th>
+                </tr>
+                <tr>
+                    <td>Health Check</td>
+                    <td>GET</td>
+                    <td>{{baseUrl}}/health</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td>Register</td>
+                    <td>POST</td>
+                    <td>{{baseUrl}}/register</td>
+                    <td>{"mobile_number":"...", "pin":"...", "full_name":"..."}</td>
+                </tr>
+                <tr>
+                    <td>Login</td>
+                    <td>POST</td>
+                    <td>{{baseUrl}}/login</td>
+                    <td>{"mobile_number":"...", "pin":"...", "device_id":"..."}</td>
+                </tr>
+                <tr>
+                    <td>My Profile</td>
+                    <td>GET</td>
+                    <td>{{baseUrl}}/user/me</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td>Transfer</td>
+                    <td>POST</td>
+                    <td>{{baseUrl}}/transfer</td>
+                    <td>{"receiver_mobile":"...", "amount":100, "pin":"..."}</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- COMPLETE TEST CHECKLIST -->
+        <section class="section">
+            <h2><span class="icon">✓</span> Complete Test Checklist</h2>
+
+            <h3>🔒 Security Tests</h3>
+            <table>
+                <tr>
+                    <th>Test</th>
+                    <th>Command / Action</th>
+                    <th>Expected</th>
+                </tr>
+                <tr>
+                    <td>Password uses Argon2id</td>
+                    <td><code>pytest tests/test_security.py::TestPasswordSecurity -v</code></td>
+                    <td>All PASSED</td>
+                </tr>
+                <tr>
+                    <td>Tokens have unique JTI</td>
+                    <td><code>pytest tests/test_security.py::TestAuthTokens -v</code></td>
+                    <td>All PASSED</td>
+                </tr>
+                <tr>
+                    <td>HMAC signing works</td>
+                    <td><code>pytest tests/test_security.py::TestHMACSigning -v</code></td>
+                    <td>All PASSED</td>
+                </tr>
+                <tr>
+                    <td>Encryption roundtrip</td>
+                    <td><code>pytest tests/test_security.py::TestEncryption -v</code></td>
+                    <td>All PASSED</td>
+                </tr>
+                <tr>
+                    <td>Geo-velocity check</td>
+                    <td><code>pytest tests/test_security.py::TestGeoVelocity -v</code></td>
+                    <td>All PASSED</td>
+                </tr>
+            </table>
+
+            <h3>🧠 AI/Fraud Tests</h3>
+            <table>
+                <tr>
+                    <th>Test</th>
+                    <th>Command / Action</th>
+                    <th>Expected</th>
+                </tr>
+                <tr>
+                    <td>Feature extraction</td>
+                    <td><code>pytest tests/test_fraud_engine.py::TestFeatureExtraction -v</code></td>
+                    <td>All PASSED</td>
+                </tr>
+                <tr>
+                    <td>MCC tier classification</td>
+                    <td><code>pytest tests/test_security.py::TestFraudRules -v</code></td>
+                    <td>All PASSED</td>
+                </tr>
+                <tr>
+                    <td>AI scoring (no model)</td>
+                    <td><code>pytest tests/test_fraud_engine.py::TestAIScoring -v</code></td>
+                    <td>Returns 0.0</td>
+                </tr>
+            </table>
+
+            <h3>📱 End-to-End Tests</h3>
+            <table>
+                <tr>
+                    <th>Test</th>
+                    <th>How</th>
+                    <th>Expected</th>
+                </tr>
+                <tr>
+                    <td>Full registration flow</td>
+                    <td>Mobile app or Swagger</td>
+                    <td>New account created</td>
+                </tr>
+                <tr>
+                    <td>Full payment flow</td>
+                    <td>Mobile app</td>
+                    <td>Processing shield → Success</td>
+                </tr>
+                <tr>
+                    <td>Fraud block flow</td>
+                    <td>6+ rapid transactions</td>
+                    <td>Transaction rejected</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- TESTING COMMAND SUMMARY -->
+        <section class="section"
+            style="background: linear-gradient(135deg, rgba(46, 213, 115, 0.1), rgba(165, 94, 234, 0.1));">
+            <h2>📋 All Testing Commands (Copy-Paste Ready)</h2>
+
+            <div class="cmd-block">
+                <span class="comment"># ═══════════════════════════════════════════════════════════════════</span>
+                <span class="comment"># UNIT TESTS (Backend)</span>
+                <span class="comment"># ═══════════════════════════════════════════════════════════════════</span>
+                <span class="command">cd "C:\Users\dhanu\Downloads\Safe Pay\backend"</span>
+                <span class="command">.\venv\Scripts\activate</span>
+
+                <span class="comment"># Run ALL tests</span>
+                <span class="command">pytest tests/ -v</span>
+
+                <span class="comment"># Run with coverage report</span>
+                <span class="command">pytest tests/ -v --cov=. --cov-report=html</span>
+
+                <span class="comment"># Run specific file</span>
+                <span class="command">pytest tests/test_security.py -v</span>
+                <span class="command">pytest tests/test_fraud_engine.py -v</span>
+
+                <span class="comment"># ═══════════════════════════════════════════════════════════════════</span>
+                <span class="comment"># API TESTING (Swagger)</span>
+                <span class="comment"># ═══════════════════════════════════════════════════════════════════</span>
+
+                <span class="comment"># Start server first</span>
+                <span class="command">uvicorn main:app --host 0.0.0.0 --port 8000 --reload</span>
+
+                <span class="comment"># Open in browser:</span>
+                <span class="output">http://localhost:8000/docs</span>
+
+                <span class="comment"># ═══════════════════════════════════════════════════════════════════</span>
+                <span class="comment"># MOBILE APP TESTING</span>
+                <span class="comment"># ═══════════════════════════════════════════════════════════════════</span>
+                <span class="command">cd "C:\Users\dhanu\Downloads\Safe Pay\mobile_app"</span>
+                <span class="command">flutter run</span>
+
+                <span class="comment"># Flutter widget tests</span>
+                <span class="command">flutter test</span>
+
+                <span class="comment"># ═══════════════════════════════════════════════════════════════════</span>
+                <span class="comment"># QUICK CURL TESTS</span>
+                <span class="comment"># ═══════════════════════════════════════════════════════════════════</span>
+                <span class="command">curl http://localhost:8000/health</span>
+                <span class="command">curl http://localhost:8000/docs</span>
+            </div>
+        </section>
+    </div>
+
+    <footer>
+        <p>SafePay Complete Testing Guide • A to Z Methods</p>
+        <p>Generated January 31, 2026 • Truth Only</p>
+    </footer>
+</body>
+
+</html>

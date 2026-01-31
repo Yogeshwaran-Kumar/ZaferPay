@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafePay Database - Complete A to Z Documentation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0a0a12;
+            --bg-card: #14141f;
+            --bg-hover: #1e1e2e;
+            --text-primary: #ffffff;
+            --text-secondary: #8888a0;
+            --accent-purple: #a55eea;
+            --accent-blue: #3742fa;
+            --accent-green: #2ed573;
+            --accent-orange: #ffa502;
+            --accent-red: #ff4757;
+            --accent-cyan: #1dd1a1;
+            --border: #2a2a40;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            line-height: 1.7;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            text-align: center;
+            padding: 3rem 2rem;
+            background: linear-gradient(180deg, rgba(55, 66, 250, 0.15) 0%, transparent 100%);
+            border-bottom: 1px solid var(--border);
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #3742fa 0%, #1dd1a1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .section {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 2rem;
+            margin: 2rem 0;
+            border: 1px solid var(--border);
+        }
+
+        h2 {
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        h2 .icon {
+            font-size: 1.5rem;
+        }
+
+        h3 {
+            margin: 1.5rem 0 0.75rem 0;
+            color: var(--accent-cyan);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            font-size: 0.85rem;
+        }
+
+        th,
+        td {
+            padding: 0.6rem 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: rgba(55, 66, 250, 0.1);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.5px;
+            position: sticky;
+            top: 0;
+        }
+
+        tr:hover {
+            background: var(--bg-hover);
+        }
+
+        code {
+            font-family: 'Fira Code', monospace;
+            background: var(--bg-hover);
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            color: var(--accent-green);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .badge.pk {
+            background: rgba(255, 165, 2, 0.2);
+            color: var(--accent-orange);
+        }
+
+        .badge.fk {
+            background: rgba(165, 94, 234, 0.2);
+            color: var(--accent-purple);
+        }
+
+        .badge.idx {
+            background: rgba(55, 66, 250, 0.2);
+            color: var(--accent-blue);
+        }
+
+        .badge.enc {
+            background: rgba(46, 213, 115, 0.2);
+            color: var(--accent-green);
+        }
+
+        .badge.hash {
+            background: rgba(29, 209, 161, 0.2);
+            color: var(--accent-cyan);
+        }
+
+        .badge.plain {
+            background: rgba(136, 136, 160, 0.2);
+            color: var(--text-secondary);
+        }
+
+        .badge.core {
+            background: rgba(55, 66, 250, 0.3);
+            color: var(--accent-blue);
+        }
+
+        .badge.fraud {
+            background: rgba(255, 71, 87, 0.3);
+            color: var(--accent-red);
+        }
+
+        .badge.auth {
+            background: rgba(165, 94, 234, 0.3);
+            color: var(--accent-purple);
+        }
+
+        .badge.ai {
+            background: rgba(46, 213, 115, 0.3);
+            color: var(--accent-green);
+        }
+
+        .timeline {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+
+        .timeline-item {
+            background: var(--bg-hover);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.25rem;
+        }
+
+        .timeline-item h4 {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.75rem;
+        }
+
+        .timeline-item.past h4 {
+            color: var(--text-secondary);
+        }
+
+        .timeline-item.present h4 {
+            color: var(--accent-green);
+        }
+
+        .timeline-item.future h4 {
+            color: var(--accent-cyan);
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+
+        .summary-card {
+            background: var(--bg-hover);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .summary-card .number {
+            font-size: 2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-purple) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .summary-card .label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+
+        .schema-box {
+            font-family: 'Fira Code', monospace;
+            background: #0d0d15;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin: 1rem 0;
+            font-size: 0.8rem;
+            overflow-x: auto;
+            line-height: 1.6;
+        }
+
+        .schema-box .table-name {
+            color: var(--accent-orange);
+            font-weight: bold;
+        }
+
+        .schema-box .column {
+            color: var(--accent-cyan);
+        }
+
+        .schema-box .type {
+            color: var(--accent-purple);
+        }
+
+        .schema-box .keyword {
+            color: var(--accent-green);
+        }
+
+        .schema-box .comment {
+            color: #666;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--border);
+            margin-top: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .timeline {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>🗄️ SafePay Database Schema</h1>
+        <p style="margin-top: 0.5rem; color: var(--text-secondary);">Complete A to Z Documentation - Past, Present,
+            Future</p>
+    </header>
+
+    <div class="container">
+        <!-- SUMMARY -->
+        <section class="section"
+            style="background: linear-gradient(135deg, rgba(55, 66, 250, 0.1), rgba(29, 209, 161, 0.1));">
+            <h2><span class="icon">📊</span> Database Summary</h2>
+
+            <div class="summary-grid">
+                <div class="summary-card">
+                    <div class="number">12</div>
+                    <div class="label">Tables</div>
+                </div>
+                <div class="summary-card">
+                    <div class="number">60+</div>
+                    <div class="label">Columns</div>
+                </div>
+                <div class="summary-card">
+                    <div class="number">8</div>
+                    <div class="label">Indexes</div>
+                </div>
+                <div class="summary-card">
+                    <div class="number">15</div>
+                    <div class="label">Foreign Keys</div>
+                </div>
+                <div class="summary-card">
+                    <div class="number">10</div>
+                    <div class="label">Encrypted Fields</div>
+                </div>
+            </div>
+
+            <table>
+                <tr>
+                    <th>Current Database</th>
+                    <th>Provider</th>
+                    <th>Location</th>
+                    <th>Connection</th>
+                </tr>
+                <tr>
+                    <td><strong>PostgreSQL 16</strong></td>
+                    <td>Neon Cloud (Free Tier)</td>
+                    <td>ap-southeast-1 (Singapore)</td>
+                    <td>SSL Required, Connection Pooling</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- PAST, PRESENT, FUTURE -->
+        <section class="section">
+            <h2><span class="icon">⏰</span> Database Evolution: Past → Present → Future</h2>
+
+            <div class="timeline">
+                <div class="timeline-item past">
+                    <h4>📜 Past (v1.0)</h4>
+                    <ul style="font-size: 0.85rem; color: var(--text-secondary); margin-left: 1rem;">
+                        <li><strong>SQLite</strong> - Local file</li>
+                        <li>Plain text storage</li>
+                        <li>No encryption</li>
+                        <li>No fraud detection</li>
+                        <li>Simple users + transactions</li>
+                    </ul>
+                </div>
+                <div class="timeline-item present" style="border-color: var(--accent-green);">
+                    <h4>✅ Present (v3.0)</h4>
+                    <ul style="font-size: 0.85rem; color: var(--text-secondary); margin-left: 1rem;">
+                        <li><strong>PostgreSQL (Neon)</strong></li>
+                        <li>AES-256 encryption</li>
+                        <li>SHA-256 hash search</li>
+                        <li>Argon2id passwords</li>
+                        <li>12 tables + AI/Fraud</li>
+                        <li>Connection pooling (20)</li>
+                    </ul>
+                </div>
+                <div class="timeline-item future">
+                    <h4>🚀 Future (Production)</h4>
+                    <ul style="font-size: 0.85rem; color: var(--text-secondary); margin-left: 1rem;">
+                        <li><strong>PostgreSQL (AWS RDS/GCP)</strong></li>
+                        <li>Read replicas</li>
+                        <li>Automated backups</li>
+                        <li>Point-in-time recovery</li>
+                        <li>PCI-DSS compliance</li>
+                        <li>HSM for key storage</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- TABLE 1: USERS -->
+        <section class="section">
+            <h2><span class="icon">👤</span> Table: users <span class="badge core">CORE</span></h2>
+            <p>Main user accounts table. Stores authentication, identity, and balance information.</p>
+
+            <table>
+                <tr>
+                    <th>Column</th>
+                    <th>Type</th>
+                    <th>Security</th>
+                    <th>Purpose</th>
+                    <th>Why This Design?</th>
+                </tr>
+                <tr>
+                    <td><code>id</code></td>
+                    <td>Integer</td>
+                    <td><span class="badge pk">PK</span> <span class="badge idx">INDEX</span></td>
+                    <td>Primary key</td>
+                    <td>Fast lookups, auto-increment</td>
+                </tr>
+                <tr>
+                    <td><code>username</code></td>
+                    <td>String</td>
+                    <td><span class="badge idx">UNIQUE</span></td>
+                    <td>Display name</td>
+                    <td>User-facing identifier</td>
+                </tr>
+                <tr>
+                    <td><code>mobile_hash</code></td>
+                    <td>String</td>
+                    <td><span class="badge hash">SHA-256</span> <span class="badge idx">INDEX</span></td>
+                    <td>Mobile number lookup</td>
+                    <td>Searchable without storing plain number</td>
+                </tr>
+                <tr>
+                    <td><code>mobile_encrypted</code></td>
+                    <td>String</td>
+                    <td><span class="badge enc">AES-256</span></td>
+                    <td>Mobile number display</td>
+                    <td>Decrypt only when needed (profile view)</td>
+                </tr>
+                <tr>
+                    <td><code>email_hash</code></td>
+                    <td>String</td>
+                    <td><span class="badge hash">SHA-256</span> <span class="badge idx">INDEX</span></td>
+                    <td>Email lookup</td>
+                    <td>Same pattern as mobile</td>
+                </tr>
+                <tr>
+                    <td><code>email_encrypted</code></td>
+                    <td>String</td>
+                    <td><span class="badge enc">AES-256</span></td>
+                    <td>Email display</td>
+                    <td>Encrypted at rest</td>
+                </tr>
+                <tr>
+                    <td><code>hashed_password</code></td>
+                    <td>String</td>
+                    <td><span class="badge"
+                            style="background: rgba(255,71,87,0.2); color: var(--accent-red);">ARGON2ID</span></td>
+                    <td>PIN/Password</td>
+                    <td>Strongest password hash algorithm</td>
+                </tr>
+                <tr>
+                    <td><code>upi_id</code></td>
+                    <td>String</td>
+                    <td><span class="badge plain">PLAIN</span> <span class="badge idx">UNIQUE</span></td>
+                    <td>UPI address</td>
+                    <td>Designed to be shared (QR codes)</td>
+                </tr>
+                <tr>
+                    <td><code>device_id_hash</code></td>
+                    <td>String</td>
+                    <td><span class="badge hash">SHA-256</span> <span class="badge idx">INDEX</span></td>
+                    <td>Device binding</td>
+                    <td>Verify same device without storing ID</td>
+                </tr>
+                <tr>
+                    <td><code>balance</code></td>
+                    <td>Float</td>
+                    <td><span class="badge plain">PLAIN</span></td>
+                    <td>Fast balance queries</td>
+                    <td>Plain for calculations (SUM, etc.)</td>
+                </tr>
+                <tr>
+                    <td><code>encrypted_balance</code></td>
+                    <td>String</td>
+                    <td><span class="badge enc">AES-256</span></td>
+                    <td>Audit trail</td>
+                    <td>Encrypted copy for compliance</td>
+                </tr>
+                <tr>
+                    <td><code>mcc</code></td>
+                    <td>String</td>
+                    <td><span class="badge plain">PLAIN</span></td>
+                    <td>Merchant category</td>
+                    <td>NULL for personal, code for merchants</td>
+                </tr>
+                <tr>
+                    <td><code>last_active_at</code></td>
+                    <td>DateTime</td>
+                    <td><span class="badge plain">PLAIN</span></td>
+                    <td>Activity tracking</td>
+                    <td>Detect dormant accounts (F3)</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- TABLE 2: TRANSACTIONS -->
+        <section class="section">
+            <h2><span class="icon">💸</span> Table: transactions <span class="badge core">CORE</span></h2>
+            <p>All payment records. This is the heart of the app.</p>
+
+            <table>
+                <tr>
+                    <th>Column</th>
+                    <th>Type</th>
+                    <th>Security</th>
+                    <th>Purpose</th>
+                    <th>Why?</th>
+                </tr>
+                <tr>
+                    <td><code>id</code></td>
+                    <td>Integer</td>
+                    <td><span class="badge pk">PK</span></td>
+                    <td>Primary key</td>
+                    <td>Internal reference</td>
+                </tr>
+                <tr>
+                    <td><code>transaction_id</code></td>
+                    <td>String</td>
+                    <td><span class="badge idx">UNIQUE</span></td>
+                    <td>Public transaction ID</td>
+                    <td>UUID format for external reference</td>
+                </tr>
+                <tr>
+                    <td><code>sender_id</code></td>
+                    <td>Integer</td>
+                    <td><span class="badge fk">FK→users</span> <span class="badge idx">INDEX</span></td>
+                    <td>Who sent money</td>
+                    <td>Foreign key for joins</td>
+                </tr>
+                <tr>
+                    <td><code>receiver_id</code></td>
+                    <td>Integer</td>
+                    <td><span class="badge fk">FK→users</span> <span class="badge idx">INDEX</span></td>
+                    <td>Who received money</td>
+                    <td>Foreign key for joins</td>
+                </tr>
+                <tr>
+                    <td><code>amount</code></td>
+                    <td>Float</td>
+                    <td><span class="badge plain">PLAIN</span></td>
+                    <td>Transaction amount</td>
+                    <td>Fast SUM/AVG calculations</td>
+                </tr>
+                <tr>
+                    <td><code>encrypted_amount</code></td>
+                    <td>String</td>
+                    <td><span class="badge enc">AES-256</span></td>
+                    <td>Encrypted amount</td>
+                    <td>Audit compliance</td>
+                </tr>
+                <tr>
+                    <td><code>timestamp</code></td>
+                    <td>DateTime</td>
+                    <td><span class="badge idx">INDEX</span></td>
+                    <td>Transaction time</td>
+                    <td>Indexed for velocity checks</td>
+                </tr>
+                <tr>
+                    <td><code>status</code></td>
+                    <td>String</td>
+                    <td><span class="badge plain">PLAIN</span></td>
+                    <td>SUCCESS / BLOCKED / FAILED</td>
+                    <td>Outcome of transaction</td>
+                </tr>
+                <tr>
+                    <td><code>risk_score</code></td>
+                    <td>String</td>
+                    <td><span class="badge plain">PLAIN</span></td>
+                    <td>LOW / MEDIUM / HIGH</td>
+                    <td>Fraud engine verdict</td>
+                </tr>
+                <tr>
+                    <td><code>receiver_mcc</code></td>
+                    <td>String</td>
+                    <td><span class="badge plain">PLAIN</span></td>
+                    <td>Merchant category</td>
+                    <td>For MCC tier fraud rules</td>
+                </tr>
+                <tr>
+                    <td><code>ip_hash</code></td>
+                    <td>String</td>
+                    <td><span class="badge hash">HMAC-SHA256</span></td>
+                    <td>IP lookup</td>
+                    <td>Geo-velocity detection (F29)</td>
+                </tr>
+                <tr>
+                    <td><code>ip_encrypted</code></td>
+                    <td>String</td>
+                    <td><span class="badge enc">AES-256</span></td>
+                    <td>IP audit</td>
+                    <td>Decrypt for investigation</td>
+                </tr>
+            </table>
+
+            <h3>🔧 Composite Indexes (Performance)</h3>
+            <div class="schema-box">
+                <span class="comment">-- For fast "user history" queries</span>
+                <span class="keyword">CREATE INDEX</span> ix_transactions_sender_timestamp <span
+                    class="keyword">ON</span> transactions(sender_id, timestamp);
+                <span class="keyword">CREATE INDEX</span> ix_transactions_receiver_timestamp <span
+                    class="keyword">ON</span> transactions(receiver_id, timestamp);
+            </div>
+        </section>
+
+        <!-- TABLE 3: SENDER/RECEIVER PROFILES -->
+        <section class="section">
+            <h2><span class="icon">📈</span> Tables: sender_profiles & receiver_profiles <span
+                    class="badge fraud">FRAUD</span></h2>
+            <p>Behavioral profiles for fraud detection. Stores aggregated statistics.</p>
+
+            <h3>sender_profiles</h3>
+            <table>
+                <tr>
+                    <th>Column</th>
+                    <th>Type</th>
+                    <th>Purpose</th>
+                    <th>Used By Fraud Rule</th>
+                </tr>
+                <tr>
+                    <td><code>user_id</code></td>
+                    <td>Integer</td>
+                    <td>Link to user</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>avg_transaction_amount</code></td>
+                    <td>Float</td>
+                    <td>User's average tx size</td>
+                    <td>F5: Amount Spike Detection</td>
+                </tr>
+                <tr>
+                    <td><code>total_transactions_count</code></td>
+                    <td>Integer</td>
+                    <td>Total transactions ever</td>
+                    <td>F4: First TX High Value</td>
+                </tr>
+                <tr>
+                    <td><code>total_transactions_amount</code></td>
+                    <td>Float</td>
+                    <td>Lifetime volume</td>
+                    <td>AML checks</td>
+                </tr>
+                <tr>
+                    <td><code>monthly_volume</code></td>
+                    <td>Float</td>
+                    <td>This month's volume</td>
+                    <td>Limit checks</td>
+                </tr>
+                <tr>
+                    <td><code>personal_trust_limit</code></td>
+                    <td>Float</td>
+                    <td>Learned safe limit</td>
+                    <td>Adaptive Learning</td>
+                </tr>
+                <tr>
+                    <td><code>override_streak_count</code></td>
+                    <td>Integer</td>
+                    <td>Consistent good behavior</td>
+                    <td>Trust increase</td>
+                </tr>
+            </table>
+
+            <h3>receiver_profiles</h3>
+            <table>
+                <tr>
+                    <th>Column</th>
+                    <th>Type</th>
+                    <th>Purpose</th>
+                    <th>Used By Fraud Rule</th>
+                </tr>
+                <tr>
+                    <td><code>total_received_amount</code></td>
+                    <td>Float</td>
+                    <td>Total money received</td>
+                    <td>Mule detection</td>
+                </tr>
+                <tr>
+                    <td><code>total_received_count</code></td>
+                    <td>Integer</td>
+                    <td>Total incoming transactions</td>
+                    <td>Feature for AI</td>
+                </tr>
+                <tr>
+                    <td><code>unique_senders_count</code></td>
+                    <td>Integer</td>
+                    <td>How many people sent money</td>
+                    <td>F27: Money Collector</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- TABLE 4: LOGIN_HISTORY -->
+        <section class="section">
+            <h2><span class="icon">🔐</span> Table: login_history <span class="badge auth">AUTH</span></h2>
+            <p>Session tracking for security. Stores device and IP information per login.</p>
+
+            <table>
+                <tr>
+                    <th>Column</th>
+                    <th>Type</th>
+                    <th>Security</th>
+                    <th>Purpose</th>
+                </tr>
+                <tr>
+                    <td><code>user_id</code></td>
+                    <td>Integer</td>
+                    <td><span class="badge fk">FK→users</span></td>
+                    <td>Who logged in</td>
+                </tr>
+                <tr>
+                    <td><code>device_id_hash</code></td>
+                    <td>String</td>
+                    <td><span class="badge hash">SHA-256</span> <span class="badge idx">INDEX</span></td>
+                    <td>Device fingerprint</td>
+                </tr>
+                <tr>
+                    <td><code>device_id_encrypted</code></td>
+                    <td>String</td>
+                    <td><span class="badge enc">AES-256</span></td>
+                    <td>Device for audit</td>
+                </tr>
+                <tr>
+                    <td><code>ip_hash</code></td>
+                    <td>String</td>
+                    <td><span class="badge hash">SHA-256</span></td>
+                    <td>IP for geo-velocity</td>
+                </tr>
+                <tr>
+                    <td><code>ip_encrypted</code></td>
+                    <td>String</td>
+                    <td><span class="badge enc">AES-256</span></td>
+                    <td>IP for investigation</td>
+                </tr>
+                <tr>
+                    <td><code>login_time</code></td>
+                    <td>DateTime</td>
+                    <td><span class="badge plain">PLAIN</span></td>
+                    <td>When they logged in</td>
+                </tr>
+                <tr>
+                    <td><code>is_active</code></td>
+                    <td>Boolean</td>
+                    <td><span class="badge plain">PLAIN</span></td>
+                    <td>Session still active?</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- TABLE 5: AI TABLES -->
+        <section class="section">
+            <h2><span class="icon">🧠</span> AI & Fraud Detection Tables <span class="badge ai">AI</span></h2>
+
+            <h3>fraud_events</h3>
+            <p>The "memory" of the AI. Stores every suspicious event for training.</p>
+            <table>
+                <tr>
+                    <th>Column</th>
+                    <th>Type</th>
+                    <th>Purpose</th>
+                    <th>AI Use</th>
+                </tr>
+                <tr>
+                    <td><code>transaction_id</code></td>
+                    <td>String</td>
+                    <td>Which transaction</td>
+                    <td>Link to feature vector</td>
+                </tr>
+                <tr>
+                    <td><code>amount</code></td>
+                    <td>Float</td>
+                    <td>Transaction amount</td>
+                    <td>Training feature</td>
+                </tr>
+                <tr>
+                    <td><code>ai_score</code></td>
+                    <td>Float</td>
+                    <td>ML anomaly score (-1 to 1)</td>
+                    <td>Model output</td>
+                </tr>
+                <tr>
+                    <td><code>rule_violation</code></td>
+                    <td>String</td>
+                    <td>Which rule failed (e.g., F1)</td>
+                    <td>Rule-based label</td>
+                </tr>
+                <tr>
+                    <td><code>is_blocked</code></td>
+                    <td>Boolean</td>
+                    <td>Was it blocked?</td>
+                    <td><strong>Training label</strong></td>
+                </tr>
+                <tr>
+                    <td><code>is_confirmed_fraud</code></td>
+                    <td>Boolean</td>
+                    <td>Human verified?</td>
+                    <td><strong>Gold label</strong></td>
+                </tr>
+            </table>
+
+            <h3>user_trust_graph</h3>
+            <p>Social network of trust. Tracks who pays whom frequently.</p>
+            <table>
+                <tr>
+                    <th>Column</th>
+                    <th>Type</th>
+                    <th>Purpose</th>
+                    <th>Fraud Use</th>
+                </tr>
+                <tr>
+                    <td><code>user_id</code></td>
+                    <td>Integer</td>
+                    <td>The payer</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>trusted_user_id</code></td>
+                    <td>Integer</td>
+                    <td>The payee</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>trust_score</code></td>
+                    <td>Float</td>
+                    <td>Trust level (0-5)</td>
+                    <td>F6: Stranger Detection</td>
+                </tr>
+                <tr>
+                    <td><code>last_interaction_at</code></td>
+                    <td>DateTime</td>
+                    <td>Last transaction</td>
+                    <td>Trust decay</td>
+                </tr>
+            </table>
+
+            <h3>user_fraud_reports</h3>
+            <p><strong>GOLD DATA</strong> - Human-labeled fraud for accurate AI training.</p>
+            <table>
+                <tr>
+                    <th>Column</th>
+                    <th>Type</th>
+                    <th>Purpose</th>
+                    <th>AI Use</th>
+                </tr>
+                <tr>
+                    <td><code>user_id</code></td>
+                    <td>Integer</td>
+                    <td>Who reported</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>transaction_id</code></td>
+                    <td>String</td>
+                    <td>Reported transaction</td>
+                    <td>Link to features</td>
+                </tr>
+                <tr>
+                    <td><code>reason</code></td>
+                    <td>String</td>
+                    <td>not_me, wrong_amount, etc.</td>
+                    <td>Fraud pattern</td>
+                </tr>
+                <tr>
+                    <td><code>status</code></td>
+                    <td>String</td>
+                    <td>pending, confirmed, rejected</td>
+                    <td>Admin verification</td>
+                </tr>
+                <tr>
+                    <td><code>is_confirmed_fraud</code></td>
+                    <td>Boolean</td>
+                    <td>Verified by admin</td>
+                    <td><strong>Gold training label</strong></td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- TABLE 6: AUTH TABLES -->
+        <section class="section">
+            <h2><span class="icon">🔑</span> Authentication Tables <span class="badge auth">AUTH</span></h2>
+
+            <h3>revoked_tokens</h3>
+            <p>For refresh token rotation security. Prevents token reuse.</p>
+            <table>
+                <tr>
+                    <th>Column</th>
+                    <th>Type</th>
+                    <th>Purpose</th>
+                </tr>
+                <tr>
+                    <td><code>token_jti</code></td>
+                    <td>String</td>
+                    <td>JWT ID (unique identifier)</td>
+                </tr>
+                <tr>
+                    <td><code>user_id</code></td>
+                    <td>Integer</td>
+                    <td>Whose token</td>
+                </tr>
+                <tr>
+                    <td><code>revoked_at</code></td>
+                    <td>DateTime</td>
+                    <td>When revoked</td>
+                </tr>
+                <tr>
+                    <td><code>expires_at</code></td>
+                    <td>DateTime</td>
+                    <td>For cleanup job</td>
+                </tr>
+            </table>
+
+            <h3>idempotency_keys</h3>
+            <p>Prevents duplicate transactions from network retries.</p>
+            <table>
+                <tr>
+                    <th>Column</th>
+                    <th>Type</th>
+                    <th>Purpose</th>
+                </tr>
+                <tr>
+                    <td><code>key</code></td>
+                    <td>String</td>
+                    <td>Unique request key</td>
+                </tr>
+                <tr>
+                    <td><code>transaction_id</code></td>
+                    <td>String</td>
+                    <td>Result transaction</td>
+                </tr>
+                <tr>
+                    <td><code>response_data</code></td>
+                    <td>String</td>
+                    <td>Cached response JSON</td>
+                </tr>
+            </table>
+
+            <h3>device_profiles</h3>
+            <p>Tracks authorized devices per user.</p>
+            <table>
+                <tr>
+                    <th>Column</th>
+                    <th>Type</th>
+                    <th>Purpose</th>
+                </tr>
+                <tr>
+                    <td><code>device_id_hash</code></td>
+                    <td>String</td>
+                    <td>Device fingerprint</td>
+                </tr>
+                <tr>
+                    <td><code>device_name</code></td>
+                    <td>String</td>
+                    <td>"Device A", "Device B"</td>
+                </tr>
+                <tr>
+                    <td><code>login_count</code></td>
+                    <td>Integer</td>
+                    <td>Times logged in</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- SECURITY DESIGN -->
+        <section class="section">
+            <h2><span class="icon">🔒</span> Security Design Philosophy</h2>
+
+            <h3>Why Hash + Encrypt Pattern?</h3>
+            <table>
+                <tr>
+                    <th>Field Type</th>
+                    <th>Hash</th>
+                    <th>Encrypted</th>
+                    <th>Why?</th>
+                </tr>
+                <tr>
+                    <td>Mobile Number</td>
+                    <td><code>mobile_hash</code></td>
+                    <td><code>mobile_encrypted</code></td>
+                    <td>Hash for search (login), Encrypt for display (profile)</td>
+                </tr>
+                <tr>
+                    <td>Email</td>
+                    <td><code>email_hash</code></td>
+                    <td><code>email_encrypted</code></td>
+                    <td>Same pattern as mobile</td>
+                </tr>
+                <tr>
+                    <td>Device ID</td>
+                    <td><code>device_id_hash</code></td>
+                    <td><code>device_id_encrypted</code></td>
+                    <td>Hash for binding check, Encrypt for audit</td>
+                </tr>
+                <tr>
+                    <td>IP Address</td>
+                    <td><code>ip_hash</code></td>
+                    <td><code>ip_encrypted</code></td>
+                    <td>Hash for geo-velocity, Encrypt for investigation</td>
+                </tr>
+            </table>
+
+            <h3>Why Plain + Encrypted Balance?</h3>
+            <div style="background: var(--bg-hover); padding: 1rem; border-radius: 8px; margin: 1rem 0;">
+                <p><strong>Problem:</strong> Encryption prevents SUM/AVG queries.</p>
+                <p><strong>Solution:</strong> Store both:</p>
+                <ul style="margin-left: 1.5rem; color: var(--text-secondary);">
+                    <li><code>balance</code> - Plain float for fast calculations</li>
+                    <li><code>encrypted_balance</code> - AES-256 for audit compliance</li>
+                </ul>
+                <p style="margin-top: 0.5rem;">Both are updated atomically via <code>update_balance()</code> method.</p>
+            </div>
+        </section>
+
+        <!-- FUTURE IMPROVEMENTS -->
+        <section class="section">
+            <h2><span class="icon">🚀</span> Future Database Improvements</h2>
+
+            <table>
+                <tr>
+                    <th>Improvement</th>
+                    <th>Why Needed</th>
+                    <th>When</th>
+                </tr>
+                <tr>
+                    <td><strong>Read Replicas</strong></td>
+                    <td>Handle more concurrent users</td>
+                    <td>1000+ daily users</td>
+                </tr>
+                <tr>
+                    <td><strong>Automated Backups</strong></td>
+                    <td>Disaster recovery</td>
+                    <td>Before production</td>
+                </tr>
+                <tr>
+                    <td><strong>Point-in-Time Recovery</strong></td>
+                    <td>Recover from bugs/attacks</td>
+                    <td>Before production</td>
+                </tr>
+                <tr>
+                    <td><strong>PostgreSQL Partitioning</strong></td>
+                    <td>Faster queries on transactions table</td>
+                    <td>1M+ transactions</td>
+                </tr>
+                <tr>
+                    <td><strong>Separate Audit Database</strong></td>
+                    <td>Compliance, immutable logs</td>
+                    <td>PCI-DSS requirement</td>
+                </tr>
+                <tr>
+                    <td><strong>HSM Key Storage</strong></td>
+                    <td>Hardware security for encryption keys</td>
+                    <td>Enterprise/banking</td>
+                </tr>
+                <tr>
+                    <td><strong>Redis Cache</strong></td>
+                    <td>Session storage, rate limiting</td>
+                    <td>High traffic</td>
+                </tr>
+                <tr>
+                    <td><strong>TimescaleDB Extension</strong></td>
+                    <td>Time-series analytics on transactions</td>
+                    <td>Advanced analytics</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- ER DIAGRAM -->
+        <section class="section">
+            <h2><span class="icon">📐</span> Entity Relationship Summary</h2>
+
+            <div class="schema-box">
+                <span class="table-name">users</span> (1) ─────┬───── (N) <span class="table-name">transactions</span>
+                (sender_id)
+                │
+                ├───── (N) <span class="table-name">transactions</span> (receiver_id)
+                │
+                ├───── (1) <span class="table-name">sender_profiles</span>
+                │
+                ├───── (1) <span class="table-name">receiver_profiles</span>
+                │
+                ├───── (N) <span class="table-name">login_history</span>
+                │
+                ├───── (N) <span class="table-name">device_profiles</span>
+                │
+                ├───── (N) <span class="table-name">fraud_events</span>
+                │
+                ├───── (N) <span class="table-name">user_trust_graph</span> (user_id)
+                │
+                ├───── (N) <span class="table-name">user_trust_graph</span> (trusted_user_id)
+                │
+                ├───── (N) <span class="table-name">user_fraud_reports</span>
+                │
+                ├───── (N) <span class="table-name">revoked_tokens</span>
+                │
+                └───── (N) <span class="table-name">idempotency_keys</span>
+
+                <span class="comment">Legend: (1) = One, (N) = Many</span>
+            </div>
+        </section>
+
+        <!-- ALL 12 TABLES -->
+        <section class="section"
+            style="background: linear-gradient(135deg, rgba(55, 66, 250, 0.1), rgba(46, 213, 115, 0.1));">
+            <h2>📋 Complete Table Reference</h2>
+
+            <table>
+                <tr>
+                    <th>#</th>
+                    <th>Table</th>
+                    <th>Category</th>
+                    <th>Columns</th>
+                    <th>Purpose</th>
+                </tr>
+                <tr>
+                    <td>1</td>
+                    <td><code>users</code></td>
+                    <td><span class="badge core">CORE</span></td>
+                    <td>15</td>
+                    <td>User accounts, auth, balance</td>
+                </tr>
+                <tr>
+                    <td>2</td>
+                    <td><code>transactions</code></td>
+                    <td><span class="badge core">CORE</span></td>
+                    <td>12</td>
+                    <td>All payment records</td>
+                </tr>
+                <tr>
+                    <td>3</td>
+                    <td><code>sender_profiles</code></td>
+                    <td><span class="badge fraud">FRAUD</span></td>
+                    <td>9</td>
+                    <td>Sender behavior stats</td>
+                </tr>
+                <tr>
+                    <td>4</td>
+                    <td><code>receiver_profiles</code></td>
+                    <td><span class="badge fraud">FRAUD</span></td>
+                    <td>6</td>
+                    <td>Receiver behavior stats</td>
+                </tr>
+                <tr>
+                    <td>5</td>
+                    <td><code>messages</code></td>
+                    <td><span class="badge core">CORE</span></td>
+                    <td>6</td>
+                    <td>Chat messages</td>
+                </tr>
+                <tr>
+                    <td>6</td>
+                    <td><code>login_history</code></td>
+                    <td><span class="badge auth">AUTH</span></td>
+                    <td>8</td>
+                    <td>Session tracking</td>
+                </tr>
+                <tr>
+                    <td>7</td>
+                    <td><code>device_profiles</code></td>
+                    <td><span class="badge auth">AUTH</span></td>
+                    <td>6</td>
+                    <td>Authorized devices</td>
+                </tr>
+                <tr>
+                    <td>8</td>
+                    <td><code>fraud_events</code></td>
+                    <td><span class="badge ai">AI</span></td>
+                    <td>8</td>
+                    <td>AI training data</td>
+                </tr>
+                <tr>
+                    <td>9</td>
+                    <td><code>user_trust_graph</code></td>
+                    <td><span class="badge ai">AI</span></td>
+                    <td>5</td>
+                    <td>Social trust network</td>
+                </tr>
+                <tr>
+                    <td>10</td>
+                    <td><code>user_fraud_reports</code></td>
+                    <td><span class="badge ai">AI</span></td>
+                    <td>8</td>
+                    <td>Human-labeled fraud</td>
+                </tr>
+                <tr>
+                    <td>11</td>
+                    <td><code>revoked_tokens</code></td>
+                    <td><span class="badge auth">AUTH</span></td>
+                    <td>5</td>
+                    <td>Token rotation security</td>
+                </tr>
+                <tr>
+                    <td>12</td>
+                    <td><code>idempotency_keys</code></td>
+                    <td><span class="badge auth">AUTH</span></td>
+                    <td>6</td>
+                    <td>Duplicate prevention</td>
+                </tr>
+            </table>
+        </section>
+    </div>
+
+    <footer>
+        <p>SafePay Database Schema Documentation • A to Z</p>
+        <p>Generated January 31, 2026 • Truth Only</p>
+    </footer>
+</body>
+
+</html>

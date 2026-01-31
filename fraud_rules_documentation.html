@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafePay - 54 Fraud Detection Rules</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0a0a12;
+            --bg-card: #14141f;
+            --bg-hover: #1e1e2e;
+            --text-primary: #ffffff;
+            --text-secondary: #8888a0;
+            --accent-red: #ff4757;
+            --accent-orange: #ffa502;
+            --accent-yellow: #ffdd57;
+            --accent-green: #2ed573;
+            --accent-blue: #3742fa;
+            --accent-purple: #a55eea;
+            --accent-cyan: #1dd1a1;
+            --border: #2a2a40;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            padding: 3rem 2rem;
+            background: linear-gradient(180deg, rgba(167, 94, 234, 0.1) 0%, transparent 100%);
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 2rem;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #a55eea 0%, #3742fa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        header p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        /* Stats Bar */
+        .stats-bar {
+            display: flex;
+            justify-content: center;
+            gap: 3rem;
+            margin-top: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--accent-purple);
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Category Sections */
+        .category {
+            margin-bottom: 3rem;
+        }
+
+        .category-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .category-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .category-icon.velocity {
+            background: rgba(255, 71, 87, 0.2);
+        }
+
+        .category-icon.behavioral {
+            background: rgba(255, 165, 2, 0.2);
+        }
+
+        .category-icon.social {
+            background: rgba(46, 213, 115, 0.2);
+        }
+
+        .category-icon.pattern {
+            background: rgba(55, 66, 250, 0.2);
+        }
+
+        .category-icon.aml {
+            background: rgba(165, 94, 234, 0.2);
+        }
+
+        .category-icon.ai {
+            background: rgba(29, 209, 161, 0.2);
+        }
+
+        .category h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        /* Rule Table */
+        .rule-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            background: var(--bg-card);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        .rule-table th {
+            background: rgba(167, 94, 234, 0.1);
+            padding: 1rem 1.25rem;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .rule-table td {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border);
+            vertical-align: top;
+        }
+
+        .rule-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .rule-table tr:hover {
+            background: var(--bg-hover);
+        }
+
+        /* Rule ID Badge */
+        .rule-id {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            font-family: 'Monaco', 'Courier New', monospace;
+        }
+
+        .rule-id.hard {
+            background: rgba(255, 71, 87, 0.2);
+            color: var(--accent-red);
+        }
+
+        .rule-id.soft {
+            background: rgba(255, 165, 2, 0.2);
+            color: var(--accent-orange);
+        }
+
+        .rule-id.ai {
+            background: rgba(29, 209, 161, 0.2);
+            color: var(--accent-cyan);
+        }
+
+        /* Severity Badge */
+        .severity {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .severity.block {
+            background: var(--accent-red);
+            color: white;
+        }
+
+        .severity.high {
+            background: var(--accent-orange);
+            color: #000;
+        }
+
+        .severity.medium {
+            background: var(--accent-yellow);
+            color: #000;
+        }
+
+        .severity.low {
+            background: var(--accent-green);
+            color: #000;
+        }
+
+        /* Example Box */
+        .example {
+            background: rgba(55, 66, 250, 0.1);
+            border-radius: 6px;
+            padding: 0.75rem 1rem;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+            border-left: 3px solid var(--accent-blue);
+        }
+
+        .example strong {
+            color: var(--accent-blue);
+        }
+
+        /* Reason Text */
+        .reason {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        /* MCC Tiers Section */
+        .mcc-section {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border: 1px solid var(--border);
+        }
+
+        .mcc-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .mcc-tier {
+            padding: 1.25rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .mcc-tier.essential {
+            background: rgba(46, 213, 115, 0.15);
+            border: 1px solid rgba(46, 213, 115, 0.3);
+        }
+
+        .mcc-tier.high-value {
+            background: rgba(165, 94, 234, 0.15);
+            border: 1px solid rgba(165, 94, 234, 0.3);
+        }
+
+        .mcc-tier.retail {
+            background: rgba(55, 66, 250, 0.15);
+            border: 1px solid rgba(55, 66, 250, 0.3);
+        }
+
+        .mcc-tier.services {
+            background: rgba(255, 165, 2, 0.15);
+            border: 1px solid rgba(255, 165, 2, 0.3);
+        }
+
+        .mcc-tier.personal {
+            background: rgba(255, 71, 87, 0.15);
+            border: 1px solid rgba(255, 71, 87, 0.3);
+        }
+
+        .mcc-tier h4 {
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .mcc-tier p {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--border);
+            margin-top: 2rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            header h1 {
+                font-size: 1.75rem;
+            }
+
+            .rule-table th,
+            .rule-table td {
+                padding: 0.75rem;
+                font-size: 0.85rem;
+            }
+
+            .stats-bar {
+                gap: 1.5rem;
+            }
+        }
+
+        /* Highlight row on hover */
+        .rule-table tbody tr {
+            transition: background 0.2s ease;
+        }
+
+        /* Truth Alert */
+        .truth-alert {
+            background: linear-gradient(90deg, rgba(255, 71, 87, 0.1), rgba(165, 94, 234, 0.1));
+            border: 1px solid rgba(255, 71, 87, 0.3);
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .truth-alert .icon {
+            font-size: 1.5rem;
+        }
+
+        .truth-alert p {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+        }
+
+        .truth-alert strong {
+            color: var(--text-primary);
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>🛡️ SafePay Fraud Detection Rules</h1>
+        <p>Complete Documentation of All 54 Rule-Based Fraud Detection Patterns</p>
+
+        <div class="stats-bar">
+            <div class="stat-item">
+                <div class="stat-value">54</div>
+                <div class="stat-label">Total Rules</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">5</div>
+                <div class="stat-label">Hard Blocks</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">28</div>
+                <div class="stat-label">ML Features</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">5</div>
+                <div class="stat-label">MCC Tiers</div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="truth-alert">
+            <span class="icon">⚠️</span>
+            <p><strong>Truth Notice:</strong> This document lists only the rules that are ACTUALLY implemented in
+                <code>fraud_engine.py</code>. No exaggeration, no fake features.</p>
+        </div>
+
+        <!-- MCC Tier System -->
+        <section class="mcc-section">
+            <h3>🏷️ MCC Risk Tier System (Determines Which Rules Apply)</h3>
+            <p style="color: var(--text-secondary); margin-top: 0.5rem;">Merchant Category Code (MCC) determines the
+                risk profile. Different rules apply to different tiers.</p>
+
+            <div class="mcc-grid">
+                <div class="mcc-tier essential">
+                    <h4>🏥 ESSENTIAL</h4>
+                    <p>Hospital, School, Utilities<br><strong>NEVER BLOCKED</strong></p>
+                </div>
+                <div class="mcc-tier high-value">
+                    <h4>💎 HIGH_VALUE</h4>
+                    <p>Jewelry, Legal, Business<br><strong>2/hour limit</strong></p>
+                </div>
+                <div class="mcc-tier retail">
+                    <h4>🛒 RETAIL</h4>
+                    <p>Grocery, Food, Transport<br><strong>High velocity OK</strong></p>
+                </div>
+                <div class="mcc-tier services">
+                    <h4>🏨 SERVICES</h4>
+                    <p>Hotel, Electronics, Travel<br><strong>Standard checks</strong></p>
+                </div>
+                <div class="mcc-tier personal">
+                    <h4>👤 PERSONAL</h4>
+                    <p>P2P, Unknown (0000)<br><strong>Full social graph</strong></p>
+                </div>
+            </div>
+        </section>
+
+        <!-- CATEGORY 1: Hard Block Rules -->
+        <section class="category">
+            <div class="category-header">
+                <div class="category-icon velocity">🚫</div>
+                <div>
+                    <h2>Hard Block Rules (Instant Rejection)</h2>
+                    <p style="color: var(--text-secondary);">These rules immediately reject the transaction</p>
+                </div>
+            </div>
+
+            <table class="rule-table">
+                <thead>
+                    <tr>
+                        <th>Rule ID</th>
+                        <th>Rule Name</th>
+                        <th>What It Detects</th>
+                        <th>Example Scenario</th>
+                        <th>Why This Rule Exists</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="rule-id hard">F1</span></td>
+                        <td>Velocity Limit Exceeded</td>
+                        <td>Too many transactions in 10 minutes (5+ for most tiers, 2/hour for HIGH_VALUE)</td>
+                        <td class="example"><strong>Example:</strong> User sends 6 payments in 10 minutes to different
+                            people</td>
+                        <td class="reason">Automated fraud scripts send many transactions rapidly. Normal humans don't
+                            make 5+ payments in 10 minutes.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id hard">F3</span></td>
+                        <td>Dormant Account Spike</td>
+                        <td>Account inactive >30 days suddenly sends >₹500</td>
+                        <td class="example"><strong>Example:</strong> Account unused since December suddenly sends
+                            ₹5,000 in January</td>
+                        <td class="reason">Compromised accounts often show sudden activity after long dormancy.
+                            Attackers wait for victims to forget about old accounts.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id hard">F7</span></td>
+                        <td>Untrusted Receiver High Value (P2P Only)</td>
+                        <td>Sending >₹5,000 to a complete stranger (trust depth = 0)</td>
+                        <td class="example"><strong>Example:</strong> First-time user tries to send ₹50,000 to unknown
+                            person</td>
+                        <td class="reason">Social engineering scams trick users into sending large amounts to strangers.
+                            Trust must be built first.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id hard">F18</span></td>
+                        <td>Daily Per-Receiver Limit</td>
+                        <td>P2P: >₹1,00,000/day per receiver<br>Merchant: >₹3,00,000/day per receiver</td>
+                        <td class="example"><strong>Example:</strong> User already sent ₹80,000 to friend today, tries
+                            to send ₹30,000 more</td>
+                        <td class="reason">Limits prevent catastrophic loss from compromised accounts. Even if hacked,
+                            maximum loss is capped.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id hard">F29</span></td>
+                        <td>Geo-Velocity Violation</td>
+                        <td>Transaction from location >500km away within time that makes it impossible (>900 km/h)</td>
+                        <td class="example"><strong>Example:</strong> Login from Mumbai, then 10 minutes later
+                            transaction from Delhi (1,400 km = 8,400 km/h)</td>
+                        <td class="reason">Impossible travel indicates VPN evasion or device spoofing. No human can
+                            travel faster than planes.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- CATEGORY 2: Velocity & Timing Rules -->
+        <section class="category">
+            <div class="category-header">
+                <div class="category-icon velocity">⚡</div>
+                <div>
+                    <h2>Velocity & Timing Rules (F1-F15, F30-F39)</h2>
+                    <p style="color: var(--text-secondary);">Detect rapid or unusual timing patterns</p>
+                </div>
+            </div>
+
+            <table class="rule-table">
+                <thead>
+                    <tr>
+                        <th>Rule ID</th>
+                        <th>Rule Name</th>
+                        <th>Trigger Condition</th>
+                        <th>Example</th>
+                        <th>Risk Score</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="rule-id soft">F2</span></td>
+                        <td>Circular Loop</td>
+                        <td>A→B payment, then B→A within 2 minutes</td>
+                        <td class="example">You send ₹1,000 to Ram, Ram sends ₹1,000 back in 90 seconds</td>
+                        <td><span class="severity high">+40</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F4</span></td>
+                        <td>First Transaction High Value</td>
+                        <td>Brand new account sends >₹2,000 (P2P only)</td>
+                        <td class="example">New account's first-ever transaction is ₹10,000</td>
+                        <td><span class="severity high">+45</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F5</span></td>
+                        <td>Amount Spike</td>
+                        <td>Current amount > 3x user's average (tier-specific multiplier)</td>
+                        <td class="example">User averages ₹500, suddenly sends ₹5,000</td>
+                        <td><span class="severity high">+50</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F9</span></td>
+                        <td>Night Owl</td>
+                        <td>Transaction between 3 AM - 5 AM</td>
+                        <td class="example">Payment at 4:23 AM</td>
+                        <td><span class="severity medium">+25</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F10</span></td>
+                        <td>Split Detection</td>
+                        <td>3+ small transactions (<₹500) to same receiver in 1 hour</td>
+                        <td class="example">₹400, ₹300, ₹200, ₹100 all to same person in 45 minutes</td>
+                        <td><span class="severity high">+35</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F11</span></td>
+                        <td>Daily Aggregation Warning</td>
+                        <td>Total 24h spending approaches ₹50,000 (P2P)</td>
+                        <td class="example">Already spent ₹45,000 today, trying to send ₹10,000 more</td>
+                        <td><span class="severity medium">+30</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F15</span></td>
+                        <td>Rapid Balance Drain</td>
+                        <td>>50% of balance spent in 1 hour</td>
+                        <td class="example">Had ₹20,000, spent ₹12,000 in last 40 minutes</td>
+                        <td><span class="severity high">+40</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F25</span></td>
+                        <td>Consecutive Transaction Alert</td>
+                        <td>5+ back-to-back transactions without 5+ minute pause</td>
+                        <td class="example">7 payments in 3 minutes with no break</td>
+                        <td><span class="severity medium">+30</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F30</span></td>
+                        <td>Weekly Spending Limit</td>
+                        <td>Weekly spending exceeds ₹2L (P2P) or ₹5L (Merchant)</td>
+                        <td class="example">Already spent ₹1,90,000 this week, trying ₹20,000 more</td>
+                        <td><span class="severity medium">+30</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F31</span></td>
+                        <td>Micro-Transaction Burst</td>
+                        <td>>10 transactions under ₹100 in 1 hour</td>
+                        <td class="example">15 payments of ₹50 each in last 45 minutes</td>
+                        <td><span class="severity high">+40</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F32</span></td>
+                        <td>Weekend Spike</td>
+                        <td>Weekend amount >2x weekday average</td>
+                        <td class="example">Weekday average ₹1,000; Sunday payment ₹5,000</td>
+                        <td><span class="severity low">+15</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F33</span></td>
+                        <td>Holiday Period Alert</td>
+                        <td>High value (>₹50,000) during holiday periods (New Year, Diwali)</td>
+                        <td class="example">₹75,000 transaction on January 2nd</td>
+                        <td><span class="severity low">+10</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F35</span></td>
+                        <td>Same-Amount Burst</td>
+                        <td>3+ identical amounts in 1 hour</td>
+                        <td class="example">Three ₹5,000 payments in 30 minutes</td>
+                        <td><span class="severity high">+35</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F39</span></td>
+                        <td>Late-Night Velocity</td>
+                        <td>5+ transactions during night hours (10PM-6AM)</td>
+                        <td class="example">6 payments between 11 PM and 2 AM</td>
+                        <td><span class="severity high">+40</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F48</span></td>
+                        <td>Concurrent Transaction</td>
+                        <td>2+ transactions within 5 seconds</td>
+                        <td class="example">Two payments sent 2 seconds apart</td>
+                        <td><span class="severity high">+50</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F49</span></td>
+                        <td>Failed Transaction Velocity</td>
+                        <td>3+ failed transactions in 10 minutes</td>
+                        <td class="example">4 declined payments in last 8 minutes</td>
+                        <td><span class="severity high">+40</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- CATEGORY 3: Behavioral Pattern Rules -->
+        <section class="category">
+            <div class="category-header">
+                <div class="category-icon behavioral">🧠</div>
+                <div>
+                    <h2>Behavioral Pattern Rules (F19-F28, F36-F38, F40-F46)</h2>
+                    <p style="color: var(--text-secondary);">Detect deviations from user's normal behavior</p>
+                </div>
+            </div>
+
+            <table class="rule-table">
+                <thead>
+                    <tr>
+                        <th>Rule ID</th>
+                        <th>Rule Name</th>
+                        <th>Trigger Condition</th>
+                        <th>Example</th>
+                        <th>Risk Score</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="rule-id soft">F16</span></td>
+                        <td>Device Change + High Value</td>
+                        <td>New device + transaction >₹5,000</td>
+                        <td class="example">Login from new phone, immediately send ₹15,000</td>
+                        <td><span class="severity high">+35</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F19</span></td>
+                        <td>Session Anomaly</td>
+                        <td>Session transaction count >3x user's average</td>
+                        <td class="example">Usually 2 transactions per session, now doing 8</td>
+                        <td><span class="severity medium">+30</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F20</span></td>
+                        <td>Unusual Time Pattern</td>
+                        <td>Transaction at hour when user rarely transacts (<5% of history)</td>
+                        <td class="example">User never transacts at 6 AM, suddenly does</td>
+                        <td><span class="severity low">+15</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F21</span></td>
+                        <td>Behavioral Drift</td>
+                        <td>Amount is 4x+ the user's typical transaction</td>
+                        <td class="example">Usually sends ₹200-500, now sending ₹3,000</td>
+                        <td><span class="severity medium">+25</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F22</span></td>
+                        <td>Dormant Receiver Risk</td>
+                        <td>Receiver has no transaction history + amount >₹5,000</td>
+                        <td class="example">Sending ₹10,000 to a brand-new user with zero history</td>
+                        <td><span class="severity medium">+20</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F26</span></td>
+                        <td>Balance Drain Attempt</td>
+                        <td>Single transaction uses >80% of balance</td>
+                        <td class="example">Balance is ₹10,000, trying to send ₹9,000</td>
+                        <td><span class="severity medium">+25</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F28</span></td>
+                        <td>First-Time Amount</td>
+                        <td>User has never sent this exact amount before + >₹10,000</td>
+                        <td class="example">First time ever sending exactly ₹25,000</td>
+                        <td><span class="severity low">+15</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F36</span></td>
+                        <td>Progressive Amount Pattern</td>
+                        <td>Doubling pattern detected (100→200→400→800)</td>
+                        <td class="example">₹500, then ₹1,000, then ₹2,000 in sequence</td>
+                        <td><span class="severity high">+40</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F37</span></td>
+                        <td>Countdown Pattern</td>
+                        <td>Decreasing pattern with constant difference (1000→900→800)</td>
+                        <td class="example">₹5,000, then ₹4,500, then ₹4,000</td>
+                        <td><span class="severity high">+35</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F38</span></td>
+                        <td>Even-Amount Pattern</td>
+                        <td>All recent amounts divisible by 100</td>
+                        <td class="example">Last 5 transactions: ₹500, ₹1000, ₹2000, ₹3000, ₹1500</td>
+                        <td><span class="severity medium">+20</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F40</span></td>
+                        <td>New Receiver High Value</td>
+                        <td>Receiver is <7 days old + amount>₹20,000</td>
+                        <td class="example">Sending ₹50,000 to someone who joined 3 days ago</td>
+                        <td><span class="severity high">+35</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F41</span></td>
+                        <td>Frequency Spike</td>
+                        <td>Today's transaction count >3x daily average</td>
+                        <td class="example">Usually 3/day, did 12 today</td>
+                        <td><span class="severity medium">+25</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F42</span></td>
+                        <td>Spending Exceeds Income</td>
+                        <td>Weekly spending >2x weekly received + >₹50,000</td>
+                        <td class="example">Received ₹30,000 this week, spent ₹70,000</td>
+                        <td><span class="severity medium">+20</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F43</span></td>
+                        <td>New Device High Activity</td>
+                        <td>Device added in last 7 days + >5 transactions today</td>
+                        <td class="example">Added new phone yesterday, made 8 payments today</td>
+                        <td><span class="severity medium">+30</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F44</span></td>
+                        <td>Multiple IPs Detected</td>
+                        <td>3+ different IP addresses in 1 hour</td>
+                        <td class="example">Transactions from 4 different IPs in 45 minutes</td>
+                        <td><span class="severity high">+35</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F45</span></td>
+                        <td>Instant Transaction</td>
+                        <td>High-value transaction <30 seconds after login/activity</td>
+                        <td class="example">Login, immediately send ₹20,000 within 15 seconds</td>
+                        <td><span class="severity medium">+25</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F46</span></td>
+                        <td>Whole Number Pattern</td>
+                        <td>All recent transactions are whole numbers + current >₹5,000</td>
+                        <td class="example">Always sends exact amounts like ₹1000, ₹2000, never ₹1,523</td>
+                        <td><span class="severity low">+15</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F47</span></td>
+                        <td>MCC Switching</td>
+                        <td>5+ different merchant categories in 1 hour (merchant payments)</td>
+                        <td class="example">Jewelry, then restaurant, then hotel, then pharmacy, then travel in 1 hour
+                        </td>
+                        <td><span class="severity medium">+30</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- CATEGORY 4: Social Network / Receiver Rules -->
+        <section class="category">
+            <div class="category-header">
+                <div class="category-icon social">🤝</div>
+                <div>
+                    <h2>Social Network & Receiver Rules (F8, F12-F14, F17, F23, F27, F34)</h2>
+                    <p style="color: var(--text-secondary);">Trust graph and receiver profiling (mostly P2P)</p>
+                </div>
+            </div>
+
+            <table class="rule-table">
+                <thead>
+                    <tr>
+                        <th>Rule ID</th>
+                        <th>Rule Name</th>
+                        <th>Trigger Condition</th>
+                        <th>Example</th>
+                        <th>Risk Score</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="rule-id soft">F8</span></td>
+                        <td>High Value Stranger</td>
+                        <td>Sending >₹2,000 to someone with no trust connection</td>
+                        <td class="example">₹5,000 to unknown person (trust depth = 0)</td>
+                        <td><span class="severity medium">+25</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F12</span></td>
+                        <td>Stranger No Common Trust</td>
+                        <td>Receiver is not in trust graph (stranger) - P2P only</td>
+                        <td class="example">Paying someone you've never interacted with</td>
+                        <td><span class="severity medium">+20</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F13</span></td>
+                        <td>New Receiver Burst</td>
+                        <td>5+ unique new receivers in 1 day - P2P only</td>
+                        <td class="example">Sent money to 6 different strangers today</td>
+                        <td><span class="severity medium">+25</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F14</span></td>
+                        <td>Suspicious Round Amount</td>
+                        <td>Amount is exactly ₹10k, ₹20k, ₹25k, ₹50k, or ₹1L - P2P only</td>
+                        <td class="example">Payment of exactly ₹50,000</td>
+                        <td><span class="severity low">+15</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F17</span></td>
+                        <td>Receiver High Inflow</td>
+                        <td>Receiver got money from >10 unique senders today - P2P only</td>
+                        <td class="example">Receiver already received from 12 different people today</td>
+                        <td><span class="severity medium">+20</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F23</span></td>
+                        <td>Burst to New Accounts</td>
+                        <td>3+ new receivers in 1 hour + current receiver is also new</td>
+                        <td class="example">Already paid 3 strangers this hour, paying 4th stranger now</td>
+                        <td><span class="severity high">+40</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F27</span></td>
+                        <td>Recipient Cluster Risk</td>
+                        <td>Receiver got from >20 unique senders in 24 hours</td>
+                        <td class="example">Receiver is accumulating money from many sources</td>
+                        <td><span class="severity medium">+30</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F34</span></td>
+                        <td>Too Many Unique Receivers</td>
+                        <td>>50 unique receivers in last 30 days</td>
+                        <td class="example">Sent to 55 different people this month</td>
+                        <td><span class="severity medium">+30</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- CATEGORY 5: AML / Money Laundering Rules -->
+        <section class="category">
+            <div class="category-header">
+                <div class="category-icon aml">💰</div>
+                <div>
+                    <h2>Anti-Money Laundering (AML) Rules (F24, F50-F54)</h2>
+                    <p style="color: var(--text-secondary);">Detect layering, smurfing, and structured transactions</p>
+                </div>
+            </div>
+
+            <table class="rule-table">
+                <thead>
+                    <tr>
+                        <th>Rule ID</th>
+                        <th>Rule Name</th>
+                        <th>Trigger Condition</th>
+                        <th>Example</th>
+                        <th>Risk Score</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="rule-id soft">F24</span></td>
+                        <td>Chain Detection</td>
+                        <td>Receiver made 2+ outgoing payments in last 30 minutes + amount >₹10,000</td>
+                        <td class="example">A sends ₹20,000 to B, B has already sent to C and D in last 20 min</td>
+                        <td><span class="severity high">+35</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F50</span></td>
+                        <td>Star Pattern Detected</td>
+                        <td>Sender sent to 5+ unique receivers in 30 minutes</td>
+                        <td class="example">One person distributes money to 6 people in 25 minutes</td>
+                        <td><span class="severity high">+35</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F51</span></td>
+                        <td>Funnel Pattern Detected</td>
+                        <td>Receiver received from 5+ unique senders in 30 minutes</td>
+                        <td class="example">5 different people all send to same receiver in 20 minutes</td>
+                        <td><span class="severity high">+35</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F52</span></td>
+                        <td>Layering Chain Detected</td>
+                        <td>A→B→C→D chain within 30 minutes (3-hop forward detection)</td>
+                        <td class="example">Money moves through 3 accounts in sequence within 30 min</td>
+                        <td><span class="severity high">+45</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F53</span></td>
+                        <td>Smurfing Detected</td>
+                        <td>Many small transactions (≤₹5,000 each) summing to >₹50,000 today</td>
+                        <td class="example">15 transactions of ₹4,000 each = ₹60,000 total</td>
+                        <td><span class="severity high">+40</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id soft">F54</span></td>
+                        <td>Round-Trip Detected</td>
+                        <td>A→B then B→A within 24 hours with similar amounts (±20%)</td>
+                        <td class="example">You send ₹10,000 to Ram, Ram sends ₹9,500 back 2 hours later</td>
+                        <td><span class="severity high">+35</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- CATEGORY 6: AI Detection -->
+        <section class="category">
+            <div class="category-header">
+                <div class="category-icon ai">🤖</div>
+                <div>
+                    <h2>AI-Based Detection (Machine Learning)</h2>
+                    <p style="color: var(--text-secondary);">IsolationForest anomaly detection with 28 features</p>
+                </div>
+            </div>
+
+            <table class="rule-table">
+                <thead>
+                    <tr>
+                        <th>Rule ID</th>
+                        <th>Rule Name</th>
+                        <th>Trigger Condition</th>
+                        <th>How It Works</th>
+                        <th>Risk Score</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="rule-id ai">AI_STRONG</span></td>
+                        <td>AI Strong Anomaly</td>
+                        <td>AI score < -0.3 (highly abnormal)</td>
+                        <td class="example">The ML model analyzed 28 features and determined this transaction is very
+                            unusual compared to learned patterns</td>
+                        <td><span class="severity block">+65</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id ai">AI_MILD</span></td>
+                        <td>AI Mild Anomaly</td>
+                        <td>AI score between -0.3 and -0.1</td>
+                        <td class="example">Transaction shows some unusual characteristics but not extreme</td>
+                        <td><span class="severity medium">+30</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="rule-id ai">AI_BONUS</span></td>
+                        <td>AI Normal Bonus</td>
+                        <td>AI score > +0.3 (very normal)</td>
+                        <td class="example">Transaction perfectly matches user's typical behavioral patterns</td>
+                        <td><span class="severity low">-10</span></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div
+                style="margin-top: 1.5rem; background: var(--bg-card); border-radius: 8px; padding: 1.5rem; border: 1px solid var(--border);">
+                <h4 style="margin-bottom: 1rem;">📊 28 ML Features Used:</h4>
+                <div
+                    style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
+                    <span>1. Amount</span>
+                    <span>2. Hour of day</span>
+                    <span>3. Day of week</span>
+                    <span>4. Is weekend</span>
+                    <span>5. Is night (10PM-5AM)</span>
+                    <span>6. Tx count (1 hour)</span>
+                    <span>7. Tx count (24 hours)</span>
+                    <span>8. Total amount (24h)</span>
+                    <span>9. Avg transaction amount</span>
+                    <span>10. Amount vs avg ratio</span>
+                    <span>11. Minutes since last tx</span>
+                    <span>12. Unique receivers (24h)</span>
+                    <span>13. Is new receiver</span>
+                    <span>14. Trust score</span>
+                    <span>15. Account age (days)</span>
+                    <span>16. Receiver unique senders</span>
+                    <span>17. Session tx count</span>
+                    <span>18. Avg session tx</span>
+                    <span>19. Recipient age (days)</span>
+                    <span>20. Recipient tx volume</span>
+                    <span>21. Amount percentile</span>
+                    <span>22. Hour frequency</span>
+                    <span>23. Day frequency</span>
+                    <span>24. First-time amount</span>
+                    <span>25. Consecutive tx count</span>
+                    <span>26. Balance utilization %</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Summary -->
+        <section class="mcc-section">
+            <h3>📋 Rule Summary by Category</h3>
+            <table class="rule-table" style="margin-top: 1.5rem;">
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Rule Count</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Hard Block (Instant Reject)</td>
+                        <td><strong>5</strong></td>
+                        <td>F1, F3, F7, F18, F29 - Critical violations</td>
+                    </tr>
+                    <tr>
+                        <td>Velocity & Timing</td>
+                        <td><strong>16</strong></td>
+                        <td>F2, F4, F5, F9-F11, F15, F25, F30-F35, F39, F48, F49</td>
+                    </tr>
+                    <tr>
+                        <td>Behavioral Patterns</td>
+                        <td><strong>17</strong></td>
+                        <td>F16, F19-F22, F26, F28, F36-F38, F40-F47</td>
+                    </tr>
+                    <tr>
+                        <td>Social Network</td>
+                        <td><strong>8</strong></td>
+                        <td>F8, F12-F14, F17, F23, F27, F34</td>
+                    </tr>
+                    <tr>
+                        <td>Anti-Money Laundering</td>
+                        <td><strong>6</strong></td>
+                        <td>F24, F50-F54</td>
+                    </tr>
+                    <tr>
+                        <td>AI Detection</td>
+                        <td><strong>3</strong></td>
+                        <td>AI_STRONG, AI_MILD, AI_BONUS</td>
+                    </tr>
+                    <tr style="background: rgba(165, 94, 234, 0.1);">
+                        <td><strong>TOTAL</strong></td>
+                        <td><strong>54 + AI</strong></td>
+                        <td>Complete fraud detection coverage</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+    </div>
+
+    <footer>
+        <p>SafePay Fraud Detection Engine v4.0 • 54 Rules + AI Analysis</p>
+        <p>Documentation generated January 31, 2026</p>
+    </footer>
+</body>
+
+</html>

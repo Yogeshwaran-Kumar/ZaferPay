@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafePay - Complete Project Documentation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0a0a12;
+            --bg-card: #14141f;
+            --bg-hover: #1e1e2e;
+            --text-primary: #ffffff;
+            --text-secondary: #8888a0;
+            --accent-purple: #a55eea;
+            --accent-blue: #3742fa;
+            --accent-green: #2ed573;
+            --accent-orange: #ffa502;
+            --accent-red: #ff4757;
+            --accent-cyan: #1dd1a1;
+            --border: #2a2a40;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            line-height: 1.7;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            text-align: center;
+            padding: 3rem 2rem;
+            background: linear-gradient(180deg, rgba(167, 94, 234, 0.15) 0%, transparent 100%);
+            border-bottom: 1px solid var(--border);
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #a55eea 0%, #3742fa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        header p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        .section {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 2rem;
+            margin: 2rem 0;
+            border: 1px solid var(--border);
+        }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .section-title .icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .section-title h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .icon.purple {
+            background: rgba(165, 94, 234, 0.2);
+        }
+
+        .icon.blue {
+            background: rgba(55, 66, 250, 0.2);
+        }
+
+        .icon.green {
+            background: rgba(46, 213, 115, 0.2);
+        }
+
+        .icon.orange {
+            background: rgba(255, 165, 2, 0.2);
+        }
+
+        .icon.cyan {
+            background: rgba(29, 209, 161, 0.2);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        th {
+            background: rgba(165, 94, 234, 0.1);
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border);
+        }
+
+        td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            vertical-align: top;
+        }
+
+        tr:hover {
+            background: var(--bg-hover);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .badge.backend {
+            background: rgba(46, 213, 115, 0.2);
+            color: var(--accent-green);
+        }
+
+        .badge.frontend {
+            background: rgba(55, 66, 250, 0.2);
+            color: var(--accent-blue);
+        }
+
+        .badge.security {
+            background: rgba(255, 71, 87, 0.2);
+            color: var(--accent-red);
+        }
+
+        .badge.ai {
+            background: rgba(165, 94, 234, 0.2);
+            color: var(--accent-purple);
+        }
+
+        .badge.database {
+            background: rgba(255, 165, 2, 0.2);
+            color: var(--accent-orange);
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1rem;
+        }
+
+        .feature-card {
+            background: var(--bg-hover);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+            transition: transform 0.2s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .feature-card h4 {
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .feature-card p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        /* Workflow */
+        .workflow {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .workflow-step {
+            display: flex;
+            gap: 1.5rem;
+            align-items: flex-start;
+        }
+
+        .step-number {
+            width: 50px;
+            height: 50px;
+            min-width: 50px;
+            background: var(--accent-purple);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1.25rem;
+        }
+
+        .step-content {
+            flex: 1;
+            background: var(--bg-hover);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .step-content h4 {
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .step-content p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .step-content .tech {
+            margin-top: 0.75rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .tech-tag {
+            background: rgba(165, 94, 234, 0.15);
+            color: var(--accent-purple);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        /* Architecture */
+        .arch-diagram {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-top: 1.5rem;
+            text-align: center;
+        }
+
+        .arch-box {
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 2px solid var(--border);
+        }
+
+        .arch-box.mobile {
+            background: rgba(55, 66, 250, 0.1);
+            border-color: var(--accent-blue);
+        }
+
+        .arch-box.api {
+            background: rgba(46, 213, 115, 0.1);
+            border-color: var(--accent-green);
+        }
+
+        .arch-box.db {
+            background: rgba(255, 165, 2, 0.1);
+            border-color: var(--accent-orange);
+        }
+
+        .arch-box h4 {
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .arch-box p {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .arrow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            color: var(--accent-purple);
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--border);
+            margin-top: 2rem;
+        }
+
+        .truth-box {
+            background: linear-gradient(90deg, rgba(255, 71, 87, 0.1), rgba(165, 94, 234, 0.1));
+            border: 1px solid rgba(255, 71, 87, 0.3);
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            .arch-diagram {
+                grid-template-columns: 1fr;
+            }
+
+            .arrow {
+                transform: rotate(90deg);
+            }
+
+            header h1 {
+                font-size: 1.75rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>📱 SafePay - Complete Project Documentation</h1>
+        <p>Features • Tools • Tech Stack • End-to-End Workflow</p>
+    </header>
+
+    <div class="container">
+        <div class="truth-box">
+            <span style="font-size: 1.5rem;">⚠️</span>
+            <p><strong>Truth Notice:</strong> This document lists ONLY what is ACTUALLY implemented in the codebase. No
+                fake features, no exaggeration.</p>
+        </div>
+
+        <!-- PROJECT OVERVIEW -->
+        <section class="section">
+            <div class="section-title">
+                <div class="icon purple">📋</div>
+                <div>
+                    <h2>Project Overview</h2>
+                    <p style="color: var(--text-secondary);">What SafePay actually is</p>
+                </div>
+            </div>
+
+            <p style="font-size: 1.1rem; margin-bottom: 1.5rem;">
+                <strong>SafePay</strong> is a secure mock UPI payment application with advanced fraud detection. It
+                demonstrates production-level security patterns found in apps like Google Pay and PhonePe.
+            </p>
+
+            <div class="arch-diagram">
+                <div class="arch-box mobile">
+                    <h4>📱 Mobile App</h4>
+                    <p>Flutter (Dart)<br>Cross-platform UI</p>
+                </div>
+                <div class="arrow">→</div>
+                <div class="arch-box api">
+                    <h4>⚡ Backend API</h4>
+                    <p>FastAPI (Python)<br>Fraud Engine + Auth</p>
+                </div>
+                <div class="arrow">→</div>
+                <div class="arch-box db">
+                    <h4>🗄️ Database</h4>
+                    <p>SQLite + SQLAlchemy<br>Encrypted Data</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- FEATURES LIST -->
+        <section class="section">
+            <div class="section-title">
+                <div class="icon green">✨</div>
+                <div>
+                    <h2>All Features (Actually Implemented)</h2>
+                    <p style="color: var(--text-secondary);">Complete list of what the app can do</p>
+                </div>
+            </div>
+
+            <h3 style="margin-bottom: 1rem;">🔐 Security Features</h3>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>🔑 Argon2id Password Hashing</h4>
+                    <p>Industry-leading password hashing algorithm. Same as used by Google. Resistant to GPU cracking
+                        attacks.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🔒 AES-256 Field Encryption</h4>
+                    <p>All sensitive data (balance, transaction amounts, messages) encrypted before database storage
+                        using Fernet (AES-256).</p>
+                </div>
+                <div class="feature-card">
+                    <h4>📝 HMAC-SHA256 Request Signing</h4>
+                    <p>Every API request includes a signature. Prevents man-in-the-middle modification of requests.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🔄 JWT + Refresh Token Rotation</h4>
+                    <p>Short-lived access tokens (15 min) with long-lived refresh tokens (7 days). Tokens rotate on
+                        refresh.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>📱 Device Binding</h4>
+                    <p>Account locked to single device. Login from new device forces logout everywhere else.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>⏱️ Rate Limiting</h4>
+                    <p>5 login attempts per minute. Prevents brute force password attacks using SlowAPI middleware.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🔐 Secure PIN Storage</h4>
+                    <p>PIN never stored on mobile device. All PIN verification happens server-side only.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>📍 Geo-Velocity Check (F29)</h4>
+                    <p>Uses MaxMind GeoLite2 database to detect impossible travel. Blocks logins from impossible
+                        locations.</p>
+                </div>
+            </div>
+
+            <h3 style="margin: 2rem 0 1rem 0;">🕵️ Fraud Detection Features</h3>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>📊 54 Rule-Based Detection</h4>
+                    <p>54 fraud patterns including velocity limits, circular loops, split transactions, night owl, and
+                        AML patterns.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🧠 28-Feature ML Engine</h4>
+                    <p>IsolationForest AI model with 28 behavioral features for anomaly detection.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🤝 Social Graph Trust Network</h4>
+                    <p>UserTrustGraph tracks relationships. Strangers face stricter limits than trusted contacts.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🏷️ MCC Tier System</h4>
+                    <p>5 merchant category tiers (Essential, High-Value, Retail, Services, Personal) with different
+                        rules.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>📈 Auto AI Retraining</h4>
+                    <p>AI model automatically retrains every 24 hours using APScheduler. Champion-Challenger comparison.
+                    </p>
+                </div>
+                <div class="feature-card">
+                    <h4>💰 Daily Spending Limits</h4>
+                    <p>P2P: ₹1,00,000/day per receiver. Merchant: ₹3,00,000/day per receiver. Hard-coded safety.</p>
+                </div>
+            </div>
+
+            <h3 style="margin: 2rem 0 1rem 0;">💳 Payment Features</h3>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>💸 UPI-Style Transfers</h4>
+                    <p>Send money via UPI ID, phone number, or QR code. Instant confirmation with transaction ID.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>📷 QR Code Scanning</h4>
+                    <p>Scan UPI QR codes using camera with mobile_scanner package. Generate your own QR for receiving.
+                    </p>
+                </div>
+                <div class="feature-card">
+                    <h4>👥 Contact Integration</h4>
+                    <p>Import phone contacts. Check which contacts are registered SafePay users.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>💬 Transaction Messages</h4>
+                    <p>Add notes/messages to transactions. Encrypted with AES-256 in database.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>📜 Transaction History</h4>
+                    <p>Full history with sender/receiver names, amounts, timestamps, and status.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🔔 Risk Analysis Screen</h4>
+                    <p>Visual display of fraud analysis stages (Encrypting, Analyzing, Processing) before payment.</p>
+                </div>
+            </div>
+
+            <h3 style="margin: 2rem 0 1rem 0;">📱 Mobile App Features</h3>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>🏠 Home Dashboard</h4>
+                    <p>Shows balance, recent transactions, quick actions. Cached for instant loading.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>👤 Profile Management</h4>
+                    <p>View account details, login history, trusted devices. Change PIN functionality.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🔄 Pull-to-Refresh</h4>
+                    <p>Refresh data on any screen by pulling down. Real-time balance updates.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>💾 Offline Caching</h4>
+                    <p>SharedPreferences + FlutterSecureStorage for caching. Works with spotty connections.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🎨 Lottie Animations</h4>
+                    <p>Beautiful loading animations using Lottie for processing shield and fraud scanning.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>📲 Root Detection</h4>
+                    <p>flutter_jailbreak_detection warns users on rooted/jailbroken devices.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- TOOLS & TECHNOLOGIES -->
+        <section class="section">
+            <div class="section-title">
+                <div class="icon blue">🛠️</div>
+                <div>
+                    <h2>Tools & Technologies Used</h2>
+                    <p style="color: var(--text-secondary);">Complete tech stack from requirements.txt and pubspec.yaml
+                    </p>
+                </div>
+            </div>
+
+            <h3 style="margin-bottom: 1rem;">Backend (Python)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Package</th>
+                        <th>Purpose</th>
+                        <th>Why It's Used</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge backend">fastapi</span></td>
+                        <td>Web Framework</td>
+                        <td>Async API framework with automatic OpenAPI docs. High performance, type-safe.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge backend">uvicorn</span></td>
+                        <td>ASGI Server</td>
+                        <td>Production-grade server to run FastAPI. Supports async/await.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge database">sqlalchemy</span></td>
+                        <td>ORM</td>
+                        <td>Object-Relational Mapper. Prevents SQL injection with parameterized queries.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge database">psycopg2-binary</span></td>
+                        <td>PostgreSQL Driver</td>
+                        <td>Optional driver for PostgreSQL (currently using SQLite).</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge security">argon2-cffi</span></td>
+                        <td>Password Hashing</td>
+                        <td>Argon2id algorithm - winner of Password Hashing Competition. GPU-resistant.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge security">python-jose[cryptography]</span></td>
+                        <td>JWT Tokens</td>
+                        <td>JSON Web Tokens for authentication. HS256 signing algorithm.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge security">cryptography</span></td>
+                        <td>Encryption</td>
+                        <td>Fernet (AES-256) encryption for field-level data protection.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge security">slowapi</span></td>
+                        <td>Rate Limiting</td>
+                        <td>Middleware to limit API requests per minute/hour. Prevents brute force.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge ai">scikit-learn</span></td>
+                        <td>Machine Learning</td>
+                        <td>IsolationForest algorithm for anomaly detection in fraud engine.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge ai">pandas</span></td>
+                        <td>Data Processing</td>
+                        <td>DataFrame operations for feature extraction and model training.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge ai">numpy</span></td>
+                        <td>Numerical Computing</td>
+                        <td>Array operations for ML feature calculations.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge security">geoip2</span></td>
+                        <td>IP Geolocation</td>
+                        <td>MaxMind GeoLite2 database for geo-velocity check (impossible travel detection).</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge ai">apscheduler</span></td>
+                        <td>Task Scheduling</td>
+                        <td>Background scheduler for automatic AI model retraining every 24 hours.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge backend">pydantic</span></td>
+                        <td>Data Validation</td>
+                        <td>Schema validation for API request/response. Type safety.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge backend">python-dotenv</span></td>
+                        <td>Environment Variables</td>
+                        <td>Load secrets from .env file. Never hardcode passwords.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 style="margin: 2rem 0 1rem 0;">Frontend (Flutter/Dart)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Package</th>
+                        <th>Purpose</th>
+                        <th>Why It's Used</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge frontend">flutter</span></td>
+                        <td>UI Framework</td>
+                        <td>Cross-platform mobile development. Single codebase for iOS + Android.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge frontend">http</span></td>
+                        <td>HTTP Client</td>
+                        <td>API calls to backend. Supports headers, body, timeouts.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge security">flutter_secure_storage</span></td>
+                        <td>Secure Storage</td>
+                        <td>Encrypted storage for tokens. Uses Keychain (iOS) / KeyStore (Android).</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge frontend">mobile_scanner</span></td>
+                        <td>QR Scanning</td>
+                        <td>Camera-based QR code scanner for UPI payments.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge frontend">qr_flutter</span></td>
+                        <td>QR Generation</td>
+                        <td>Generate QR codes containing user's UPI ID for receiving payments.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge frontend">flutter_contacts</span></td>
+                        <td>Contact Access</td>
+                        <td>Read phone contacts to find registered SafePay users.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge frontend">permission_handler</span></td>
+                        <td>Permissions</td>
+                        <td>Request camera, contacts, storage permissions gracefully.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge frontend">shared_preferences</span></td>
+                        <td>Local Storage</td>
+                        <td>Cache user data, settings, home screen data for instant loading.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge frontend">device_info_plus</span></td>
+                        <td>Device Info</td>
+                        <td>Get device ID for device binding feature.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge security">flutter_jailbreak_detection</span></td>
+                        <td>Root Detection</td>
+                        <td>Detect rooted/jailbroken devices and warn users about security risks.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge security">crypto</span></td>
+                        <td>HMAC Signing</td>
+                        <td>Client-side HMAC-SHA256 for request integrity verification.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge frontend">lottie</span></td>
+                        <td>Animations</td>
+                        <td>Beautiful JSON-based animations for loading states and processing screens.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge frontend">google_fonts</span></td>
+                        <td>Typography</td>
+                        <td>Access Google Fonts library for consistent, beautiful typography.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge frontend">intl</span></td>
+                        <td>Formatting</td>
+                        <td>Date, time, and currency formatting for Indian locale.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 style="margin: 2rem 0 1rem 0;">Infrastructure</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tool</th>
+                        <th>Purpose</th>
+                        <th>Why It's Used</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge database">SQLite</span></td>
+                        <td>Database</td>
+                        <td>Lightweight, file-based database. No separate server needed. Good for development.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge backend">Cloudflare Tunnel</span></td>
+                        <td>Remote Access</td>
+                        <td>Expose local backend to internet securely. HTTPS with valid certificates.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge ai">GeoLite2-City.mmdb</span></td>
+                        <td>IP Database</td>
+                        <td>MaxMind geolocation database (63MB). Maps IP addresses to cities/countries.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge ai">fraud_model_v2.pkl</span></td>
+                        <td>ML Model</td>
+                        <td>Serialized IsolationForest model. HMAC-signed to prevent tampering.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- END-TO-END WORKFLOW -->
+        <section class="section">
+            <div class="section-title">
+                <div class="icon cyan">🔄</div>
+                <div>
+                    <h2>End-to-End Workflow</h2>
+                    <p style="color: var(--text-secondary);">Complete flow from user action to database</p>
+                </div>
+            </div>
+
+            <h3 style="margin-bottom: 1.5rem;">📱 User Login Flow</h3>
+            <div class="workflow">
+                <div class="workflow-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h4>User Opens App</h4>
+                        <p>Flutter app loads. Checks FlutterSecureStorage for existing access token.</p>
+                        <div class="tech">
+                            <span class="tech-tag">Flutter</span>
+                            <span class="tech-tag">flutter_secure_storage</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h4>Enter Mobile Number</h4>
+                        <p>App sends POST /auth/check-mobile with device ID. Backend checks if user exists and device
+                            matches.</p>
+                        <div class="tech">
+                            <span class="tech-tag">device_info_plus</span>
+                            <span class="tech-tag">FastAPI</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h4>Enter PIN</h4>
+                        <p>User enters 4-6 digit PIN. App sends POST /token with mobile + PIN. Backend verifies PIN with
+                            Argon2id.</p>
+                        <div class="tech">
+                            <span class="tech-tag">argon2-cffi</span>
+                            <span class="tech-tag">python-jose</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h4>Token Issued</h4>
+                        <p>Backend generates JWT access token (15 min) + refresh token (7 days). Stores in secure
+                            storage.</p>
+                        <div class="tech">
+                            <span class="tech-tag">JWT HS256</span>
+                            <span class="tech-tag">Keychain/KeyStore</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">5</div>
+                    <div class="step-content">
+                        <h4>Home Screen Loads</h4>
+                        <p>App calls GET /users/home. Backend decrypts balance from database, returns user data + recent
+                            transactions.</p>
+                        <div class="tech">
+                            <span class="tech-tag">AES-256 Decrypt</span>
+                            <span class="tech-tag">SQLAlchemy</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <h3 style="margin: 2.5rem 0 1.5rem 0;">💸 Payment Transaction Flow</h3>
+            <div class="workflow">
+                <div class="workflow-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h4>User Initiates Payment</h4>
+                        <p>User selects receiver (UPI ID, phone, or QR scan). Enters amount and optional message. Taps
+                            "Pay".</p>
+                        <div class="tech">
+                            <span class="tech-tag">mobile_scanner</span>
+                            <span class="tech-tag">Flutter UI</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h4>Enter PIN for Authorization</h4>
+                        <p>PaymentPinScreen asks for PIN. PIN is NOT stored locally - will be sent to server for
+                            verification.</p>
+                        <div class="tech">
+                            <span class="tech-tag">Server-side verification only</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h4>Processing Shield Animation</h4>
+                        <p>ProcessingShieldScreen shows 3-stage animation: Encrypting → Analyzing → Processing. Sends
+                            POST /transactions.</p>
+                        <div class="tech">
+                            <span class="tech-tag">Lottie</span>
+                            <span class="tech-tag">HMAC Request Signing</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h4>Backend: HMAC Verification</h4>
+                        <p>Backend verifies X-HMAC-Signature header. If mismatch, rejects request as tampered. Verifies
+                            PIN with Argon2id.</p>
+                        <div class="tech">
+                            <span class="tech-tag">HMAC-SHA256</span>
+                            <span class="tech-tag">Argon2id</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">5</div>
+                    <div class="step-content">
+                        <h4>Backend: Fraud Engine Analysis</h4>
+                        <p>evaluate_fraud() runs 3-stage pipeline:<br>
+                            <strong>Stage 0:</strong> MCC Tier Classification<br>
+                            <strong>Stage 1:</strong> 54 Rule-Based Checks (velocity, patterns, AML)<br>
+                            <strong>Stage 2:</strong> Social Graph Trust Score<br>
+                            <strong>Stage 3:</strong> AI Anomaly Detection (28 features)
+                        </p>
+                        <div class="tech">
+                            <span class="tech-tag">fraud_engine.py</span>
+                            <span class="tech-tag">IsolationForest</span>
+                            <span class="tech-tag">UserTrustGraph</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">6</div>
+                    <div class="step-content">
+                        <h4>Backend: Daily Limit Check</h4>
+                        <p>Checks F18 daily per-receiver limit (P2P: ₹1L, Merchant: ₹3L). Hard block if exceeded.</p>
+                        <div class="tech">
+                            <span class="tech-tag">SQLAlchemy Query</span>
+                            <span class="tech-tag">func.sum()</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">7</div>
+                    <div class="step-content">
+                        <h4>Backend: Balance Check & Lock</h4>
+                        <p>Uses pessimistic locking (FOR UPDATE) to prevent race conditions. Decrypts balance, checks
+                            sufficiency.</p>
+                        <div class="tech">
+                            <span class="tech-tag">with_for_update()</span>
+                            <span class="tech-tag">AES-256 Decrypt</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">8</div>
+                    <div class="step-content">
+                        <h4>Backend: Execute Transfer</h4>
+                        <p>Deduct from sender, add to receiver. Encrypt new balances. Create Transaction record with
+                            encrypted amount.</p>
+                        <div class="tech">
+                            <span class="tech-tag">AES-256 Encrypt</span>
+                            <span class="tech-tag">UUID Transaction ID</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">9</div>
+                    <div class="step-content">
+                        <h4>Backend: Update Trust Graph</h4>
+                        <p>record_trust() adds/updates trust relationship between sender and receiver. Increases trust
+                            score.</p>
+                        <div class="tech">
+                            <span class="tech-tag">UserTrustGraph</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">10</div>
+                    <div class="step-content">
+                        <h4>Response to Mobile App</h4>
+                        <p>Backend returns success/failure with transaction details. App shows result screen with
+                            animation.</p>
+                        <div class="tech">
+                            <span class="tech-tag">JSON Response</span>
+                            <span class="tech-tag">Lottie Success/Fail</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <h3 style="margin: 2.5rem 0 1.5rem 0;">🤖 AI Auto-Training Flow (Background)</h3>
+            <div class="workflow">
+                <div class="workflow-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h4>Server Starts</h4>
+                        <p>ai_scheduler.py starts APScheduler. Runs train_model() immediately on startup.</p>
+                        <div class="tech">
+                            <span class="tech-tag">apscheduler</span>
+                            <span class="tech-tag">BackgroundScheduler</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h4>Fetch Training Data</h4>
+                        <p>Loads last 10,000 successful transactions. Gets fraud feedback from FraudEvent table (blocked
+                            transactions).</p>
+                        <div class="tech">
+                            <span class="tech-tag">SQLAlchemy</span>
+                            <span class="tech-tag">FraudEvent model</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h4>Feature Extraction</h4>
+                        <p>Extracts 28 features for each transaction (amount, hour, velocity, trust score, etc.).
+                            Creates pandas DataFrame.</p>
+                        <div class="tech">
+                            <span class="tech-tag">pandas</span>
+                            <span class="tech-tag">numpy</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h4>Train Challenger Model</h4>
+                        <p>Trains new IsolationForest model with 200 estimators, 5% contamination rate.</p>
+                        <div class="tech">
+                            <span class="tech-tag">scikit-learn</span>
+                            <span class="tech-tag">IsolationForest</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">5</div>
+                    <div class="step-content">
+                        <h4>Champion-Challenger Comparison</h4>
+                        <p>Compares new model vs existing model on test data. New model must beat old by 5% to be
+                            promoted.</p>
+                        <div class="tech">
+                            <span class="tech-tag">A/B Testing</span>
+                            <span class="tech-tag">AUC Comparison</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">6</div>
+                    <div class="step-content">
+                        <h4>Sign & Save Model</h4>
+                        <p>Winner model serialized with pickle. HMAC-SHA256 signature appended. Saved as
+                            fraud_model_v2.pkl.</p>
+                        <div class="tech">
+                            <span class="tech-tag">pickle</span>
+                            <span class="tech-tag">HMAC Signing</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">7</div>
+                    <div class="step-content">
+                        <h4>Repeat Every 24 Hours</h4>
+                        <p>Scheduler triggers train_model() every 24 hours automatically. Continuous improvement.</p>
+                        <div class="tech">
+                            <span class="tech-tag">IntervalTrigger(hours=24)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- FILE STRUCTURE -->
+        <section class="section">
+            <div class="section-title">
+                <div class="icon orange">📁</div>
+                <div>
+                    <h2>Project File Structure</h2>
+                    <p style="color: var(--text-secondary);">Key files and their purposes</p>
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>File</th>
+                        <th>Lines</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>backend/main.py</code></td>
+                        <td>1,919</td>
+                        <td>API endpoints, transaction processing, authentication, idempotency</td>
+                    </tr>
+                    <tr>
+                        <td><code>backend/fraud_engine.py</code></td>
+                        <td>1,468</td>
+                        <td>54 fraud rules, 28 ML features, MCC tiers, social graph, AI scoring</td>
+                    </tr>
+                    <tr>
+                        <td><code>backend/models.py</code></td>
+                        <td>393</td>
+                        <td>SQLAlchemy models: User, Transaction, FraudEvent, UserTrustGraph, etc.</td>
+                    </tr>
+                    <tr>
+                        <td><code>backend/security.py</code></td>
+                        <td>232</td>
+                        <td>AES-256 encryption/decryption, HMAC verification</td>
+                    </tr>
+                    <tr>
+                        <td><code>backend/auth.py</code></td>
+                        <td>198</td>
+                        <td>Argon2id hashing, JWT generation, refresh token rotation</td>
+                    </tr>
+                    <tr>
+                        <td><code>backend/ai_scheduler.py</code></td>
+                        <td>404</td>
+                        <td>APScheduler for 24-hour AI retraining, champion-challenger</td>
+                    </tr>
+                    <tr>
+                        <td><code>mobile_app/lib/main.dart</code></td>
+                        <td>~500</td>
+                        <td>App entry point, theme, navigation</td>
+                    </tr>
+                    <tr>
+                        <td><code>mobile_app/lib/services/api_client.dart</code></td>
+                        <td>218</td>
+                        <td>HTTP client with retry logic, auto-refresh tokens, SSL validation</td>
+                    </tr>
+                    <tr>
+                        <td><code>mobile_app/lib/services/auth_service.dart</code></td>
+                        <td>208</td>
+                        <td>Login, logout, PIN verification, device ID extraction</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+    </div>
+
+    <footer>
+        <p>SafePay Complete Project Documentation</p>
+        <p>Generated January 31, 2026 • Only truth, no exaggeration</p>
+    </footer>
+</body>
+
+</html>

@@ -61,7 +61,8 @@ class User(Base):
     
     # Timestamps & Balance
     last_active_at = Column(DateTime, nullable=True)
-    balance = Column(Float, default=0.0)
+    balance = Column(Float, default=0.0)  # Plain for fast calculations
+    encrypted_balance = Column(String, nullable=True)  # AES-256 encrypted for audit
     
     # New: Total Device Count (Summary)
     total_device_count = Column(Integer, default=0)
@@ -83,6 +84,32 @@ class User(Base):
             return security.decrypt_value(self.mobile_encrypted)
         except:
             return None
+    
+    @property
+    def secure_balance(self):
+        """
+        Get balance from encrypted field if available, else from plain field.
+        This provides backward compatibility while ensuring new data is encrypted.
+        """
+        if self.encrypted_balance:
+            try:
+                import security
+                decrypted = security.decrypt_value(self.encrypted_balance, float)
+                if decrypted is not None:
+                    return decrypted
+            except:
+                pass
+        return self.balance
+    
+    def update_balance(self, new_balance: float):
+        """
+        Update balance in both plain (for fast queries) and encrypted (for security) fields.
+        This is the ONLY method that should be used to modify balance.
+        """
+        import security
+        self.balance = new_balance
+        self.encrypted_balance = security.encrypt_value(str(new_balance))
+
 
 
 class Transaction(Base):
@@ -108,6 +135,10 @@ class Transaction(Base):
     # Additional Context for Fraud detection
     receiver_mcc = Column(String, nullable=True)
     note = Column(String, nullable=True)  # Payment Note (e.g. "Rent")
+    
+    # IP Tracking for Geo-Velocity Detection (F29)
+    ip_hash = Column(String, nullable=True)  # HMAC-SHA256 hash for lookup
+    ip_encrypted = Column(String, nullable=True)  # AES-256 encrypted for audit
     
     # Indexes for faster queries
     __table_args__ = (
@@ -158,6 +189,7 @@ class ReceiverProfile(Base):
     total_received_amount = Column(Float, default=0.0)
     total_received_count = Column(Integer, default=0)
     unique_senders_count = Column(Integer, default=0)
+    last_received_time = Column(DateTime, nullable=True)
     
     user = relationship("User", back_populates="receiver_profile")
 
@@ -305,3 +337,56 @@ class UserTrustGraph(Base):
     
     user = relationship("User", foreign_keys=[user_id])
     trusted_user = relationship("User", foreign_keys=[trusted_user_id])
+
+
+class RevokedToken(Base):
+    """
+    Revoked Tokens Table for Refresh Token Rotation
+    
+    Security: When a refresh token is used, it's revoked and a new one is issued.
+    This prevents token replay attacks - if attacker steals a refresh token,
+    it becomes invalid after single use.
+    """
+    __tablename__ = "revoked_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    token_jti = Column(String, unique=True, index=True)  # JWT ID (jti claim)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    revoked_at = Column(DateTime, default=datetime.datetime.now)
+    expires_at = Column(DateTime)  # For cleanup of old entries
+    
+    user = relationship("User")
+
+
+class UserFraudReport(Base):
+    """
+    User Fraud Reports - REAL human-labeled fraud data for AI training
+    
+    This is GOLD for AI learning:
+    - Users report transactions they didn't authorize
+    - These become confirmed fraud examples
+    - AI learns to detect similar patterns
+    
+    This is what makes the difference between:
+    - Guessing what's fraud (auto-blocked)
+    - KNOWING what's fraud (user-reported)
+    """
+    __tablename__ = "user_fraud_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)  # Who reported
+    transaction_id = Column(String, index=True)  # Which transaction
+    
+    # Report details
+    reason = Column(String)  # "not_me", "wrong_amount", "unknown_receiver", "other"
+    description = Column(String, nullable=True)  # Optional user description
+    
+    # Status
+    status = Column(String, default="pending")  # "pending", "confirmed", "rejected"
+    reported_at = Column(DateTime, default=datetime.datetime.now)
+    reviewed_at = Column(DateTime, nullable=True)
+    
+    # For AI training
+    is_confirmed_fraud = Column(Boolean, default=True)  # True = confirmed fraud for training
+    
+    user = relationship("User")

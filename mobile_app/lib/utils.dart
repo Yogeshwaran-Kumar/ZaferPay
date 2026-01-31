@@ -11,10 +11,13 @@ String formatAmount(dynamic amount) {
     return "0";
   }
 
-  // Check if it's effectively an integer
-  if (val % 1 == 0) {
-    return val.toInt().toString();
-  } else {
-    return val.toString();
+  // Check if it's effectively an integer (handling float precision)
+  // Converting to fixed(2) first handles the rounding
+  String formatted = val.toStringAsFixed(2);
+  if (formatted.endsWith('.00')) {
+    return formatted.substring(0, formatted.length - 3);
   }
+  // Optional: If you prefer 5.5 over 5.50, uncomment below:
+  // if (formatted.endsWith('0')) return formatted.substring(0, formatted.length - 1);
+  return formatted;
 }

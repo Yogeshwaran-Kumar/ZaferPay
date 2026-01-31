@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafePay AI Engine - Complete A to Z Documentation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0a0a12;
+            --bg-card: #14141f;
+            --bg-hover: #1e1e2e;
+            --text-primary: #ffffff;
+            --text-secondary: #8888a0;
+            --accent-purple: #a55eea;
+            --accent-blue: #3742fa;
+            --accent-green: #2ed573;
+            --accent-orange: #ffa502;
+            --accent-red: #ff4757;
+            --accent-cyan: #1dd1a1;
+            --border: #2a2a40;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            line-height: 1.7;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            text-align: center;
+            padding: 3rem 2rem;
+            background: linear-gradient(180deg, rgba(29, 209, 161, 0.15) 0%, transparent 100%);
+            border-bottom: 1px solid var(--border);
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #1dd1a1 0%, #3742fa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        .section {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 2rem;
+            margin: 2rem 0;
+            border: 1px solid var(--border);
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .section-header .letter {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-blue) 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 800;
+        }
+
+        .section-header h2 {
+            font-size: 1.4rem;
+        }
+
+        code {
+            font-family: 'Fira Code', monospace;
+            background: var(--bg-hover);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            color: var(--accent-cyan);
+        }
+
+        .code-block {
+            background: #0d0d15;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            overflow-x: auto;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            border: 1px solid var(--border);
+        }
+
+        .code-block .comment {
+            color: #666;
+        }
+
+        .code-block .keyword {
+            color: var(--accent-purple);
+        }
+
+        .code-block .string {
+            color: var(--accent-green);
+        }
+
+        .code-block .number {
+            color: var(--accent-orange);
+        }
+
+        .code-block .function {
+            color: var(--accent-blue);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        th {
+            background: rgba(29, 209, 161, 0.1);
+            padding: 0.75rem 1rem;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border);
+        }
+
+        td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+            vertical-align: top;
+        }
+
+        tr:hover {
+            background: var(--bg-hover);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge.file {
+            background: rgba(55, 66, 250, 0.2);
+            color: var(--accent-blue);
+        }
+
+        .badge.config {
+            background: rgba(255, 165, 2, 0.2);
+            color: var(--accent-orange);
+        }
+
+        .badge.key {
+            background: rgba(255, 71, 87, 0.2);
+            color: var(--accent-red);
+        }
+
+        .flow-step {
+            display: flex;
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+            align-items: flex-start;
+        }
+
+        .step-num {
+            width: 40px;
+            height: 40px;
+            min-width: 40px;
+            background: var(--accent-purple);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+        }
+
+        .step-content {
+            flex: 1;
+            background: var(--bg-hover);
+            padding: 1.25rem;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .step-content h4 {
+            margin-bottom: 0.5rem;
+        }
+
+        .step-content p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .truth-box {
+            background: linear-gradient(90deg, rgba(255, 71, 87, 0.1), rgba(29, 209, 161, 0.1));
+            border: 1px solid rgba(255, 71, 87, 0.3);
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .feature-list {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem;
+            margin: 1rem 0;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: var(--bg-hover);
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+
+        .feature-num {
+            width: 24px;
+            height: 24px;
+            min-width: 24px;
+            background: rgba(29, 209, 161, 0.2);
+            color: var(--accent-cyan);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .diagram {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin: 1.5rem 0;
+        }
+
+        .diagram-box {
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+            min-width: 120px;
+        }
+
+        .diagram-box.data {
+            background: rgba(55, 66, 250, 0.2);
+            border: 2px solid var(--accent-blue);
+        }
+
+        .diagram-box.process {
+            background: rgba(165, 94, 234, 0.2);
+            border: 2px solid var(--accent-purple);
+        }
+
+        .diagram-box.output {
+            background: rgba(46, 213, 115, 0.2);
+            border: 2px solid var(--accent-green);
+        }
+
+        .diagram-arrow {
+            font-size: 1.5rem;
+            color: var(--accent-cyan);
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--border);
+            margin-top: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .feature-list {
+                grid-template-columns: 1fr;
+            }
+
+            header h1 {
+                font-size: 1.75rem;
+            }
+
+            .diagram {
+                flex-direction: column;
+            }
+
+            .diagram-arrow {
+                transform: rotate(90deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>🤖 SafePay AI Engine - Complete A to Z</h1>
+        <p>How the Machine Learning Fraud Detection Actually Works</p>
+    </header>
+
+    <div class="container">
+        <div class="truth-box">
+            <span style="font-size: 1.5rem;">⚠️</span>
+            <p><strong>Truth Only:</strong> This document describes EXACTLY what is implemented in
+                <code>fraud_engine.py</code> and <code>ai_scheduler.py</code>. No fake features.</p>
+        </div>
+
+        <!-- A: ALGORITHM -->
+        <section class="section">
+            <div class="section-header">
+                <div class="letter">A</div>
+                <div>
+                    <h2>Algorithm: IsolationForest</h2>
+                    <p style="color: var(--text-secondary);">The actual ML algorithm used</p>
+                </div>
+            </div>
+
+            <p><strong>What it is:</strong> IsolationForest is an unsupervised anomaly detection algorithm from
+                scikit-learn. It isolates anomalies by randomly selecting features and split values.</p>
+
+            <div class="code-block">
+                <span class="comment"># From ai_scheduler.py, line 218</span>
+                <span class="keyword">from</span> sklearn.ensemble <span class="keyword">import</span> IsolationForest
+
+                challenger = <span class="function">IsolationForest</span>(
+                n_estimators=<span class="number">200</span>, <span class="comment"># 200 decision trees in the
+                    forest</span>
+                contamination=<span class="number">0.05</span>, <span class="comment"># Expect 5% of data to be
+                    anomalies</span>
+                max_features=<span class="number">0.8</span>, <span class="comment"># Use 80% of features per
+                    tree</span>
+                random_state=<span class="number">42</span>, <span class="comment"># Reproducible results</span>
+                n_jobs=-<span class="number">1</span> <span class="comment"># Use all CPU cores</span>
+                )
+            </div>
+
+            <table>
+                <tr>
+                    <th>Parameter</th>
+                    <th>Value</th>
+                    <th>What It Means</th>
+                </tr>
+                <tr>
+                    <td>n_estimators</td>
+                    <td><code>200</code></td>
+                    <td>200 decision trees vote on whether a transaction is normal or anomaly</td>
+                </tr>
+                <tr>
+                    <td>contamination</td>
+                    <td><code>0.05</code></td>
+                    <td>Assumes 5% of transactions in training data are anomalous</td>
+                </tr>
+                <tr>
+                    <td>max_features</td>
+                    <td><code>0.8</code></td>
+                    <td>Each tree only sees 80% of the 28 features (randomization)</td>
+                </tr>
+            </table>
+
+            <p style="margin-top: 1rem; color: var(--text-secondary);"><strong>Why IsolationForest?</strong> It's
+                designed for anomaly detection, doesn't require labeled fraud data, and is fast for real-time scoring.
+            </p>
+        </section>
+
+        <!-- B: BRAIN STAGE -->
+        <section class="section">
+            <div class="section-header">
+                <div class="letter">B</div>
+                <div>
+                    <h2>Brain Stage (Stage 3 of Fraud Pipeline)</h2>
+                    <p style="color: var(--text-secondary);">Where AI fits in the 3-stage pipeline</p>
+                </div>
+            </div>
+
+            <div class="diagram">
+                <div class="diagram-box data">
+                    <strong>Stage 1</strong><br>
+                    REFLEXES<br>
+                    <small>54 Hard Rules</small>
+                </div>
+                <div class="diagram-arrow">→</div>
+                <div class="diagram-box data">
+                    <strong>Stage 2</strong><br>
+                    NETWORK<br>
+                    <small>Social Graph</small>
+                </div>
+                <div class="diagram-arrow">→</div>
+                <div class="diagram-box process">
+                    <strong>Stage 3</strong><br>
+                    🧠 BRAIN<br>
+                    <small>AI Analysis</small>
+                </div>
+                <div class="diagram-arrow">→</div>
+                <div class="diagram-box output">
+                    <strong>Output</strong><br>
+                    DECISION<br>
+                    <small>LOW/MEDIUM/HIGH</small>
+                </div>
+            </div>
+
+            <p><strong>When AI runs:</strong> The AI Brain runs AFTER the rule-based checks pass. If rules already
+                blocked the transaction, AI is never invoked. AI adds refinement for edge cases.</p>
+
+            <div class="code-block">
+                <span class="comment"># From fraud_engine.py - AI adds to risk score</span>
+                ai_score = <span class="function">get_ai_score</span>(features)
+
+                <span class="keyword">if</span> ai_score < -<span class="number">0.3</span>: <span class="comment">#
+                        Strong anomaly</span>
+                    risk_score += <span class="number">65</span>
+                    violations_list.append(<span class="string">"AI_STRONG_ANOMALY"</span>)
+                    <span class="keyword">elif</span> ai_score < -<span class="number">0.1</span>: <span
+                            class="comment"># Mild anomaly</span>
+                        risk_score += <span class="number">30</span>
+                        violations_list.append(<span class="string">"AI_MILD_ANOMALY"</span>)
+                        <span class="keyword">elif</span> ai_score > <span class="number">0.3</span>: <span
+                            class="comment"># Very normal</span>
+                        risk_score -= <span class="number">10</span> <span class="comment"># Trust bonus!</span>
+            </div>
+        </section>
+
+        <!-- C: CONFIGURATION -->
+        <section class="section">
+            <div class="section-header">
+                <div class="letter">C</div>
+                <div>
+                    <h2>Configuration (Constants & Settings)</h2>
+                    <p style="color: var(--text-secondary);">All hardcoded values in the AI system</p>
+                </div>
+            </div>
+
+            <table>
+                <tr>
+                    <th>Constant</th>
+                    <th>Value</th>
+                    <th>File</th>
+                    <th>Purpose</th>
+                </tr>
+                <tr>
+                    <td><code>RETRAIN_INTERVAL_HOURS</code></td>
+                    <td><span class="badge config">24</span></td>
+                    <td>ai_scheduler.py:42</td>
+                    <td>How often to retrain the model</td>
+                </tr>
+                <tr>
+                    <td><code>MIN_TRANSACTIONS_FOR_TRAINING</code></td>
+                    <td><span class="badge config">30</span></td>
+                    <td>ai_scheduler.py:43</td>
+                    <td>Minimum transactions needed to train</td>
+                </tr>
+                <tr>
+                    <td><code>MODEL_PATH</code></td>
+                    <td><span class="badge file">fraud_model_v2.pkl</span></td>
+                    <td>ai_scheduler.py:44</td>
+                    <td>Where the trained model is saved</td>
+                </tr>
+                <tr>
+                    <td><code>CHALLENGER_MODEL_PATH</code></td>
+                    <td><span class="badge file">fraud_model_challenger.pkl</span></td>
+                    <td>ai_scheduler.py:45</td>
+                    <td>Where the challenger model is saved</td>
+                </tr>
+                <tr>
+                    <td><code>AI Strong Anomaly Threshold</code></td>
+                    <td><span class="badge key">-0.3</span></td>
+                    <td>fraud_engine.py</td>
+                    <td>Below this = high risk (+65 score)</td>
+                </tr>
+                <tr>
+                    <td><code>AI Mild Anomaly Threshold</code></td>
+                    <td><span class="badge key">-0.1</span></td>
+                    <td>fraud_engine.py</td>
+                    <td>Between -0.3 and -0.1 (+30 score)</td>
+                </tr>
+                <tr>
+                    <td><code>AI Bonus Threshold</code></td>
+                    <td><span class="badge key">+0.3</span></td>
+                    <td>fraud_engine.py</td>
+                    <td>Above this = trust bonus (-10 score)</td>
+                </tr>
+                <tr>
+                    <td><code>Champion Improvement Threshold</code></td>
+                    <td><span class="badge config">5%</span></td>
+                    <td>ai_scheduler.py:247</td>
+                    <td>Challenger must beat champion by 5%</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- D: DATA FLOW -->
+        <section class="section">
+            <div class="section-header">
+                <div class="letter">D</div>
+                <div>
+                    <h2>Data Flow: Transaction → AI → Decision</h2>
+                    <p style="color: var(--text-secondary);">Complete flow when scoring a transaction</p>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="step-num">1</div>
+                <div class="step-content">
+                    <h4>Transaction Request Arrives</h4>
+                    <p>User wants to send ₹5,000 to another user. API receives: sender_id, receiver_id, amount,
+                        device_id, timestamp.</p>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="step-num">2</div>
+                <div class="step-content">
+                    <h4>Feature Extraction</h4>
+                    <p><code>extract_features()</code> runs 15+ database queries to calculate 28 features. Takes
+                        ~50-100ms.</p>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="step-num">3</div>
+                <div class="step-content">
+                    <h4>Feature Array Creation</h4>
+                    <p><code>get_feature_array()</code> converts the feature dictionary into a fixed-order array of 28
+                        numbers.</p>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="step-num">4</div>
+                <div class="step-content">
+                    <h4>Model Scoring</h4>
+                    <p><code>model.decision_function([features])</code> returns a float score. Negative = anomaly,
+                        Positive = normal.</p>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="step-num">5</div>
+                <div class="step-content">
+                    <h4>Risk Score Adjustment</h4>
+                    <p>AI score converted to risk points: <strong>Strong anomaly</strong> → +65, <strong>Mild</strong> →
+                        +30, <strong>Very normal</strong> → -10.</p>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="step-num">6</div>
+                <div class="step-content">
+                    <h4>Final Decision</h4>
+                    <p>Total risk score determines outcome: 0-30 → LOW (pass), 31-60 → MEDIUM (warn), 61+ → HIGH
+                        (block).</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- E-F: FEATURES (28 Total) -->
+        <section class="section">
+            <div class="section-header">
+                <div class="letter">E</div>
+                <div>
+                    <h2>Extracted Features (28 Total)</h2>
+                    <p style="color: var(--text-secondary);">All inputs to the ML model</p>
+                </div>
+            </div>
+
+            <p>The model uses exactly <strong>28 features</strong>. Here's what each one is:</p>
+
+            <h4 style="margin: 1rem 0 0.5rem 0;">📊 Transaction Features (5)</h4>
+            <div class="feature-list">
+                <div class="feature-item">
+                    <div class="feature-num">1</div> amount - Transaction amount in ₹
+                </div>
+                <div class="feature-item">
+                    <div class="feature-num">2</div> hour - Hour of day (0-23)
+                </div>
+                <div class="feature-item">
+                    <div class="feature-num">3</div> day_of_week - Day (0=Mon, 6=Sun)
+                </div>
+                <div class="feature-item">
+                    <div class="feature-num">4</div> is_weekend - 1 if Sat/Sun, else 0
+                </div>
+                <div class="feature-item">
+                    <div class="feature-num">5</div> is_night - 1 if 10PM-5AM, else 0
+                </div>
+            </div>
+
+            <h4 style="margin: 1rem 0 0.5rem 0;">⚡ Velocity Features (3)</h4>
+            <div class="feature-list">
+                <div class="feature-item">
+                    <div class="feature-num">6</div> tx_count_1h - Transactions in last hour
+                </div>
+                <div class="feature-item">
+                    <div class="feature-num">7</div> tx_count_24h - Transactions in last 24h
+                </div>
+                <div class="feature-item">
+                    <div class="feature-num">8</div> total_amount_24h - Total sent in 24h
+                </div>
+            </div>
+
+            <h4 style="margin: 1rem 0 0.5rem 0;">🧠 Behavioral Features (5)</h4>
+            <div class="feature-list">
+                <div class="feature-item">
+                    <div class="feature-num">9</div> avg_amount - User's average tx amount
+                </div>
+                <div class="feature-item">
+                    <div class="feature-num">10</div> amount_vs_avg_ratio - Current / Average
+                </div>
+                <div class="feature-item">
+                    <div class="feature-num">11</div> minutes_since_last_tx - Time since last tx
+                </div>
+                <div class="feature-item">
+                    <div class="feature-num">12</div> unique_receivers_24h - Unique receivers today
+                </div>
+                <div class="feature-item">
+                    <div class="feature-num">13</div> is_new_receiver - 1 if never paid before
+                </div>
+            </div>
+
+            <h4 style="margin: 1rem 0 0.5rem 0;">🤝 Trust Features (2)</h4>
+            <div class="feature-list">
+                <div class="feature-item">
+                    <div class="feature-num">14</div> trust_score - From UserTrustGraph (0-5)
+                </div>
+                <div class="feature-item">
+                    <div class="feature-num">15</div> account_age_days - Days since first tx
+                </div>
+            </div>
+
+            <h4 style="margin: 1rem 0 0.5rem 0;">👁️ Receiver Features (1)</h4>
+            <div class="feature-list">
+                <div class="feature-item">
+                    <div class="feature-num">16</div> receiver_unique_senders_24h - How many people sent to receiver
+                    today
+                </div>
+            </div>
+
+            <h4 style="margin: 1rem 0 0.5rem 0;">📈 Session Features (3)</h4>
+            <div class="feature-list">
+                <div class="feature-item">
+                    <div class="feature-num">17</div> session_tx_count - Tx in current session
+                </div>
+                <div class="feature-item">
+                    <div class="feature-num">18</div> avg_session_tx - User's typical session count
+                </div>
+                <div class="feature-item">
+                    <div class="feature-num">19</div> recipient_age_days - Receiver's account age
+                </div>
+            </div>
+
+            <h4 style="margin: 1rem 0 0.5rem 0;">📊 Volume & Pattern Features (9)</h4>
+            <div class="feature-list">
+                <div class="feature-item">
+                    <div class="feature-num">20</div> recipient_tx_volume - Receiver's total tx count
+                </div>
+                <div class="feature-item">
+                    <div class="feature-num">21</div> amount_percentile - Where this amount ranks
+                </div>
+                <div class="feature-item">
+                    <div class="feature-num">22</div> hour_frequency - How often user transacts at this hour
+                </div>
+                <div class="feature-item">
+                    <div class="feature-num">23</div> day_frequency - How often user transacts on this day
+                </div>
+                <div class="feature-item">
+                    <div class="feature-num">24</div> is_first_time_amount - 1 if never sent this amount
+                </div>
+                <div class="feature-item">
+                    <div class="feature-num">25</div> consecutive_tx_count - Back-to-back tx count
+                </div>
+                <div class="feature-item">
+                    <div class="feature-num">26</div> balance_utilization - % of balance used
+                </div>
+                <div class="feature-item">
+                    <div class="feature-num">27</div> (Reserved)
+                </div>
+                <div class="feature-item">
+                    <div class="feature-num">28</div> (Reserved)
+                </div>
+            </div>
+        </section>
+
+        <!-- F: FILES -->
+        <section class="section">
+            <div class="section-header">
+                <div class="letter">F</div>
+                <div>
+                    <h2>Files Involved in AI System</h2>
+                    <p style="color: var(--text-secondary);">The actual files and their roles</p>
+                </div>
+            </div>
+
+            <table>
+                <tr>
+                    <th>File</th>
+                    <th>Lines</th>
+                    <th>Role</th>
+                </tr>
+                <tr>
+                    <td><code>fraud_engine.py</code></td>
+                    <td>1,468</td>
+                    <td>Feature extraction, model loading, scoring. Does NOT train.</td>
+                </tr>
+                <tr>
+                    <td><code>ai_scheduler.py</code></td>
+                    <td>404</td>
+                    <td>Training logic, scheduler, champion-challenger. ONLY place training happens.</td>
+                </tr>
+                <tr>
+                    <td><code>fraud_model_v2.pkl</code></td>
+                    <td>~1-5 MB</td>
+                    <td>Serialized IsolationForest model (pickle). HMAC-signed.</td>
+                </tr>
+                <tr>
+                    <td><code>fraud_model_challenger.pkl</code></td>
+                    <td>~1-5 MB</td>
+                    <td>New model waiting to beat champion.</td>
+                </tr>
+                <tr>
+                    <td><code>models.py</code></td>
+                    <td>393</td>
+                    <td>FraudEvent table definition (feedback loop).</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- G-H: GUARDS & HMAC -->
+        <section class="section">
+            <div class="section-header">
+                <div class="letter">G</div>
+                <div>
+                    <h2>Guards: Model Security (HMAC Signing)</h2>
+                    <p style="color: var(--text-secondary);">How the model file is protected</p>
+                </div>
+            </div>
+
+            <p><strong>Problem:</strong> If an attacker replaces the model file, they could disable fraud detection.</p>
+            <p><strong>Solution:</strong> Every model file is HMAC-SHA256 signed. On load, the signature is verified.
+            </p>
+
+            <div class="code-block">
+                <span class="comment"># HOW MODELS ARE SAVED (ai_scheduler.py line 70-79)</span>
+                <span class="keyword">def</span> <span class="function">save_signed_model</span>(model, path):
+                model_bytes = pickle.<span class="function">dumps</span>(model) <span class="comment"># Serialize
+                    model</span>
+
+                <span class="comment"># Create HMAC-SHA256 signature using secret key</span>
+                signature = hmac.<span class="function">new</span>(HMAC_SECRET.encode(), model_bytes, hashlib.sha256)
+
+                <span class="keyword">with</span> <span class="function">open</span>(path, <span
+                    class="string">"wb"</span>) <span class="keyword">as</span> f:
+                f.<span class="function">write</span>(model_bytes) <span class="comment"># Write model data</span>
+                f.<span class="function">write</span>(signature.hexdigest().encode()) <span class="comment"># Append
+                    64-byte signature</span>
+            </div>
+
+            <div class="code-block">
+                <span class="comment"># HOW MODELS ARE LOADED (fraud_engine.py line 590-628)</span>
+                <span class="keyword">def</span> <span class="function">load_model_readonly</span>():
+                <span class="keyword">with</span> <span class="function">open</span>(MODEL_PATH, <span
+                    class="string">"rb"</span>) <span class="keyword">as</span> f:
+                content = f.<span class="function">read</span>()
+
+                payload = content[:-<span class="number">64</span>] <span class="comment"># Everything except last 64
+                    bytes</span>
+                embedded_sig = content[-<span class="number">64</span>:] <span class="comment"># Last 64 bytes =
+                    signature</span>
+
+                <span class="comment"># Recalculate expected signature</span>
+                expected_sig = hmac.<span class="function">new</span>(HMAC_SECRET.encode(), payload,
+                hashlib.sha256).<span class="function">hexdigest</span>().encode()
+
+                <span class="keyword">if</span> hmac.<span class="function">compare_digest</span>(embedded_sig,
+                expected_sig):
+                _model = pickle.<span class="function">loads</span>(payload) <span class="comment"># ✅ Verified! Load
+                    model</span>
+                <span class="keyword">else</span>:
+                <span class="function">print</span>(<span class="string">"🚨 SECURITY ALERT: Model tampering
+                    detected!"</span>)
+                <span class="comment"># Model NOT loaded. AI disabled.</span>
+            </div>
+        </section>
+
+        <!-- I-L: INTERVAL & LEARNING -->
+        <section class="section">
+            <div class="section-header">
+                <div class="letter">I</div>
+                <div>
+                    <h2>Interval Training (Every 24 Hours)</h2>
+                    <p style="color: var(--text-secondary);">APScheduler automatic retraining</p>
+                </div>
+            </div>
+
+            <p><strong>When it trains:</strong></p>
+            <ul style="margin-left: 2rem; color: var(--text-secondary);">
+                <li><strong>On server startup</strong> - Immediately runs train_model()</li>
+                <li><strong>Every 24 hours</strong> - APScheduler triggers train_model()</li>
+                <li><strong>Manual trigger</strong> - Admin can call <code>POST /admin/ai/retrain</code></li>
+            </ul>
+
+            <div class="code-block">
+                <span class="comment"># APScheduler setup (ai_scheduler.py line 289-300)</span>
+                _scheduler = <span class="function">BackgroundScheduler</span>()
+
+                _scheduler.<span class="function">add_job</span>(
+                train_model,
+                trigger=<span class="function">IntervalTrigger</span>(hours=<span class="number">24</span>), <span
+                    class="comment"># Every 24 hours</span>
+                id=<span class="string">'ai_retrain'</span>,
+                name=<span class="string">'AI Model Retraining'</span>
+                )
+
+                _scheduler.<span class="function">start</span>()
+            </div>
+        </section>
+
+        <!-- M-O: MODEL LIFECYCLE -->
+        <section class="section">
+            <div class="section-header">
+                <div class="letter">M</div>
+                <div>
+                    <h2>Model Training Lifecycle</h2>
+                    <p style="color: var(--text-secondary);">What happens in train_model()</p>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="step-num">1</div>
+                <div class="step-content">
+                    <h4>Fetch Transaction History</h4>
+                    <p>Query last 10,000 successful transactions from database. Need minimum 30 to proceed.</p>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="step-num">2</div>
+                <div class="step-content">
+                    <h4>Get Fraud Feedback</h4>
+                    <p>Query FraudEvent table for blocked transactions in last 30 days. These are labeled as "fraud" for
+                        training.</p>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="step-num">3</div>
+                <div class="step-content">
+                    <h4>Extract Features</h4>
+                    <p>For each transaction, extract 28 features. Create pandas DataFrame.</p>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="step-num">4</div>
+                <div class="step-content">
+                    <h4>Train Challenger Model</h4>
+                    <p><code>IsolationForest.fit(dataframe)</code> - Trains new model on all data.</p>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="step-num">5</div>
+                <div class="step-content">
+                    <h4>Champion-Challenger Test</h4>
+                    <p>Compare challenger vs current champion on last 100 transactions. Calculate correlation with known
+                        labels.</p>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="step-num">6</div>
+                <div class="step-content">
+                    <h4>Promote Winner</h4>
+                    <p>If challenger beats champion by >5%, it becomes new champion. Otherwise, champion stays.</p>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="step-num">7</div>
+                <div class="step-content">
+                    <h4>Save & Sign</h4>
+                    <p>Winner is serialized with pickle and HMAC-signed before saving to disk.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- P-R: RULES ONLY MODE -->
+        <section class="section">
+            <div class="section-header">
+                <div class="letter">R</div>
+                <div>
+                    <h2>Rules-Only Mode (Fallback)</h2>
+                    <p style="color: var(--text-secondary);">What happens if AI is unavailable</p>
+                </div>
+            </div>
+
+            <p>If the model file doesn't exist or signature fails, the system operates in <strong>"Rules Only"
+                    mode</strong>:</p>
+
+            <div class="code-block">
+                <span class="comment"># From fraud_engine.py</span>
+                <span class="keyword">if</span> <span class="keyword">not</span> os.path.<span
+                    class="function">exists</span>(MODEL_PATH):
+                <span class="function">print</span>(<span class="string">"🛡️ Guard: No AI Model found. Operating in
+                    'Rules Only' mode."</span>)
+                <span class="keyword">return</span> <span class="comment"># _model stays None</span>
+
+                <span class="comment"># Later, when scoring:</span>
+                <span class="keyword">def</span> <span class="function">get_ai_score</span>(features):
+                <span class="keyword">if</span> _model <span class="keyword">is</span> <span
+                    class="keyword">None</span>:
+                <span class="keyword">return</span> <span class="number">0.0</span> <span class="comment"># Neutral
+                    score - AI has no opinion</span>
+            </div>
+
+            <p style="margin-top: 1rem;">In this mode, only the 54 rule-based checks run. The AI adds 0 points to risk
+                score. This is a safe fallback.</p>
+        </section>
+
+        <!-- S: SCORING -->
+        <section class="section">
+            <div class="section-header">
+                <div class="letter">S</div>
+                <div>
+                    <h2>Scoring: How AI Score Translates to Risk</h2>
+                    <p style="color: var(--text-secondary);">decision_function() output interpretation</p>
+                </div>
+            </div>
+
+            <p>The <code>model.decision_function()</code> returns a float. Here's how it's interpreted:</p>
+
+            <table>
+                <tr>
+                    <th>AI Score Range</th>
+                    <th>Meaning</th>
+                    <th>Risk Points Added</th>
+                    <th>Violation Code</th>
+                </tr>
+                <tr>
+                    <td>
+                        < -0.3</td>
+                    <td>🚨 Strong Anomaly</td>
+                    <td><strong>+65</strong></td>
+                    <td>AI_STRONG_ANOMALY</td>
+                </tr>
+                <tr>
+                    <td>-0.3 to -0.1</td>
+                    <td>⚠️ Mild Anomaly</td>
+                    <td><strong>+30</strong></td>
+                    <td>AI_MILD_ANOMALY</td>
+                </tr>
+                <tr>
+                    <td>-0.1 to +0.3</td>
+                    <td>😐 Normal</td>
+                    <td><strong>0</strong></td>
+                    <td>(none)</td>
+                </tr>
+                <tr>
+                    <td>> +0.3</td>
+                    <td>✅ Very Normal</td>
+                    <td><strong>-10</strong></td>
+                    <td>AI_TRUST_BONUS</td>
+                </tr>
+            </table>
+
+            <p style="margin-top: 1rem;"><strong>Total Risk Thresholds:</strong></p>
+            <ul style="margin-left: 2rem; color: var(--text-secondary);">
+                <li><strong>0-30</strong> → LOW Risk → Transaction passes</li>
+                <li><strong>31-60</strong> → MEDIUM Risk → Transaction passes with warning</li>
+                <li><strong>61+</strong> → HIGH Risk → Transaction blocked</li>
+            </ul>
+        </section>
+
+        <!-- T-U: TRAINING DATA -->
+        <section class="section">
+            <div class="section-header">
+                <div class="letter">T</div>
+                <div>
+                    <h2>Training Data Sources</h2>
+                    <p style="color: var(--text-secondary);">Where the model learns from</p>
+                </div>
+            </div>
+
+            <table>
+                <tr>
+                    <th>Data Source</th>
+                    <th>Query</th>
+                    <th>How It's Used</th>
+                </tr>
+                <tr>
+                    <td>Transaction Table</td>
+                    <td>Last 10,000 SUCCESS transactions</td>
+                    <td>Normal behavior examples</td>
+                </tr>
+                <tr>
+                    <td>FraudEvent Table</td>
+                    <td>All events from last 30 days</td>
+                    <td>Blocked transactions = fraud labels</td>
+                </tr>
+            </table>
+
+            <div
+                style="background: rgba(255, 71, 87, 0.1); border: 1px solid rgba(255, 71, 87, 0.3); border-radius: 8px; padding: 1rem; margin-top: 1rem;">
+                <h4 style="color: var(--accent-red);">⚠️ Known Limitation (Truth)</h4>
+                <p style="color: var(--text-secondary); margin-top: 0.5rem;">
+                    The AI learns from its <strong>own blocked transactions</strong>. If the rules block a transaction,
+                    it's labeled as "fraud" for training. This can create bias - the AI learns to agree with the rules
+                    rather than discover new fraud patterns. Ideally, human-verified labels would be used, but that
+                    requires manual review infrastructure.
+                </p>
+            </div>
+        </section>
+
+        <!-- V-Z: VERIFICATION -->
+        <section class="section">
+            <div class="section-header">
+                <div class="letter">V</div>
+                <div>
+                    <h2>Verification: Champion-Challenger A/B Testing</h2>
+                    <p style="color: var(--text-secondary);">How new models are validated</p>
+                </div>
+            </div>
+
+            <p>Before a new model replaces the old one, it must prove itself:</p>
+
+            <div class="code-block">
+                <span class="comment"># Champion-Challenger comparison (ai_scheduler.py line 230-253)</span>
+
+                <span class="comment"># Get last 100 transactions for testing</span>
+                test_df = df.<span class="function">tail</span>(<span class="number">100</span>)
+                test_labels = labels[-<span class="number">100</span>:] <span class="comment"># 1=blocked,
+                    0=normal</span>
+
+                <span class="comment"># Score all test transactions with both models</span>
+                champion_scores = champion.<span class="function">decision_function</span>(test_df)
+                challenger_scores = challenger.<span class="function">decision_function</span>(test_df)
+
+                <span class="comment"># Calculate correlation with actual labels</span>
+                champion_auc = <span class="function">abs</span>(np.<span
+                    class="function">corrcoef</span>(champion_scores, test_labels)[<span class="number">0</span>, <span
+                    class="number">1</span>])
+                challenger_auc = <span class="function">abs</span>(np.<span
+                    class="function">corrcoef</span>(challenger_scores, test_labels)[<span class="number">0</span>,
+                <span class="number">1</span>])
+
+                <span class="comment"># Challenger must beat champion by 5% to win</span>
+                <span class="keyword">if</span> challenger_auc > champion_auc * <span class="number">1.05</span>:
+                <span class="function">print</span>(<span class="string">"🏆 Challenger wins!"</span>)
+                <span class="function">save_signed_model</span>(challenger, MODEL_PATH)
+                <span class="keyword">else</span>:
+                <span class="function">print</span>(<span class="string">"👑 Champion defends."</span>)
+            </div>
+        </section>
+
+        <!-- SUMMARY -->
+        <section class="section"
+            style="background: linear-gradient(135deg, rgba(29, 209, 161, 0.1), rgba(55, 66, 250, 0.1));">
+            <h2 style="margin-bottom: 1rem;">🎯 Complete AI Summary</h2>
+
+            <table>
+                <tr>
+                    <th>Component</th>
+                    <th>Truth</th>
+                </tr>
+                <tr>
+                    <td>Algorithm</td>
+                    <td>IsolationForest from scikit-learn (200 trees, 5% contamination)</td>
+                </tr>
+                <tr>
+                    <td>Features</td>
+                    <td>28 features extracted from transaction + user behavior</td>
+                </tr>
+                <tr>
+                    <td>Training Interval</td>
+                    <td>Every 24 hours + on server startup</td>
+                </tr>
+                <tr>
+                    <td>Training Data</td>
+                    <td>Last 10,000 transactions + FraudEvent feedback</td>
+                </tr>
+                <tr>
+                    <td>Model Validation</td>
+                    <td>Champion-Challenger A/B test (5% improvement needed)</td>
+                </tr>
+                <tr>
+                    <td>Security</td>
+                    <td>HMAC-SHA256 signature on model file</td>
+                </tr>
+                <tr>
+                    <td>Fallback</td>
+                    <td>Rules-Only mode if model unavailable</td>
+                </tr>
+                <tr>
+                    <td>Scoring Impact</td>
+                    <td>-10 to +65 risk points depending on anomaly level</td>
+                </tr>
+            </table>
+        </section>
+    </div>
+
+    <footer>
+        <p>SafePay AI Engine Documentation • A to Z</p>
+        <p>Generated January 31, 2026 • Truth Only</p>
+    </footer>
+</body>
+
+</html>

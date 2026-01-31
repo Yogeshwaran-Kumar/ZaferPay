@@ -142,3 +142,19 @@ class HomeAggregateResponse(BaseModel):
     history: List[TransactionResponse]
     people: List[UserLookupResponse]
     merchants: List[UserLookupResponse]
+
+# ═══════════════════════════════════════════════════════════════════════════
+# FRAUD REPORTING SCHEMAS
+# ═══════════════════════════════════════════════════════════════════════════
+
+class FraudReportRequest(BaseModel):
+    """User reports a transaction as fraudulent"""
+    transaction_id: str
+    reason: str  # "not_me", "wrong_amount", "unknown_receiver", "other"
+    description: Optional[str] = None  # Optional details
+
+class FraudReportResponse(BaseModel):
+    """Response after fraud report submission"""
+    success: bool
+    message: str
+    report_id: Optional[int] = None
