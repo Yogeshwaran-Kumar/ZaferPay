@@ -35,7 +35,8 @@ class TransactionService {
     String? mcc,
     String? note,
     bool isContact = false,
-    String? paymentSource,        // 'qr_scan', 'deep_link', 'manual_entry', 'contact_list'
+    String?
+    paymentSource, // 'qr_scan', 'deep_link', 'manual_entry', 'contact_list'
     bool isScreenSharing = false, // true if AnyDesk/TeamViewer detected
   }) async {
     final body = {
@@ -81,7 +82,7 @@ class TransactionService {
     bool isContact = false,
     bool skipFraudCheck = false,
     String? acknowledgedRisk,
-    String? paymentSource,        // v5.0 scam telemetry
+    String? paymentSource, // v5.0 scam telemetry
     bool isScreenSharing = false, // v5.0 scam telemetry
   }) async {
     final txnId = 'TXN${DateTime.now().millisecondsSinceEpoch}';
@@ -166,7 +167,7 @@ class TransactionService {
     bool isContact = false,
     bool skipFraudCheck = false,
     String? acknowledgedRisk,
-    String? paymentSource,        // v5.0 scam telemetry
+    String? paymentSource, // v5.0 scam telemetry
     bool isScreenSharing = false, // v5.0 scam telemetry
   }) async {
     try {

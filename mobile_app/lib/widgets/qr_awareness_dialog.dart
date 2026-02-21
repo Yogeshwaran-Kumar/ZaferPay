@@ -103,7 +103,7 @@ class QrAwarenessDialog extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.red.shade900.withOpacity(0.4),
+                color: Colors.red.shade900.withValues(alpha: 0.4),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: Colors.red.shade700),
               ),
@@ -127,7 +127,7 @@ class QrAwarenessDialog extends StatelessWidget {
           onPressed: () => Navigator.pop(context, false),
           style: OutlinedButton.styleFrom(
             foregroundColor: config.cancelColor,
-            side: BorderSide(color: config.cancelColor.withOpacity(0.6)),
+            side: BorderSide(color: config.cancelColor.withValues(alpha: 0.6)),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(30),
             ),

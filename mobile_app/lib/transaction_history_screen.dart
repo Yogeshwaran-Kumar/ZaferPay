@@ -6,7 +6,18 @@ import 'transaction_details_screen.dart';
 import 'utils.dart';
 
 class TransactionHistoryScreen extends StatefulWidget {
-  const TransactionHistoryScreen({super.key});
+  final DateTime? initialMonth;
+  final String? initialCategory;
+  final String? initialType; // 'Money sent' or 'Money received'
+  final bool showFilters;
+
+  const TransactionHistoryScreen({
+    super.key,
+    this.initialMonth,
+    this.initialCategory,
+    this.initialType,
+    this.showFilters = true,
+  });
 
   @override
   State<TransactionHistoryScreen> createState() =>
@@ -39,6 +50,9 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialType != null) {
+      _selectedPaymentType = widget.initialType;
+    }
     _loadData();
     _searchController.addListener(_applyFilters);
   }
@@ -158,6 +172,29 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
           if (matches) return true;
         }
         return false;
+      }).toList();
+    }
+
+    // 5. Month Filter (from Spend Analysis)
+    if (widget.initialMonth != null) {
+      final filterMonthStr = DateFormat('yyyy-MM').format(widget.initialMonth!);
+      temp = temp.where((tx) {
+        try {
+          final txDate = DateTime.parse(tx['timestamp']).toLocal();
+          return DateFormat('yyyy-MM').format(txDate) == filterMonthStr;
+        } catch (e) {
+          return false;
+        }
+      }).toList();
+    }
+
+    // 6. Category Filter (from Spend Analysis)
+    if (widget.initialCategory != null) {
+      temp = temp.where((tx) {
+        final mcc = tx['receiver_mcc'] ?? tx['sender_mcc'];
+        final domain = MccHelper.getDomain(mcc?.toString());
+        final category = MccHelper.getGroupedCategory(domain);
+        return category == widget.initialCategory;
       }).toList();
     }
 
@@ -779,33 +816,33 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  // Filters
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _buildFilterChip(
-                          "Status",
-                          _selectedStatuses.isNotEmpty
-                              ? "${_selectedStatuses.length} selected"
-                              : null,
-                          _showStatusFilter,
-                        ),
-                        _buildFilterChip(
-                          "Payment type",
-                          _selectedPaymentType,
-                          _showPaymentTypeFilter,
-                        ),
-                        _buildFilterChip(
-                          "Amount",
-                          _selectedAmountRangeIndices.isNotEmpty
-                              ? "${_selectedAmountRangeIndices.length} ranges"
-                              : null,
-                          _showAmountFilter,
-                        ),
-                      ],
+                  if (widget.showFilters)
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _buildFilterChip(
+                            "Status",
+                            _selectedStatuses.isNotEmpty
+                                ? "${_selectedStatuses.length} selected"
+                                : null,
+                            _showStatusFilter,
+                          ),
+                          _buildFilterChip(
+                            "Payment type",
+                            _selectedPaymentType,
+                            _showPaymentTypeFilter,
+                          ),
+                          _buildFilterChip(
+                            "Amount",
+                            _selectedAmountRangeIndices.isNotEmpty
+                                ? "${_selectedAmountRangeIndices.length} ranges"
+                                : null,
+                            _showAmountFilter,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),

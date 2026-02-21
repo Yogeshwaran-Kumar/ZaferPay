@@ -6,6 +6,7 @@ import 'api_service.dart';
 import 'transaction_history_screen.dart';
 import 'transaction_details_screen.dart';
 import 'balance_check_screen.dart';
+import 'balance_overview_screen.dart';
 import 'mcc_helper.dart';
 import 'utils.dart';
 
@@ -27,14 +28,11 @@ class MoneyScreenState extends State<MoneyScreen> with RouteAware {
   Map<String, dynamic>? _user;
   List<dynamic> _history = [];
   bool _isLoading = true;
-  bool _isBalanceVisible = false;
   Timer? _timer;
 
   /// Public method to lock (hide) the balance - called when tab switches away
   void lockBalance() {
-    if (_isBalanceVisible && mounted) {
-      setState(() => _isBalanceVisible = false);
-    }
+    // Balance is now a separate screen, no need to lock here
   }
 
   @override
@@ -63,9 +61,6 @@ class MoneyScreenState extends State<MoneyScreen> with RouteAware {
   @override
   void didPushNext() {
     // Auto-lock balance when navigating away
-    if (_isBalanceVisible && mounted) {
-      setState(() => _isBalanceVisible = false);
-    }
   }
 
   @override
@@ -145,7 +140,14 @@ class MoneyScreenState extends State<MoneyScreen> with RouteAware {
     );
 
     if (result == true && mounted) {
-      setState(() => _isBalanceVisible = true);
+      // Navigate to the new Balance Overview Screen
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              BalanceOverviewScreen(user: _user!, history: _history),
+        ),
+      );
     }
   }
 
@@ -196,7 +198,7 @@ class MoneyScreenState extends State<MoneyScreen> with RouteAware {
             children: [
               // Balance Card
               GestureDetector(
-                onTap: _isBalanceVisible ? null : _checkBalance,
+                onTap: _checkBalance,
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(24),
@@ -230,9 +232,7 @@ class MoneyScreenState extends State<MoneyScreen> with RouteAware {
                             ),
                           ),
                           Icon(
-                            _isBalanceVisible
-                                ? Icons.visibility
-                                : Icons.visibility_off,
+                            Icons.visibility_off,
                             color: Colors.white,
                             size: 20,
                           ),
@@ -240,50 +240,21 @@ class MoneyScreenState extends State<MoneyScreen> with RouteAware {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        _isBalanceVisible
-                            ? '₹ ${formatAmount(_user!['balance'])}'
-                            : '₹ ••••••',
+                        '₹ ••••••',
                         style: GoogleFonts.outfit(
                           fontSize: 36,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
                       ),
-                      if (!_isBalanceVisible) ...[
-                        const SizedBox(height: 16),
-                        Text(
-                          'Tap to view balance',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.8),
-                            fontSize: 12,
-                          ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Tap to view balance & spend analysis',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.8),
+                          fontSize: 12,
                         ),
-                      ] else ...[
-                        const SizedBox(height: 16),
-                        TextButton.icon(
-                          onPressed: () {
-                            setState(() => _isBalanceVisible = false);
-                          },
-                          icon: const Icon(
-                            Icons.lock,
-                            color: Colors.white,
-                            size: 16,
-                          ),
-                          label: const Text(
-                            'Hide Balance',
-                            style: TextStyle(color: Colors.white),
-                          ),
-                          style: TextButton.styleFrom(
-                            backgroundColor: Colors.white.withValues(
-                              alpha: 0.2,
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                       const SizedBox(height: 16),
                       Container(
                         padding: const EdgeInsets.symmetric(

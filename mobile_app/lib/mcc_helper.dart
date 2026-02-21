@@ -62,6 +62,73 @@ class MccHelper {
     return domains[mcc] ?? "Merchant";
   }
 
+  /// Groups a specific domain into a broader UI category
+  static String getGroupedCategory(String domain) {
+    if (domain == 'Personal') return 'People';
+
+    switch (domain) {
+      case 'Restaurant':
+      case 'Bar / Pub':
+      case 'Fast Food':
+      case 'Bakery':
+      case 'Candy / Snacks':
+      case 'Grocery / Retail Shop':
+      case 'Misc. Food Store':
+      case 'Hotel':
+        return 'Food & Drinks';
+
+      case 'Department Store':
+      case 'General Retail':
+      case 'Clothing Store':
+      case 'Electronics Store':
+      case 'Sporting Goods':
+      case 'Book Store':
+      case 'Cosmetics':
+      case 'Shoe Store':
+      case 'Hardware Store':
+      case 'Furniture Store':
+      case 'Jewelry':
+        return 'Shopping';
+
+      case 'Travel Agency':
+      case 'Transport / Taxi':
+      case 'Cab / Auto':
+      case 'Bus / Travel':
+      case 'Airlines':
+      case 'Transport Services':
+        return 'Transport';
+
+      case 'Utilities':
+      case 'Telecom':
+        return 'Bills & Utilities';
+
+      case 'Cinema':
+      case 'Amusement Park':
+      case 'Recreation':
+      case 'Theater':
+      case 'Tourist Attraction':
+        return 'Entertainment';
+
+      case 'Hospital':
+      case 'Dentist':
+      case 'Doctor / Clinic':
+      case 'Chiropractor':
+      case 'Optometrist':
+      case 'Medical Services':
+      case 'Nursing / Care':
+      case 'Pharmacy':
+        return 'Health';
+
+      case 'Merchant':
+      case 'Uncategorized':
+        return 'Others';
+
+      default:
+        // Any other specific domains like Education, Financial, Insurance, Legal, etc.
+        return 'Others';
+    }
+  }
+
   /// Check if the MCC indicates a personal account (not a merchant).
   /// Returns true if MCC is null, empty, or any form of zeros (0, 00, 000, 0000, etc.)
   static bool isPersonal(dynamic mcc) {
