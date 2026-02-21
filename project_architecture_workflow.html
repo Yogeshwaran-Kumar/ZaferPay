@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafePay Architecture & Intelligence Logic</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            securityLevel: 'loose',
+            flowchart: {
+                curve: 'basis',
+                useMaxWidth: true,
+                htmlLabels: true
+            },
+            themeVariables: {
+                darkMode: true,
+                background: '#141420',
+                fontFamily: 'Inter',
+                fontSize: '16px',
+                primaryColor: '#1e1e2e',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#6366f1',
+                lineColor: '#6366f1',
+                secondaryColor: '#0f172a',
+                tertiaryColor: '#1e293b'
+            }
+        });
+    </script>
+    <style>
+        :root {
+            --bg-dark: #0a0a12;
+            --bg-card: #141420;
+            --bg-card-hover: #1c1c2e;
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.4);
+            --accent-cyan: #06b6d4;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --accent-yellow: #f59e0b;
+            --accent-purple: #8b5cf6;
+            --text-main: #ffffff;
+            --text-secondary: #94a3b8;
+            --border: #2a2a40;
+            --glass: rgba(255, 255, 255, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            /* Wider for big diagram */
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* ─── HERO SECTION ─── */
+        .hero {
+            text-align: center;
+            padding: 4rem 0;
+            position: relative;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -100px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 800px;
+            height: 600px;
+            background: radial-gradient(circle, var(--primary-glow) 0%, transparent 70%);
+            opacity: 0.3;
+            z-index: -1;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -1px;
+        }
+
+        .hero p {
+            color: var(--text-secondary);
+            font-size: 1.2rem;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        /* ─── DIAGRAM CARD ─── */
+        .diagram-container {
+            margin: 2rem 0 5rem 0;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 3rem;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Glow effect on container */
+        .diagram-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--primary), transparent);
+        }
+
+        .diagram-title {
+            text-align: center;
+            margin-bottom: 3rem;
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .diagram-title span {
+            color: var(--primary);
+        }
+
+        .mermaid {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            /* Enhance diagram visibility */
+            filter: drop-shadow(0 0 10px rgba(99, 102, 241, 0.1));
+        }
+
+        /* ─── MCC GRID ─── */
+        .mcc-section {
+            margin-top: 5rem;
+        }
+
+        .mcc-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .mcc-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            transition: 0.3s;
+        }
+
+        .mcc-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .mcc-header {
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .mcc-title {
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .mcc-icon {
+            font-size: 1.5rem;
+        }
+
+        .mcc-body {
+            padding: 1.5rem;
+        }
+
+        .mcc-stat {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.8rem;
+            padding-bottom: 0.8rem;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.9rem;
+        }
+
+        .mcc-stat:last-child {
+            border-bottom: none;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+        }
+
+        .stat-val {
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .tag {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .tag.green {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--accent-green);
+        }
+
+        .tag.red {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--accent-red);
+        }
+
+        .tag.yellow {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--accent-yellow);
+        }
+
+        .tag.blue {
+            background: rgba(99, 102, 241, 0.2);
+            color: var(--primary);
+        }
+
+        /* ─── UTILITIES ─── */
+        .section-header {
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .section-header h2 {
+            font-size: 2rem;
+        }
+
+        .section-header .icon {
+            width: 50px;
+            height: 50px;
+            background: var(--bg-card);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            border: 1px solid var(--border);
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 5rem;
+            padding: 2rem;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            color: var(--text-secondary);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+
+        <!-- HERO -->
+        <header class="hero">
+            <h1>SafePay Neural Architecture</h1>
+            <p>Visualizing the verified A-Z secure transaction pipeline.</p>
+            <div style="margin-top: 1rem;">
+                <span class="tag blue">LIVE SYSTEM MAP</span>
+            </div>
+        </header>
+
+        <!-- FULL ARCHITECTURE DIAGRAM -->
+        <div class="diagram-container">
+            <h2 class="diagram-title"><span>⚡</span> Full System Architecture</h2>
+
+            <div class="mermaid">
+                %%{init: {
+                'theme': 'base',
+                'themeVariables': {
+                'primaryColor': '#1e1e2e',
+                'primaryTextColor': '#fff',
+                'primaryBorderColor': '#6366f1',
+                'secondaryColor': '#0f172a',
+                'tertiaryColor': '#1e1e2e',
+                'lineColor': '#8b5cf6',
+                'fontFamily': 'Inter',
+                'fontSize': '16px'
+                }
+                }}%%
+
+                flowchart TD
+                %% --- STYLES ---
+                classDef mobile fill:#1e1e2e,stroke:#6366f1,stroke-width:2px,color:#fff;
+                classDef backend fill:#1e1e2e,stroke:#f59e0b,stroke-width:2px,color:#fff;
+                classDef engine fill:#2a1010,stroke:#ef4444,stroke-width:2px,color:#fff,stroke-dasharray: 5 5;
+                classDef db fill:#0f172a,stroke:#10b981,stroke-width:2px,color:#fff;
+                classDef cloud fill:#0f172a,stroke:#06b6d4,stroke-width:2px,color:#fff;
+                classDef highlight fill:#312e81,stroke:#6366f1,stroke-width:3px,color:#fff;
+
+                %% --- MOBILE APP ---
+                subgraph Client ["📱 Mobile App (Flutter)"]
+                direction TB
+                UI["🖥️ UI Screens"]
+                AS["💰 Amount Screen"]
+                RAS["🛡️ Risk Analysis Screen"]
+                PIN["🔢 PIN Entry"]
+                PS["🔄 Processing Shield"]
+
+                UI --> AS
+                AS -->|"User Clicks Pay"| RAS
+                RAS -->|"Show Risk Warning"| PIN
+                PIN -->|"User Enters PIN"| PS
+
+                subgraph Logic ["⚙️ Logic Services"]
+                TS["TransactionService"]
+                API["ApiService"]
+                TS --> API
+                end
+
+                RAS -.->|"Request Analysis"| TS
+                TS -.->|"POST /analyze"| API
+                PS -.->|"POST /create"| TS
+                end
+                class Client,UI,AS,RAS,PIN,PS,Logic,TS,API mobile
+                class RAS highlight
+
+                %% --- INTERNET ---
+                HTTPS(("🌐 HTTPS Encrypted Tunnel")):::cloud
+                API ==> HTTPS
+                HTTPS ==> Gateway
+
+                %% --- BACKEND SYSTEM ---
+                subgraph BackendSystem ["🔥 Backend Infrastructure (FastAPI)"]
+                direction TB
+                Gateway["⛩️ Main Application"]
+                PreCheck["🔍 Endpoint: /analyze"]
+                FinalTx["💳 Endpoint: /create"]
+
+                Gateway --> PreCheck
+                Gateway --> FinalTx
+
+                %% --- FRAUD ENGINE ---
+                subgraph Engine ["🧠 Fraud Intelligence Engine"]
+                direction TB
+                Start(["Start Evaluation"]):::backend
+
+                %% Logic Flow
+                Tier{{"🏢 Tier Config"}}:::backend
+                Rules{{"📜 Check 54 Rules"}}:::backend
+                Social{{"🕸️ Social Graph"}}:::backend
+                AI{{"🤖 AI Model"}}:::backend
+
+                Violation["🚫 Violation Found (HIGH RISK)"]:::engine
+                Safe["✅ Safe / Warn"]:::backend
+
+                PreCheck --> Start
+                FinalTx --> Start
+
+                Start --> Tier
+                Tier --> Rules
+
+                Rules -->|"Fail Rule"| Violation
+                Rules -->|"Pass Rules"| Social
+
+                Social -->|"Untrusted"| Violation
+                Social -->|"Trusted"| AI
+
+                AI -->|"Score below -0.3"| Violation
+                AI -->|"Normal Score"| Safe
+                end
+                end
+                class BackendSystem,Gateway,PreCheck,FinalTx backend
+
+                %% --- DATABASE ---
+                subgraph DataLayer ["🗄️ Persistence Layer"]
+                DB[("💾 SafePay DB <br> (Atomic Ledger)")]:::db
+                end
+
+                FinalTx ==>|"Atomic Write & Lock"| DB
+                PreCheck -.->|"Read History"| DB
+            </div>
+
+            <div style="margin-top: 2rem; display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap;">
+                <div
+                    style="display: flex; align-items: center; gap: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">
+                    <div style="width: 12px; height: 12px; background: #6366f1; border-radius: 50%;"></div> Mobile App
+                </div>
+                <div
+                    style="display: flex; align-items: center; gap: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">
+                    <div style="width: 12px; height: 12px; background: #f59e0b; border-radius: 50%;"></div> Backend API
+                </div>
+                <div
+                    style="display: flex; align-items: center; gap: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">
+                    <div style="width: 12px; height: 12px; background: #ef4444; border-radius: 50%;"></div> Fraud Engine
+                </div>
+                <div
+                    style="display: flex; align-items: center; gap: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">
+                    <div style="width: 12px; height: 12px; background: #10b981; border-radius: 50%;"></div> Database
+                </div>
+            </div>
+        </div>
+
+        <!-- MCC RULES SYSTEM -->
+        <section class="mcc-section">
+            <div class="section-header">
+                <div class="icon">🏢</div>
+                <h2>MCC Risk Tier System</h2>
+                <p style="color:var(--text-secondary); margin-left: 1rem;">Logic verified from
+                    <code>backend/fraud_engine.py</code>
+                </p>
+            </div>
+
+            <div class="mcc-grid">
+
+                <!-- ESSENTIAL -->
+                <div class="mcc-card" style="border-top: 4px solid var(--accent-green);">
+                    <div class="mcc-header">
+                        <div class="mcc-title">ESSENTIAL</div>
+                        <div class="mcc-icon">🏥</div>
+                    </div>
+                    <div class="mcc-body">
+                        <p style="margin-bottom: 1rem; color: var(--text-secondary);">Hospitals, Utilities, Schools,
+                            Insurance.</p>
+                        <div class="mcc-stat">
+                            <span class="stat-label">Velocity Limit</span>
+                            <span class="stat-val">UNLIMITED</span>
+                        </div>
+                        <div class="mcc-stat">
+                            <span class="stat-label">Max Amount</span>
+                            <span class="stat-val">₹1 Crore</span>
+                        </div>
+                        <div class="mcc-stat">
+                            <span class="stat-label">Trust Policy</span>
+                            <span class="stat-val"><span class="tag green">SKIP ALL CHECKS</span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- HIGH VALUE -->
+                <div class="mcc-card" style="border-top: 4px solid var(--accent-purple);">
+                    <div class="mcc-header">
+                        <div class="mcc-title">HIGH_VALUE</div>
+                        <div class="mcc-icon">💎</div>
+                    </div>
+                    <div class="mcc-body">
+                        <p style="margin-bottom: 1rem; color: var(--text-secondary);">Jewelry, Business Services,
+                            Consultants.</p>
+                        <div class="mcc-stat">
+                            <span class="stat-label">Velocity Limit</span>
+                            <span class="stat-val" style="color: var(--accent-red);">2 per hour</span>
+                        </div>
+                        <div class="mcc-stat">
+                            <span class="stat-label">Max Amount</span>
+                            <span class="stat-val">₹5 Lakhs</span>
+                        </div>
+                        <div class="mcc-stat">
+                            <span class="stat-label">Trust Policy</span>
+                            <span class="stat-val"><span class="tag yellow">AML MONITORING</span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RETAIL -->
+                <div class="mcc-card" style="border-top: 4px solid var(--accent-cyan);">
+                    <div class="mcc-header">
+                        <div class="mcc-title">RETAIL</div>
+                        <div class="mcc-icon">🛒</div>
+                    </div>
+                    <div class="mcc-body">
+                        <p style="margin-bottom: 1rem; color: var(--text-secondary);">Grocery, Food, Transport, Fashion.
+                        </p>
+                        <div class="mcc-stat">
+                            <span class="stat-label">Velocity Limit</span>
+                            <span class="stat-val">20 per hour</span>
+                        </div>
+                        <div class="mcc-stat">
+                            <span class="stat-label">Max Amount</span>
+                            <span class="stat-val">₹1 Lakh</span>
+                        </div>
+                        <div class="mcc-stat">
+                            <span class="stat-label">Trust Policy</span>
+                            <span class="stat-val">Allow High Velocity</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SERVICES -->
+                <div class="mcc-card" style="border-top: 4px solid var(--primary);">
+                    <div class="mcc-header">
+                        <div class="mcc-title">SERVICES</div>
+                        <div class="mcc-icon">✈️</div>
+                    </div>
+                    <div class="mcc-body">
+                        <p style="margin-bottom: 1rem; color: var(--text-secondary);">Travel, Electronics, Hotels.</p>
+                        <div class="mcc-stat">
+                            <span class="stat-label">Velocity Limit</span>
+                            <span class="stat-val">5 per hour</span>
+                        </div>
+                        <div class="mcc-stat">
+                            <span class="stat-label">Max Amount</span>
+                            <span class="stat-val">₹2 Lakhs</span>
+                        </div>
+                        <div class="mcc-stat">
+                            <span class="stat-label">Trust Policy</span>
+                            <span class="stat-val">Standard Checks</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PERSONAL -->
+                <div class="mcc-card" style="border-top: 4px solid var(--text-secondary);">
+                    <div class="mcc-header">
+                        <div class="mcc-title">PERSONAL / P2P</div>
+                        <div class="mcc-icon">👤</div>
+                    </div>
+                    <div class="mcc-body">
+                        <p style="margin-bottom: 1rem; color: var(--text-secondary);">Default for normal users (0000).
+                        </p>
+                        <div class="mcc-stat">
+                            <span class="stat-label">Velocity Limit</span>
+                            <span class="stat-val">5 per hour</span>
+                        </div>
+                        <div class="mcc-stat">
+                            <span class="stat-label">Max Amount</span>
+                            <span class="stat-val">₹1 Lakh</span>
+                        </div>
+                        <div class="mcc-stat">
+                            <span class="stat-label">Stranger Limit</span>
+                            <span class="stat-val" style="color: var(--accent-red);">₹5,000 (First Time)</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- FOOTER -->
+
+
+    </div>
+
+</body>
+
+</html>

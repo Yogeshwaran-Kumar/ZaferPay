@@ -1,0 +1,39 @@
+2026-02-20 15:11:14 | INFO     | safepay:730 | 📲 Updating FCM token for user Dhanush
+2026-02-20 15:12:20 | INFO     | safepay:27 | ✅ Firebase Admin SDK initialized successfully.
+2026-02-20 15:12:25 | ERROR    | safepay:61 | ❌ Error sending notification: Requested entity was not found.
+2026-02-20 15:20:09 | INFO     | safepay:730 | 📲 Updating FCM token for user Kavitha
+2026-02-20 15:22:33 | INFO     | safepay:730 | 📲 Updating FCM token for user Kavitha
+2026-02-20 15:24:48 | INFO     | safepay:730 | 📲 Updating FCM token for user Kavitha
+2026-02-20 15:25:44 | INFO     | safepay:730 | 📲 Updating FCM token for user Kavitha
+2026-02-20 15:31:30 | INFO     | safepay:730 | 📲 Updating FCM token for user Kavitha
+2026-02-20 15:35:02 | INFO     | safepay:730 | 📲 Updating FCM token for user Kavitha
+2026-02-20 15:37:09 | INFO     | safepay:730 | 📲 Updating FCM token for user Kavitha
+2026-02-20 15:40:09 | INFO     | safepay:730 | 📲 Updating FCM token for user Dhanush
+2026-02-20 15:52:49 | INFO     | safepay:730 | 📲 Updating FCM token for user Kavitha
+2026-02-20 15:55:53 | INFO     | safepay:730 | 📲 Updating FCM token for user Kavitha
+2026-02-20 16:08:26 | INFO     | safepay:730 | 📲 Updating FCM token for user Kavitha
+2026-02-20 16:12:24 | INFO     | safepay:730 | 📲 Updating FCM token for user Kavitha
+2026-02-20 16:26:17 | INFO     | safepay:730 | 📲 Updating FCM token for user Kavitha
+2026-02-20 16:26:51 | INFO     | safepay:730 | 📲 Updating FCM token for user Kavitha
+2026-02-20 16:31:14 | INFO     | safepay:730 | 📲 Updating FCM token for user Kavitha
+2026-02-20 17:01:59 | INFO     | safepay:730 | 📲 Updating FCM token for user Kavitha
+2026-02-20 19:55:23 | ERROR    | safepay:97 | Error in automated bank reporting: a bytes-like object is required, not 'str'
+2026-02-20 19:55:56 | ERROR    | safepay:98 | Error in automated bank reporting: a bytes-like object is required, not 'str'
+2026-02-20 19:56:37 | INFO     | safepay:97 | 🚨 AUTOMATED BANK REPORT TRIGGERED for user test_user (1)
+2026-02-20 19:56:37 | INFO     | safepay:98 | 📤 Report (PDF Size: 0 bytes) simulated sent to fraud-alerts@bank-partner.com
+2026-02-20 19:56:59 | INFO     | safepay:99 | 🚨 AUTOMATED BANK REPORT TRIGGERED for user test_user (1)
+2026-02-20 19:56:59 | INFO     | safepay:100 | 📤 Report (PDF Size: 0 bytes) simulated sent to fraud-alerts@bank-partner.com
+2026-02-20 19:57:17 | ERROR    | safepay:99 | Error in automated bank reporting: expected str, bytes or os.PathLike object, not BytesIO
+2026-02-20 19:59:01 | INFO     | safepay:95 | 🚨 AUTOMATED BANK REPORT TRIGGERED for user test_user (1)
+2026-02-20 19:59:01 | INFO     | safepay:96 | 📤 Report (PDF Size: 1867 bytes) simulated sent to fraud-alerts@bank-partner.com
+2026-02-20 20:56:12 | INFO     | safepay:741 | 📲 Updating FCM token for user Dhanush
+2026-02-20 20:57:02 | INFO     | safepay:741 | 📲 Updating FCM token for user Dhanush
+2026-02-20 22:45:29 | INFO     | safepay:741 | 📲 Updating FCM token for user Dhanush
+2026-02-20 22:53:41 | INFO     | safepay:741 | 📲 Updating FCM token for user Dhanush
+2026-02-20 23:01:22 | INFO     | safepay:741 | 📲 Updating FCM token for user Dhanush
+2026-02-20 23:17:38 | INFO     | safepay:741 | 📲 Updating FCM token for user Dhanush
+2026-02-20 23:30:05 | INFO     | safepay:741 | 📲 Updating FCM token for user Dhanush
+2026-02-20 23:59:01 | INFO     | safepay:741 | 📲 Updating FCM token for user Dhanush
+2026-02-20 23:59:46 | INFO     | safepay:741 | 📲 Updating FCM token for user Dhanush
+2026-02-21 00:17:30 | INFO     | safepay:741 | 📲 Updating FCM token for user Dhanush
+2026-02-21 00:59:25 | INFO     | safepay:741 | 📲 Updating FCM token for user Dhanush
