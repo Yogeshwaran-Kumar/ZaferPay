@@ -15,6 +15,7 @@ class ProcessingShieldScreen extends StatefulWidget {
   final bool skipFraudCheck;
   final String? acknowledgedRisk;
   final int? requestId; // Payment Request ID
+  final String? paymentSource;
 
   const ProcessingShieldScreen({
     super.key,
@@ -28,6 +29,7 @@ class ProcessingShieldScreen extends StatefulWidget {
     this.skipFraudCheck = false,
     this.acknowledgedRisk,
     this.requestId,
+    this.paymentSource,
   });
 
   @override
@@ -126,6 +128,7 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
       skipFraudCheck: widget.skipFraudCheck,
       acknowledgedRisk: widget.acknowledgedRisk,
       requestId: widget.requestId,
+      paymentSource: widget.paymentSource,
     );
 
     // 3. Show "Processing" state while waiting for network
@@ -436,7 +439,7 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
               ),
               const SizedBox(width: 6),
               Text(
-                "Powered by SafePay",
+                "Powered by ZaferPay",
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,

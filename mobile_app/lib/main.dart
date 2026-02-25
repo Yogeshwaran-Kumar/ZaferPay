@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io'; // Import dart:io for HttpOverrides
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -14,14 +16,20 @@ import 'settings_screen.dart';
 import 'change_pin_screen.dart';
 import 'risk_analysis_screen.dart'; // Import RiskAnalysisScreen
 import 'pending_requests_screen.dart'; // Import PendingRequestsScreen
+import 'amount_screen.dart';
+import 'contacts_screen.dart';
+import 'transaction_details_screen.dart';
 
 // Note: PaymentPinScreen is usually pushed with arguments, so simpler to use named route or onGenerateRoute.
 // But we can add it here if we want named route navigation.
 import 'payment_pin_screen.dart';
-import 'amount_screen.dart';
 import 'conversation_screen.dart';
 import 'money_screen.dart'; // For RouteObserver
 import 'services/notification_service.dart';
+import 'package:receive_sharing_intent/receive_sharing_intent.dart';
+import 'package:google_mlkit_barcode_scanning/google_mlkit_barcode_scanning.dart'
+    as mlkit;
+import 'mcc_helper.dart';
 
 // Global Key to access Navigator without Context
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -67,6 +75,27 @@ void main() async {
   // OPTIMIZATION: Warm up caches
   ApiService().warmUpPinCache();
 
+  try {
+    final String? homeStr = prefs.getString('home_data_cache');
+    if (homeStr != null) {
+      final Map<String, dynamic> homeData = jsonDecode(homeStr);
+      if (homeData['user'] != null) {
+        // Use the persisted app_lock_enabled setting if available
+        if (homeData['user']['app_lock_enabled'] != null) {
+          MyApp.appLockEnabled = homeData['user']['app_lock_enabled'] == true;
+        } else {
+          // Fallback to has_mpin if legacy user
+          MyApp.appLockEnabled = homeData['user']['has_mpin'] == true;
+        }
+      }
+    }
+
+    // Also fetch preferences from local store for immediate apply on cold start
+    MyApp.biometricEnabled = prefs.getBool('biometric_enabled') ?? false;
+    MyApp.appLockEnabled =
+        prefs.getBool('app_lock_enabled') ?? MyApp.appLockEnabled;
+  } catch (_) {}
+
   runApp(const MyApp());
 }
 
@@ -86,6 +115,8 @@ class MyApp extends StatefulWidget {
   static DateTime? lastShareTime;
   static bool isRequestingPermission = false;
   static DateTime? lastPermissionRequestTime;
+  static bool appLockEnabled = true; // Synced safely on launch
+  static bool biometricEnabled = false; // Synced safely on launch
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -102,10 +133,163 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    // Initialize and clear notifications on cold start
+    NotificationService.instance.initialize();
+    NotificationService.instance.resetBadgeCount();
+
+    _initSharingIntent();
+  }
+
+  late StreamSubscription _intentDataStreamSubscription;
+
+  void _initSharingIntent() {
+    // For sharing images while app is in memory
+    _intentDataStreamSubscription = ReceiveSharingIntent.instance
+        .getMediaStream()
+        .listen(
+          (List<SharedMediaFile> value) {
+            if (value.isNotEmpty) {
+              _handleSharedImages(value);
+            }
+          },
+          onError: (err) {
+            debugPrint("getIntentDataStream error: $err");
+          },
+        );
+
+    // For sharing images while app is closed
+    ReceiveSharingIntent.instance.getInitialMedia().then((
+      List<SharedMediaFile> value,
+    ) {
+      if (value.isNotEmpty) {
+        _handleSharedImages(value);
+      }
+    });
+  }
+
+  Future<void> _handleSharedImages(List<SharedMediaFile> files) async {
+    for (var file in files) {
+      if (file.path.endsWith('.png') ||
+          file.path.endsWith('.jpg') ||
+          file.path.endsWith('.jpeg')) {
+        await _processSharedImage(file.path);
+      }
+    }
+  }
+
+  Future<void> _processSharedImage(String path) async {
+    final inputImage = mlkit.InputImage.fromFilePath(path);
+    final scanner = mlkit.BarcodeScanner(formats: [mlkit.BarcodeFormat.qrCode]);
+
+    try {
+      final barcodes = await scanner.processImage(inputImage);
+      for (final barcode in barcodes) {
+        if (barcode.rawValue != null && barcode.rawValue!.isNotEmpty) {
+          _handleQrResult(barcode.rawValue!);
+          break;
+        }
+      }
+    } catch (e) {
+      debugPrint("ML Kit Error processing shared image: $e");
+    } finally {
+      await scanner.close();
+    }
+  }
+
+  void _handleQrResult(String raw) async {
+    Map<String, String> result = {'upi': raw, 'payment_source': 'qr_share'};
+
+    if (raw.startsWith('upi://')) {
+      try {
+        final uri = Uri.parse(raw);
+        final params = uri.queryParameters;
+        if (params.containsKey('pa')) result['upi'] = params['pa']!;
+        if (params.containsKey('mc')) result['mcc'] = params['mc']!;
+        if (params.containsKey('pn')) result['name'] = params['pn']!;
+      } catch (e) {
+        debugPrint("Error parsing URI: $e");
+      }
+    }
+
+    // Determine category from MCC if present
+    String? category;
+    if (result['mcc'] != null && result['mcc']!.isNotEmpty) {
+      category = MccHelper.getDomain(result['mcc']!);
+      result['category'] = category;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SECURITY: Ensure app is unlocked before proceeding
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (MyApp.appLockEnabled || MyApp.biometricEnabled) {
+      // If we are on login screen (cold start or explicit logout), WAIT until it's gone
+      if (_routeObserver.currentRouteName == '/login') {
+        debugPrint("QR Share: App is on login screen, waiting for unlock...");
+      } else {
+        // App is open, trigger lock
+        debugPrint("QR Share: Triggering app lock...");
+        await _checkAndLockApp();
+      }
+
+      // STRICT WAIT LOOP: Ensure we are NOT on login screen AND we have a valid session
+      int attempts = 0;
+      Map<String, dynamic>? userData;
+
+      while (attempts < 60) {
+        // Wait up to 30 seconds
+        if (_routeObserver.currentRouteName != '/login' &&
+            !_isLockScreenShown) {
+          // Try to get session
+          userData = await ApiService().getMe();
+          if (userData != null) {
+            debugPrint("QR Share: Authentication verified.");
+            break;
+          }
+        }
+        await Future.delayed(const Duration(milliseconds: 500));
+        attempts++;
+      }
+
+      if (userData == null) {
+        debugPrint("QR Share: Authentication failed or timed out. Aborting.");
+        return;
+      }
+
+      // Navigate to amount screen ONLY if user is authenticated
+      navigatorKey.currentState?.pushNamed(
+        '/amount',
+        arguments: {
+          'upi': result['upi'],
+          'name': result['name'],
+          'category': result['category'],
+          'mcc': result['mcc'],
+          'senderBalance': userData['balance'],
+          'senderUpi': userData['upi_id'],
+          'payment_source': 'qr_share',
+        },
+      );
+    } else {
+      // Security disabled: proceed directly
+      final userData = await ApiService().getMe();
+      navigatorKey.currentState?.pushNamed(
+        '/amount',
+        arguments: {
+          'upi': result['upi'],
+          'name': result['name'],
+          'category': result['category'],
+          'mcc': result['mcc'],
+          'senderBalance': userData?['balance'],
+          'senderUpi': userData?['upi_id'],
+          'payment_source': 'qr_share',
+        },
+      );
+    }
   }
 
   @override
   void dispose() {
+    _intentDataStreamSubscription.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -118,7 +302,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       _wasPaused = true;
     } else if (state == AppLifecycleState.resumed) {
       // Reset Badge Count on Resume
-      NotificationService().resetBadgeCount();
+      NotificationService.instance.resetBadgeCount();
 
       if (_wasPaused) {
         _checkAndLockApp();
@@ -127,9 +311,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _checkAndLockApp() async {
+  Future<dynamic> _checkAndLockApp() async {
     // If lock screen is already shown, don't show it again.
-    if (_isLockScreenShown) return;
+    if (_isLockScreenShown) return null;
 
     // Check current route to decide if we should lock.
     final currentRoute = _routeObserver.currentRouteName;
@@ -153,18 +337,28 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // 5. If returned from permission request recently, skip lock.
     // 5. Removed grace period for permission return as per user request
 
+    // Check if App Lock or Biometrics are enabled via global flags
+    // These are synced on launch and updated via SettingsScreen
+    final bool isLockEnabled = MyApp.appLockEnabled || MyApp.biometricEnabled;
+
+    if (!isLockEnabled) {
+      return null; // Skip lock
+    }
+
     // Default: LOCK THE APP
     // We assume if the user is NOT on /login, they are logged in and in a sensitive area.
     _isLockScreenShown = true;
-    navigatorKey.currentState
+    return navigatorKey.currentState
         ?.push(
           MaterialPageRoute(
             builder: (context) => const LoginScreen(isUnlockMode: true),
             fullscreenDialog: false,
+            settings: const RouteSettings(name: '/login'),
           ),
         )
-        .then((_) {
+        .then((result) {
           _isLockScreenShown = false;
+          return result;
         });
   }
 
@@ -226,7 +420,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             _routeObserver,
             moneyScreenRouteObserver,
           ], // Add observer here
-          title: 'SafePay',
+          title: 'ZaferPay',
           debugShowCheckedModeBanner: false,
           themeMode: currentMode,
           theme: ThemeData(
@@ -318,9 +512,32 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             '/scan': (context) => const ScanScreen(),
             '/pay': (context) => const PayScreen(),
             '/amount': (context) => const AmountScreen(),
+            '/contacts': (context) => const ContactsScreen(),
+            '/transaction-details': (context) {
+              final args =
+                  ModalRoute.of(context)!.settings.arguments
+                      as Map<String, dynamic>;
+              return TransactionDetailsScreen(
+                transaction: args['transaction'],
+                currentUpiId: args['currentUpiId'],
+                merchantCategory: args['merchantCategory'],
+              );
+            },
             '/settings': (context) => const SettingsScreen(),
 
-            '/change-pin': (context) => const ChangePinScreen(),
+            '/change-mpin': (context) {
+              final args =
+                  (ModalRoute.of(context)?.settings.arguments
+                      as Map<String, dynamic>?) ??
+                  {};
+              return ChangePinScreen(
+                isMpin: true,
+                isSetOnly: args['isSetOnly'] ?? false,
+                isDisableOnly: args['isDisableOnly'] ?? false,
+              );
+            },
+            '/change-upi-pin': (context) =>
+                const ChangePinScreen(isMpin: false),
             '/risk-analysis': (context) => const RiskAnalysisScreen(),
             '/pending-requests': (context) => const PendingRequestsScreen(),
             '/payment-pin': (context) {
@@ -337,6 +554,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 skipFraudCheck: args['skipFraudCheck'] ?? false,
                 acknowledgedRisk: args['acknowledgedRisk'],
                 requestId: args['paymentRequestId'], // Pass Request ID
+                paymentSource: args['payment_source'], // Pass Telemetry
               );
             },
             '/conversation': (context) {

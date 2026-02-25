@@ -44,7 +44,7 @@ class BiometricService {
   /// Triggers the system biometric prompt.
   /// Returns `true` on success, `false` on failure/cancel.
   Future<bool> authenticate({
-    String reason = 'Use your biometric to unlock SafePay',
+    String reason = 'Use your biometric to unlock ZaferPay',
   }) async {
     try {
       return await _auth.authenticate(

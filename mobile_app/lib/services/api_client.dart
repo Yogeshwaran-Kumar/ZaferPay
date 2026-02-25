@@ -9,7 +9,7 @@ class ApiClient {
   // Default URLs
   static String get _defaultBaseUrl {
     if (kIsWeb) return 'http://127.0.0.1:8000';
-    return 'https://interactions-linked-prisoners-wilderness.trycloudflare.com';
+    return 'https://backing-bristol-princeton-defence.trycloudflare.com';
   }
 
   static const Duration _timeout = Duration(seconds: 30);
@@ -143,6 +143,30 @@ class ApiClient {
 
       return _client!
           .put(
+            Uri.parse('$url$endpoint'),
+            headers: combinedHeaders,
+            body: body != null ? json.encode(body) : null,
+          )
+          .timeout(_timeout);
+    });
+  }
+
+  Future<http.Response> patch(
+    String endpoint, {
+    Map<String, dynamic>? body,
+    Map<String, String>? headers,
+  }) async {
+    return _retryRequest(() async {
+      final url = await baseUrl;
+      final token = await _storage.read(key: 'token');
+      final combinedHeaders = {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+        ...?headers,
+      };
+
+      return _client!
+          .patch(
             Uri.parse('$url$endpoint'),
             headers: combinedHeaders,
             body: body != null ? json.encode(body) : null,

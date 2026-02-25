@@ -14,7 +14,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'widgets/risk_status_widget.dart';
 // To reuse logic if needed, or better, keep logic in widget
 import 'mcc_helper.dart';
-import 'package:flutter_app_badger/flutter_app_badger.dart';
+import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'services/notification_service.dart';
 
 class HomeScreen extends StatefulWidget {
   final void Function(int)? onSwitchTab;
@@ -40,8 +42,13 @@ class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> _recentPeople = [];
   List<dynamic> _recentMerchants = [];
   List<dynamic> _pendingRequests = [];
+  Map<String, dynamic>? _dailySummary;
   bool _isLoading = true;
   bool _isPeopleExpanded = false;
+
+  // Track which person IDs have been opened (to prevent polling from restoring stale badges)
+  final Set<dynamic> _readPersonIds = {};
+  bool _isResetting = false; // Suppress all badges briefly after global reset
 
   // RISK STATE
   bool _isRisk = false;
@@ -53,29 +60,41 @@ class _HomeScreenState extends State<HomeScreen> {
   Timer? _timer;
 
   StreamSubscription? _authSubscription;
+  StreamSubscription? _resetSubscription;
 
   @override
   void initState() {
     super.initState();
+
+    // Trigger a backend notification clear NOW.
+    // Unlike main.dart which runs before the user breathes, this runs AFTER
+    // the user has signed in, guaranteeing we have an auth token and avoiding 401s.
+    NotificationService.instance.resetBadgeCount();
+
     // 0. Sync Load (True Zero Latency)
     // Initialize state BEFORE first build
     final cached = _api.getCachedHomeDataSync();
     if (cached != null) {
       _user = cached['user'];
       _history = cached['history'] ?? [];
-      _recentPeople = cached['people'] ?? [];
-      _recentMerchants = cached['merchants'] ?? [];
+      _recentPeople = List.from(cached['people'] ?? []);
+      _recentMerchants = List.from(cached['merchants'] ?? []);
       _pendingRequests = cached['pending_requests'] ?? [];
+      _dailySummary = cached['daily_summary'];
+
+      // Apply read overrides to cached data to prevent stale badges from showing
+      _applyReadOverrides(_recentPeople);
+      _applyReadOverrides(_recentMerchants);
+
       _isLoading = false; // No spinner ever!
-    } else {
-      // Only trigger async load if sync failed
-      _loadData();
     }
+
+    // ALWAYS trigger immediate network refresh (fresh data from server)
+    _loadData(showLoading: cached == null);
 
     // Start polling every 2 seconds for near-instant updates
     _timer = Timer.periodic(const Duration(seconds: 2), (timer) {
       if (mounted) {
-        // Optimized: Only fetch what's needed or rely on _loadData's internal checks
         _loadData(showLoading: false);
       }
     });
@@ -91,18 +110,50 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // Silent Contact Pre-fetch (Zero Latency Payment Prep)
     ContactService.instance.prefetchContactsIfGranted();
+
+    // Listen for Notification Resets (Clear dots immediately)
+    _resetSubscription = NotificationService.instance.onReset.listen((_) {
+      if (mounted) {
+        // --- ZERO LATENCY OPTIMIZATION ---
+        // Immediately zero out all counts in the UI BEFORE the network refresh
+        setState(() {
+          _isResetting = true;
+          for (var p in _recentPeople) {
+            p['unread_count'] = 0;
+          }
+          for (var m in _recentMerchants) {
+            m['unread_count'] = 0;
+          }
+        });
+
+        // Clear local override set as well
+        _readPersonIds.clear();
+
+        // Suppress all badges for 500ms to allow backend to commit
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) setState(() => _isResetting = false);
+        });
+
+        // Trigger network refresh in background
+        _loadData(showLoading: false, bypassCache: true);
+      }
+    });
   }
 
   @override
   void dispose() {
     _timer?.cancel();
     _authSubscription?.cancel();
+    _resetSubscription?.cancel();
 
     super.dispose();
   }
 
-  Future<void> _loadData({bool showLoading = true}) async {
-    if (showLoading) {
+  Future<void> _loadData({
+    bool showLoading = true,
+    bool bypassCache = false,
+  }) async {
+    if (showLoading && !bypassCache) {
       // Try loading cache first for instant UI
       final cached = await _api.getCachedHomeData();
       if (cached != null) {
@@ -154,18 +205,60 @@ class _HomeScreenState extends State<HomeScreen> {
       }
       if (people != null) {
         _recentPeople = people;
+        // Apply optimistic read override: if user already opened this conversation,
+        // force unread_count to 0 even if backend hasn't caught up yet.
+        // Also suppress ALL badges if a global reset just happened.
+        if (_isResetting) {
+          for (var p in _recentPeople) {
+            p['unread_count'] = 0;
+          }
+        } else {
+          _applyReadOverrides(_recentPeople);
+        }
       }
       if (merchants != null) {
         _recentMerchants = merchants;
+        if (_isResetting) {
+          for (var m in _recentMerchants) {
+            m['unread_count'] = 0;
+          }
+        } else {
+          _applyReadOverrides(_recentMerchants);
+        }
       }
       if (pending != null) {
         _pendingRequests = pending;
       }
+      _dailySummary = data['daily_summary'];
 
-      // Update App Badge
-      final totalUnread = data['total_unread'] as int? ?? 0;
-      FlutterAppBadger.updateBadgeCount(totalUnread);
+      // Note: System badge clearing is now exclusively handled by NotificationService
+      // to prevent race conditions during app resume.
     });
+  }
+
+  /// Zeroes out unread_count for any person the user has already visited.
+  /// Also cleans up _readPersonIds once the backend confirms 0 unreads.
+  void _applyReadOverrides(List<dynamic> personList) {
+    for (final person in personList) {
+      final id = person['id'];
+      if (id != null && _readPersonIds.contains(id)) {
+        if ((person['unread_count'] ?? 0) == 0) {
+          // Backend has caught up, remove from override set
+          _readPersonIds.remove(id);
+          if (kDebugMode) {
+            print('🟢 BADGE: Backend caught up for id=$id, removing override');
+          }
+        } else {
+          // Backend hasn't caught up yet, force zero
+          if (kDebugMode) {
+            print(
+              '🟡 BADGE: Forcing zero for id=$id (backend still shows ${person['unread_count']})',
+            );
+          }
+          person['unread_count'] = 0;
+        }
+      }
+    }
   }
 
   @override
@@ -330,6 +423,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
                   children: [
+                    // 7. Daily Summary Card
+                    _buildDailySummaryCard(isDark),
+                    const SizedBox(height: 24),
                     _buildListItem(
                       icon: Icons.history_rounded,
                       text: "See transaction history",
@@ -365,7 +461,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      "Powered by SafePay",
+                      "Powered by ZaferPay",
                       style: GoogleFonts.outfit(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -378,6 +474,40 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 16),
             ],
+          ),
+        ),
+      ),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: SizedBox(
+          width: 70,
+          height: 70,
+          child: FloatingActionButton(
+            onPressed: () {
+              launchUrl(Uri.parse('tel:1930'));
+            },
+            backgroundColor: const Color(0xFF34A853),
+            elevation: 4,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.call, color: Colors.white, size: 24),
+                const SizedBox(height: 4),
+                Text(
+                  'Cyber\nCrime',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.outfit(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    height: 1.1,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -470,7 +600,7 @@ class _HomeScreenState extends State<HomeScreen> {
         width: double.infinity,
         constraints: const BoxConstraints(minHeight: 160),
         decoration: BoxDecoration(
-          color: const Color(0xFF00B9F1), // SafePay Blue
+          color: const Color(0xFF00B9F1), // ZaferPay Blue
           borderRadius: BorderRadius.circular(24),
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
@@ -629,6 +759,8 @@ class _HomeScreenState extends State<HomeScreen> {
           'mcc': scannedMcc,
           'senderBalance': _user?['balance'],
           'senderUpi': _user?['upi_id'],
+          'payment_source':
+              (scanResult as Map)['payment_source'], // Forward telemetry
         },
       );
 
@@ -717,6 +849,21 @@ class _HomeScreenState extends State<HomeScreen> {
         final upi = person['upi_id'];
         final mobile = person['mobile_number'];
         final id = person['id'];
+
+        // Optimistically clear the badge immediately (instant visual feedback)
+        // Also track this person so polling doesn't restore stale counts
+        if (id != null) {
+          _readPersonIds.add(id);
+        }
+        if (kDebugMode) {
+          print(
+            '🔴 BADGE CLEAR: Tapped person id=$id, upi=$upi, readSet=$_readPersonIds',
+          );
+        }
+        setState(() {
+          person['unread_count'] = 0;
+        });
+
         Navigator.pushNamed(
           context,
           '/conversation',
@@ -727,7 +874,10 @@ class _HomeScreenState extends State<HomeScreen> {
             'id': id,
             'isMerchant': isMerchant,
           },
-        );
+        ).then((_) {
+          // Refresh home data when returning from conversation
+          if (mounted) _loadData(showLoading: false);
+        });
       },
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -750,8 +900,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-              // Badge
-              if ((person['unread_count'] ?? 0) > 0)
+              // Badge — hidden during reset suppression window
+              if (!_isResetting && (person['unread_count'] ?? 0) > 0)
                 Positioned(
                   right: -2,
                   top: -2,
@@ -1185,6 +1335,191 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildDailySummaryCard(bool isDark) {
+    if (_dailySummary == null) return const SizedBox.shrink();
+
+    final textColor = isDark ? Colors.white : const Color(0xFF1F1F1F);
+    final subColor = isDark ? Colors.white60 : Colors.grey.shade600;
+
+    final double received = (_dailySummary!['received_amount'] ?? 0.0)
+        .toDouble();
+    final double sent = (_dailySummary!['sent_amount'] ?? 0.0).toDouble();
+
+    // Formatting date
+    String timeRange = "";
+    try {
+      final startTimeStr = _dailySummary!['start_time'];
+      final endTimeStr = _dailySummary!['end_time'];
+      if (startTimeStr != null && endTimeStr != null) {
+        final start = DateTime.parse(startTimeStr).toLocal();
+        final end = DateTime.parse(endTimeStr).toLocal();
+
+        final DateFormat formatter = DateFormat('MMM d, h:mm a');
+        timeRange = "${formatter.format(start)} - ${formatter.format(end)}";
+      }
+    } catch (e) {
+      if (kDebugMode) print("Date parsing error: $e");
+      timeRange = "Last 24 hours";
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => widget.onSwitchTab?.call(1),
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E2630) : Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: isDark ? Colors.white10 : Colors.grey.shade200,
+            ),
+            boxShadow: [
+              if (!isDark)
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.analytics_outlined,
+                    color: Color(0xFF00B9F1),
+                    size: 22,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    "Daily Summary",
+                    style: GoogleFonts.outfit(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00B9F1).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildSummaryItem(
+                      label: "Received",
+                      amount: received,
+                      color: Colors.green,
+                      isDark: isDark,
+                      lastAt: _dailySummary!['last_received_at'],
+                    ),
+                  ),
+                  Container(
+                    height: 40,
+                    width: 1,
+                    color: isDark ? Colors.white10 : Colors.grey.shade200,
+                  ),
+                  Expanded(
+                    child: _buildSummaryItem(
+                      label: "Sent",
+                      amount: sent,
+                      color: Colors.orange,
+                      isDark: isDark,
+                      lastAt: _dailySummary!['last_sent_at'],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Divider(color: isDark ? Colors.white10 : Colors.grey.shade100),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.access_time_rounded, size: 14, color: subColor),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      timeRange,
+                      style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        color: subColor,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryItem({
+    required String label,
+    required double amount,
+    required Color color,
+    required bool isDark,
+    String? lastAt,
+  }) {
+    String timeText = "";
+    if (lastAt != null && amount > 0) {
+      try {
+        final date = DateTime.parse(lastAt).toLocal();
+        timeText = DateFormat('h:mm a').format(date);
+      } catch (_) {}
+    }
+
+    return Column(
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.outfit(
+            fontSize: 13,
+            color: isDark ? Colors.white54 : Colors.grey.shade600,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          "₹${amount.toStringAsFixed(2)}",
+          style: GoogleFonts.outfit(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        if (timeText.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            "at $timeText",
+            style: GoogleFonts.outfit(
+              fontSize: 10,
+              color: isDark ? Colors.white38 : Colors.grey.shade500,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+        ],
       ],
     );
   }

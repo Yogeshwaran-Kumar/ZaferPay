@@ -284,7 +284,7 @@ class _BalanceOverviewScreenState extends State<BalanceOverviewScreen> {
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
-                                "SafePay Bank", // Mocked Bank Name as requested or could pull from DB if available
+                                "ZaferPay Bank", // Mocked Bank Name as requested or could pull from DB if available
                                 style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w500,
@@ -379,7 +379,7 @@ class _BalanceOverviewScreenState extends State<BalanceOverviewScreen> {
 
                     const SizedBox(height: 32),
 
-                    // --- Powered by SafePay ---
+                    // --- Powered by ZaferPay ---
                     Center(
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -391,7 +391,7 @@ class _BalanceOverviewScreenState extends State<BalanceOverviewScreen> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            'Powered by SafePay',
+                            'Powered by ZaferPay',
                             style: GoogleFonts.outfit(
                               fontSize: 13,
                               fontWeight: FontWeight.w500,

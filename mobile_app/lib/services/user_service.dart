@@ -66,6 +66,34 @@ class UserService {
     } catch (_) {}
   }
 
+  /// Zeroes out all unread_count values in the RAM cache (and persists to disk).
+  /// Called by NotificationService.resetBadgeCount() BEFORE HomeScreen is created,
+  /// so that stale badge counts never appear from cached data.
+  Future<void> clearCachedUnreadCounts() async {
+    if (_homeRamCache == null) return;
+
+    // Zero out in RAM
+    if (_homeRamCache!['people'] != null) {
+      for (var p in _homeRamCache!['people']) {
+        p['unread_count'] = 0;
+      }
+    }
+    if (_homeRamCache!['merchants'] != null) {
+      for (var m in _homeRamCache!['merchants']) {
+        m['unread_count'] = 0;
+      }
+    }
+    if (_homeRamCache!['total_unread'] != null) {
+      _homeRamCache!['total_unread'] = 0;
+    }
+
+    // Persist zeroed-out data to disk so it survives app restarts
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_homeCacheKey, json.encode(_homeRamCache));
+    } catch (_) {}
+  }
+
   // --- Get Me ---
   Future<Map<String, dynamic>?> getMe() async {
     try {

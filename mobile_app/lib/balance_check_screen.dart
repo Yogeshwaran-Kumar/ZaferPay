@@ -16,7 +16,6 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
   String _enteredPin = '';
   bool _isLoading = false;
   bool _isSuccess = false;
-  int _pinAttempts = 0;
 
   @override
   void initState() {
@@ -55,19 +54,19 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
   }
 
   Future<void> _handleIncorrectPin() async {
+    if (!mounted) return;
     setState(() {
-      _pinAttempts++;
       _enteredPin = ''; // Reset PIN field
     });
 
-    if (_pinAttempts == 1) {
+    if (_api.failedAttempts == 1) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Incorrect PIN. Please try again.'),
           backgroundColor: Colors.red,
         ),
       );
-    } else if (_pinAttempts == 2) {
+    } else if (_api.failedAttempts == 2) {
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -84,7 +83,7 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
           ],
         ),
       );
-    } else if (_pinAttempts >= 3) {
+    } else if (_api.failedAttempts >= 3) {
       _handleLockedOut();
     }
   }
@@ -103,7 +102,7 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
     );
 
     // Wait for user to read it
-    await Future.delayed(const Duration(seconds: 4));
+    await Future.delayed(const Duration(milliseconds: 500));
 
     await _api.logout();
 
@@ -115,7 +114,7 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
     if (_enteredPin.length != 4) return;
 
     // 1. Zero Latency Local Check (Smart)
-    final status = await _api.verifyPinSmart(_enteredPin);
+    final status = await _api.verifyUpiPin(_enteredPin);
 
     if (status == PinVerificationStatus.success) {
       if (mounted) {
@@ -132,6 +131,31 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
     } else if (status == PinVerificationStatus.lockedOut) {
       // Instant Logout (0.0s)
       if (mounted) _handleLockedOut();
+      return;
+    } else if (status == PinVerificationStatus.expired) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text("PIN Expired"),
+          content: const Text(
+            "Security requirement: Your UPI PIN has expired (6 months old). Please update it to continue.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.pushNamed(context, '/change-upi-pin');
+              },
+              child: const Text("Update PIN"),
+            ),
+          ],
+        ),
+      );
+      setState(() {
+        _enteredPin = '';
+      });
       return;
     }
 
@@ -159,6 +183,10 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
     } else {
       if (error == 'INCORRECT_PIN') {
         _handleIncorrectPin();
+        return;
+      }
+      if (error == 'LOCKED_OUT') {
+        _handleLockedOut();
         return;
       }
 

@@ -66,14 +66,15 @@ class _ConversationScreenState extends State<ConversationScreen> {
       _scrollToHighlight();
     }
 
-    // Mark as read immediately if ID is known (Optimized for notification clearing)
-    if (widget.args['id'] != null) {
-      _api.markRead(widget.args['id']);
-    }
+    // Mark as read immediately if ID is known (fire-and-forget for speed)
+    _markConversationAsRead();
   }
 
   @override
   void dispose() {
+    // Safety net: mark as read one final time when leaving the screen
+    // This ensures the backend is updated even if the initial call failed
+    _markConversationAsRead();
     _msgController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -120,36 +121,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
         _isLoading = false;
       });
 
-      // Mark as Read (Fire & Forget)
-      // We need the sender's ID (the user we are talking to)
-      // The API returns 'sender_id' in messages, but we can't be sure if we have any messages yet.
-      // However, the `users/lookup` API returns ID.
-      // Optimally, we pass ID in args, but we only have UPI.
-      // Let's rely on the backend to handle lookup if we pass UPI?
-      // Backend expects sender_ID (int).
-      // We can get it from the first message sent by them, OR we lookup user first.
-
-      // Better approach: We know who we are talking to (targetUpi).
-      // We need their ID.
-      // Let's lookup user details if not present.
-
-      if (_messages.isNotEmpty) {
-        // Find a message where sender is NOT me (i.e. it is the other person)
-        final otherMsg = _messages.firstWhere(
-          (m) => m['sender_upi_id'] != _myUpi && m['sender_id'] != null,
-          orElse: () => null,
-        );
-
-        if (otherMsg != null) {
-          _api.markRead(otherMsg['sender_id']);
-        } else if (widget.args['id'] != null) {
-          // If passed in args
-          _api.markRead(widget.args['id']);
-        } else {
-          // Fallback: Lookup ID if critical, but for now we assume if we have messages we have ID.
-          // If no messages at all, nothing to read!
-        }
-      }
+      // Mark as Read (AWAIT to ensure backend commits before HomeScreen refreshes)
+      await _markConversationAsRead();
     } catch (e) {
       if (kDebugMode) print("Conversation Load Error: $e");
       if (mounted) {
@@ -159,6 +132,49 @@ class _ConversationScreenState extends State<ConversationScreen> {
             content: Text("Failed to load conversation"),
             backgroundColor: Colors.red,
           ),
+        );
+      }
+    }
+  }
+
+  /// Centralized method to mark all items from this contact as read.
+  /// Tries args['id'] first (always available from HomeScreen), then
+  /// falls back to extracting sender_id from messages.
+  Future<void> _markConversationAsRead() async {
+    int? contactId;
+
+    // Priority 1: ID passed from HomeScreen (most reliable)
+    if (widget.args['id'] != null) {
+      contactId = widget.args['id'] is int
+          ? widget.args['id']
+          : int.tryParse(widget.args['id'].toString());
+    }
+
+    // Priority 2: Extract from messages
+    if (contactId == null && _messages.isNotEmpty) {
+      final otherMsg = _messages.firstWhere(
+        (m) => m['sender_upi_id'] != _myUpi && m['sender_id'] != null,
+        orElse: () => null,
+      );
+      if (otherMsg != null) {
+        contactId = otherMsg['sender_id'] is int
+            ? otherMsg['sender_id']
+            : int.tryParse(otherMsg['sender_id'].toString());
+      }
+    }
+
+    if (contactId != null) {
+      if (kDebugMode) {
+        print('🔴 MARK READ: Calling markRead with contactId=$contactId');
+      }
+      await _api.markRead(contactId);
+      if (kDebugMode) {
+        print('🟢 MARK READ: markRead completed for contactId=$contactId');
+      }
+    } else {
+      if (kDebugMode) {
+        print(
+          '⚠️ MARK READ: No contactId found! args[id]=${widget.args['id']}, messages=${_messages.length}',
         );
       }
     }
@@ -708,7 +724,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
         child: (widget.args['isValid'] == false)
             ? Center(
                 child: Text(
-                  "This user is not on SafePay",
+                  "This user is not on ZaferPay",
                   style: GoogleFonts.outfit(
                     color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                   ),
@@ -733,7 +749,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       ).then((_) => _loadData());
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00B9F1), // SafePay Blue
+                      backgroundColor: const Color(0xFF00B9F1), // ZaferPay Blue
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(

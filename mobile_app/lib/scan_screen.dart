@@ -35,6 +35,11 @@ class _ScanScreenState extends State<ScanScreen> {
   int _currentLux = 100; // Default to bright
   bool get _isLowLight => _currentLux < 15;
 
+  // Pre-warmed ML Kit scanner for instant gallery uploads
+  final mlkit.BarcodeScanner _fileScanner = mlkit.BarcodeScanner(
+    formats: [mlkit.BarcodeFormat.qrCode],
+  );
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -85,6 +90,7 @@ class _ScanScreenState extends State<ScanScreen> {
   void dispose() {
     _subscription?.cancel();
     cameraController.dispose();
+    _fileScanner.close();
     super.dispose();
   }
 
@@ -137,30 +143,12 @@ class _ScanScreenState extends State<ScanScreen> {
       final XFile? image = await picker.pickImage(source: ImageSource.gallery);
       if (image == null) return;
 
-      // Show loading indicator
-      if (mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => const Center(
-            child: CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-            ),
-          ),
-        );
-      }
-
-      await Future.delayed(const Duration(milliseconds: 50)); // Small UX delay
-
       String? result;
-      // Use Google ML Kit directly for robust file analysis
+      // Use pre-warmed Google ML Kit directly for robust, instant file analysis
       final inputImage = mlkit.InputImage.fromFilePath(image.path);
-      final scanner = mlkit.BarcodeScanner(
-        formats: [mlkit.BarcodeFormat.qrCode],
-      );
 
       try {
-        final barcodes = await scanner.processImage(inputImage);
+        final barcodes = await _fileScanner.processImage(inputImage);
         for (final barcode in barcodes) {
           if (barcode.rawValue != null && barcode.rawValue!.isNotEmpty) {
             result = barcode.rawValue;
@@ -169,17 +157,10 @@ class _ScanScreenState extends State<ScanScreen> {
         }
       } catch (e) {
         debugPrint("ML Kit Error: $e");
-      } finally {
-        await scanner.close();
-      }
-
-      // Dismiss loading
-      if (mounted) {
-        Navigator.of(context, rootNavigator: true).pop(); // Pop Dialog
       }
 
       if (result != null && result.isNotEmpty) {
-        _handleScanResult(result);
+        _handleScanResult(result, source: 'qr_upload');
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -195,9 +176,6 @@ class _ScanScreenState extends State<ScanScreen> {
       }
     } catch (e) {
       if (mounted) {
-        try {
-          Navigator.of(context, rootNavigator: true).pop();
-        } catch (_) {}
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error reading image: $e')));
@@ -205,13 +183,13 @@ class _ScanScreenState extends State<ScanScreen> {
     }
   }
 
-  void _handleScanResult(String raw) {
+  void _handleScanResult(String raw, {String source = 'qr_scan'}) {
     if (_found) return; // Prevent duplicates
     setState(() => _found = true);
 
-    // Tag the result so downstream screens know this came from a QR scan.
-    // This is forwarded to the backend as payment_source='qr_scan' for F57/F58 rules.
-    Map<String, String> result = {'upi': raw, 'payment_source': 'qr_scan'};
+    // Tag the result so downstream screens know this came from a QR scan or upload.
+    // This is forwarded to the backend as payment_source for fraud rules.
+    Map<String, String> result = {'upi': raw, 'payment_source': source};
 
     if (raw.startsWith('upi://')) {
       try {

@@ -112,13 +112,31 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     }
   }
 
+  bool get _isWithin24Hours {
+    try {
+      final timestamp = widget.transaction['timestamp'];
+      if (timestamp == null) return false;
+      final dt = DateTime.parse(timestamp).toLocal();
+      final now = DateTime.now();
+      final diff = now.difference(dt);
+      return diff.inHours < 24;
+    } catch (e) {
+      return false;
+    }
+  }
+
   /// Determine button visibility based on request status
   bool get _showRequestButton {
-    // Show immediately (don't wait for loading). Hide only if pending/paid.
+    // Show immediately (don't wait for loading). Hide only if pending/paid OR > 24h.
+    if (!_isWithin24Hours) return false;
     return _requestStatus == null || _requestStatus == 'cancelled';
   }
 
   bool get _showReportButton {
+    // If it's after 24 hours, we show only the report button (if applicable)
+    // The user's request "after 24hr only the report button should be shown"
+    // implies it should be visible after the 24h window.
+
     if (_requestStatus == 'paid') return false;
 
     final transaction = widget.transaction;
@@ -126,13 +144,17 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     final isDebit = transaction['sender_upi_id'] == currentUpiId;
 
     if (isDebit) {
-      // User is Sender: Always show report button
+      // User is Sender: Always allow reporting
       return true;
     } else {
-      // User is Receiver: Show ONLY if Business Account
-      // The transaction stores 'receiver_mcc' which belongs to the Receiver (Me)
+      // User is Receiver: Show if Business Account OR if it's an old transaction
+      // "after 24hr only the report button should be shown" suggests it becomes
+      // the primary action for older transactions.
       final myMcc = transaction['receiver_mcc'];
-      return MccHelper.isMerchant(myMcc);
+      if (MccHelper.isMerchant(myMcc)) return true;
+
+      // If not a merchant, but it's older than 24h, we'll show it as the "only" button
+      return !_isWithin24Hours;
     }
   }
 
@@ -537,11 +559,60 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                           ),
                         ),
 
+                      const SizedBox(height: 16),
+
+                      // Call Cyber Crime (1930) Button
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: InkWell(
+                          onTap: () {
+                            launchUrl(Uri.parse('tel:1930'));
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF34A853),
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(
+                                    0xFF34A853,
+                                  ).withValues(alpha: 0.2),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.call,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 10),
+                                Text(
+                                  'Call Cyber Crime (1930)',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+
                       const SizedBox(height: 28),
 
                       // ──── Footer ────
                       Text(
-                        'Powered by SafePay',
+                        'Powered by ZaferPay',
                         style: GoogleFonts.outfit(
                           color: Colors.grey.shade400,
                           fontWeight: FontWeight.bold,

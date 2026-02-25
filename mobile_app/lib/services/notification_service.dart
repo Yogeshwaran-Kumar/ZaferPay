@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_app_badger/flutter_app_badger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../api_service.dart';
 import 'api_client.dart';
 
 // Background handler must be a top-level function
@@ -28,12 +30,21 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 }
 
 class NotificationService {
+  NotificationService._internal();
+  static final NotificationService _instance = NotificationService._internal();
+  static NotificationService get instance => _instance;
+
   final ApiClient _apiClient = ApiClient();
   late final FirebaseMessaging _fcm;
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
 
   String? _fcmToken;
+  bool _isInitialized = false;
+
+  // Stream for UI to listen for reset events
+  final _resetController = StreamController<void>.broadcast();
+  Stream<void> get onReset => _resetController.stream;
 
   // Android Notification Channel
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
@@ -45,26 +56,43 @@ class NotificationService {
     playSound: true,
   );
 
-  Future<void> initialize() async {
+  Future<void> initialize({bool askPermission = false}) async {
+    if (_isInitialized) {
+      if (askPermission) {
+        // Only request if asked, after already initialized
+        await _fcm.requestPermission(alert: true, badge: true, sound: true);
+      }
+      return;
+    }
+    _isInitialized = true;
+
     // 0. Initialize Firebase Core
     await Firebase.initializeApp();
     _fcm = FirebaseMessaging.instance;
 
     // 1. Request Permission
-    NotificationSettings settings = await _fcm.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+    if (askPermission) {
+      NotificationSettings settings = await _fcm.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
 
-    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      if (kDebugMode) print('✅ User granted permission');
-    } else if (settings.authorizationStatus ==
-        AuthorizationStatus.provisional) {
-      if (kDebugMode) print('⚠️ User granted provisional permission');
-    } else {
-      if (kDebugMode) print('❌ User declined permission');
-      // We still continue initialization in case they change their mind or for foreground handling
+      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+        if (kDebugMode) {
+          print('✅ User granted permission');
+        }
+      } else if (settings.authorizationStatus ==
+          AuthorizationStatus.provisional) {
+        if (kDebugMode) {
+          print('⚠️ User granted provisional permission');
+        }
+      } else {
+        if (kDebugMode) {
+          print('❌ User declined permission');
+        }
+        // We still continue initialization in case they change their mind or for foreground handling
+      }
     }
 
     // 2. Initialize Local Notifications
@@ -100,16 +128,22 @@ class NotificationService {
     try {
       _fcmToken = await _fcm.getToken();
       if (_fcmToken != null) {
-        if (kDebugMode) print("🔥 FCM Token: $_fcmToken");
+        if (kDebugMode) {
+          print("🔥 FCM Token: $_fcmToken");
+        }
         await _sendTokenToBackend(_fcmToken!);
       }
     } catch (e) {
-      if (kDebugMode) print("❌ Failed to get FCM token: $e");
+      if (kDebugMode) {
+        print("❌ Failed to get FCM token: $e");
+      }
     }
 
     // 5. Listen for Token Refresh
     _fcm.onTokenRefresh.listen((newToken) async {
-      if (kDebugMode) print("🔄 FCM Token Refreshed: $newToken");
+      if (kDebugMode) {
+        print("🔄 FCM Token Refreshed: $newToken");
+      }
       _fcmToken = newToken;
       await _sendTokenToBackend(newToken);
     });
@@ -183,24 +217,63 @@ class NotificationService {
       );
 
       if (response.statusCode == 200) {
-        if (kDebugMode) print("✅ FCM Token synced with server");
+        if (kDebugMode) {
+          print("✅ FCM Token synced with server");
+        }
       } else {
         if (kDebugMode) {
           print("❌ Failed to sync FCM token: ${response.statusCode}");
         }
       }
     } catch (e) {
-      if (kDebugMode) print("❌ Error syncing FCM token: $e");
+      if (kDebugMode) {
+        print("❌ Error syncing FCM token: $e");
+      }
     }
   }
 
   Future<void> resetBadgeCount() async {
     try {
+      if (kDebugMode) {
+        print(
+          "🔔 NotificationService: Resetting badge count and notifications",
+        );
+      }
+
+      // --- TRUE ZERO LATENCY UI UPDATE ---
+      // Notify active UI to hide dots IMMEDIATELY, before ANY async disk/network work.
+      // This prevents a 1-frame flash on app resume.
+      _resetController.add(null);
+
+      // --- ZERO LATENCY: Clear cached badge counts FIRST ---
+      // This ensures HomeScreen's initState never sees stale unread counts
+      // even if it loads sync cached data on cold start.
+      await ApiService().clearCachedUnreadCounts();
+
+      // Clear badge
       FlutterAppBadger.removeBadge();
+      FlutterAppBadger.updateBadgeCount(0);
+
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('badge_count', 0);
+
+      // Clear all shown notifications from status bar
+      // We can call cancelAll even if initialize wasn't fully finished for other things,
+      // as the plugin instance is already created.
+      await _localNotifications.cancelAll();
+
+      // Clear Backend Unread Counts (In-app badges)
+      try {
+        await ApiService().markAllRead();
+      } catch (_) {}
+
+      if (kDebugMode) {
+        print("✅ NotificationService: Reset process initiated");
+      }
     } catch (e) {
-      if (kDebugMode) print("Failed to reset badge count: $e");
+      if (kDebugMode) {
+        print("❌ NotificationService: Failed to reset badge count: $e");
+      }
     }
   }
 

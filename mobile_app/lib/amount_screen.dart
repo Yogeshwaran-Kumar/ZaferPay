@@ -28,6 +28,7 @@ class _AmountScreenState extends State<AmountScreen> {
   String? _currentUserMobile;
   bool _isSelfTransfer = false;
   String? _rawMcc;
+  String? _paymentSource;
 
   final ApiService _api = ApiService();
   final _apiClient = ApiClient();
@@ -43,6 +44,7 @@ class _AmountScreenState extends State<AmountScreen> {
   bool _isLoadingName = true;
   bool _userNotFound = false;
   bool _isAmountTooHigh = false;
+  bool _isQrLimitExceeded = false;
 
   // Request payment state
   bool _isRequestPayment = false;
@@ -92,16 +94,26 @@ class _AmountScreenState extends State<AmountScreen> {
     }
 
     final amount = double.tryParse(amountText);
+    bool qrLimitExceeded = false;
+
+    if (amount != null &&
+        (_paymentSource == 'qr_upload' || _paymentSource == 'qr_share') &&
+        amount > 2000) {
+      qrLimitExceeded = true;
+    }
+
     if (amount != null && amount > 500000) {
-      if (!_isAmountTooHigh) {
+      if (!_isAmountTooHigh || _isQrLimitExceeded != qrLimitExceeded) {
         setState(() {
           _isAmountTooHigh = true;
+          _isQrLimitExceeded = qrLimitExceeded;
         });
       }
     } else {
-      if (_isAmountTooHigh) {
+      if (_isAmountTooHigh || _isQrLimitExceeded != qrLimitExceeded) {
         setState(() {
           _isAmountTooHigh = false;
+          _isQrLimitExceeded = qrLimitExceeded;
         });
       }
     }
@@ -114,6 +126,7 @@ class _AmountScreenState extends State<AmountScreen> {
     _receiverUpi = args?['upi'] ?? '';
     _contactName = args?['name'];
     _category = args?['category'];
+    _paymentSource = args?['payment_source'];
 
     // Request payment prefill
     if (args != null && args['isRequestPayment'] == true) {
@@ -249,7 +262,7 @@ class _AmountScreenState extends State<AmountScreen> {
   }
 
   Future<void> _onPayPressed() async {
-    if (_isSelfTransfer || _isAmountTooHigh) return;
+    if (_isSelfTransfer || _isAmountTooHigh || _isQrLimitExceeded) return;
 
     // Guard: block payment during active phone call
     if (_isOnCall) {
@@ -287,6 +300,7 @@ class _AmountScreenState extends State<AmountScreen> {
         'mcc': _rawMcc,
         'note': _noteController.text.trim(), // Pass Note
         'paymentRequestId': _paymentRequestId, // Pass Request ID
+        'payment_source': _paymentSource, // Pass Telemetry
       },
     );
 
@@ -599,7 +613,7 @@ class _AmountScreenState extends State<AmountScreen> {
     // Determine Theme Colors to match "Safe Pay" aesthetic
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Background: Deep Slate Blue (like screenshot) or White
+    // Background: Clean White or Deep Dark (no grey tint)
     final bgColor = isDark ? const Color(0xFF0F1115) : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black;
     final secondaryTextColor = isDark ? Colors.grey[400] : Colors.grey[600];
@@ -620,6 +634,7 @@ class _AmountScreenState extends State<AmountScreen> {
       appBar: AppBar(
         backgroundColor: bgColor,
         elevation: 0,
+        scrolledUnderElevation: 0, // Prevent color change on scroll
         leading: IconButton(
           icon: Icon(Icons.close, color: textColor),
           onPressed: () => Navigator.pop(context),
@@ -629,29 +644,38 @@ class _AmountScreenState extends State<AmountScreen> {
       floatingActionButton: SizedBox(
         width: MediaQuery.of(context).size.width - 32,
         child: FloatingActionButton.extended(
-          onPressed: (_isSelfTransfer || _isAmountTooHigh)
+          onPressed: (_isSelfTransfer || _isAmountTooHigh || _isQrLimitExceeded)
               ? null
               : _onPayPressed,
-          backgroundColor: (_isSelfTransfer || _isAmountTooHigh)
+          backgroundColor:
+              (_isSelfTransfer || _isAmountTooHigh || _isQrLimitExceeded)
               ? (isDark ? Colors.grey[800] : Colors.grey[300])
               : const Color(0xFF00B9F1), // Brand Cyan/Blue
-          elevation: (_isSelfTransfer || _isAmountTooHigh) ? 0 : 4,
+          elevation: (_isSelfTransfer || _isAmountTooHigh || _isQrLimitExceeded)
+              ? 0
+              : 4,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
           label: Text(
-            _isSelfTransfer ? "Cannot transfer to self" : "Proceed",
+            _isSelfTransfer
+                ? "Cannot transfer to self"
+                : _isQrLimitExceeded
+                ? "Exceeds ₹2,000 Limit"
+                : "Proceed",
             style: GoogleFonts.outfit(
               fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: (_isSelfTransfer || _isAmountTooHigh)
+              color: (_isSelfTransfer || _isAmountTooHigh || _isQrLimitExceeded)
                   ? Colors.grey[500]
                   : Colors.white,
             ),
           ),
           icon: Icon(
-            _isSelfTransfer ? Icons.block_rounded : Icons.arrow_forward_rounded,
-            color: (_isSelfTransfer || _isAmountTooHigh)
+            (_isSelfTransfer || _isQrLimitExceeded)
+                ? Icons.block_rounded
+                : Icons.arrow_forward_rounded,
+            color: (_isSelfTransfer || _isAmountTooHigh || _isQrLimitExceeded)
                 ? Colors.grey[500]
                 : Colors.white,
           ),
@@ -659,251 +683,271 @@ class _AmountScreenState extends State<AmountScreen> {
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       body: SafeArea(
-        child: Column(
-          children: [
-            const Spacer(flex: 1),
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              const SizedBox(height: 8),
 
-            // 1. Receiver Info Section (Top)
-            Center(
-              child: Column(
-                children: [
-                  // Avatar with Orange Gradient
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: getAvatarColor(displayContactName),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      initial,
-                      style: GoogleFonts.outfit(
-                        fontSize: 32,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
+              // 1. Receiver Info Section (Top)
+              Center(
+                child: Column(
+                  children: [
+                    // Avatar with Orange Gradient
+                    Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: getAvatarColor(displayContactName),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // "Paying [Name]" header
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        _isRequestPayment ? "Paying request to " : "Paying ",
+                      alignment: Alignment.center,
+                      child: Text(
+                        initial,
                         style: GoogleFonts.outfit(
-                          color: textColor,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
+                          fontSize: 32,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      Text(
-                        displayContactName,
-                        style: GoogleFonts.outfit(
-                          color: textColor,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
+                    ),
+                    const SizedBox(height: 20),
 
-                  // "Banking name: [Name]" + Verified Tick
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (!_userNotFound) ...[
+                    // "Paying [Name]" header
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
                         Text(
-                          "Banking name: ${displayBankingName ?? 'Verified Merchant'}",
+                          _isRequestPayment ? "Paying request to " : "Paying ",
                           style: GoogleFonts.outfit(
-                            color: secondaryTextColor,
-                            fontSize: 13,
+                            color: textColor,
+                            fontSize: 16,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        const SizedBox(width: 4),
-                        const Icon(
-                          Icons.verified,
-                          color: Colors.greenAccent, // Verified tick
-                          size: 14,
-                        ),
-                      ] else ...[
                         Text(
-                          "Banking name: Unknown",
+                          displayContactName,
                           style: GoogleFonts.outfit(
-                            color: secondaryTextColor,
-                            fontSize: 13,
+                            color: textColor,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ],
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-
-                  // Mobile / UPI ID
-                  Text(
-                    _receiverUpi,
-                    style: GoogleFonts.outfit(
-                      color: secondaryTextColor,
-                      fontSize: 13,
                     ),
-                  ),
+                    const SizedBox(height: 6),
 
-                  // Self-transfer warning
-                  if (_isSelfTransfer)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
-                      child: Text(
-                        "Cannot transfer to self",
-                        style: GoogleFonts.outfit(
-                          color: Colors.red[300],
-                          fontSize: 13,
-                        ),
+                    // "Banking name: [Name]" + Verified Tick
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (!_userNotFound) ...[
+                          Text(
+                            "Banking name: ${displayBankingName ?? 'Verified Merchant'}",
+                            style: GoogleFonts.outfit(
+                              color: secondaryTextColor,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(
+                            Icons.verified,
+                            color: Colors.greenAccent, // Verified tick
+                            size: 14,
+                          ),
+                        ] else ...[
+                          Text(
+                            "Banking name: Unknown",
+                            style: GoogleFonts.outfit(
+                              color: secondaryTextColor,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+
+                    // Mobile / UPI ID
+                    Text(
+                      _receiverUpi,
+                      style: GoogleFonts.outfit(
+                        color: secondaryTextColor,
+                        fontSize: 13,
                       ),
                     ),
 
-                  // Request payment info banner
-                  if (_isRequestPayment)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 16),
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 24),
+                    // General QR Awareness Warning
+                    if (_paymentSource != null &&
+                        _paymentSource!.startsWith('qr_'))
+                      Padding(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
+                          horizontal: 32.0,
+                          vertical: 12.0,
                         ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF00B9F1).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.info_outline,
-                              color: Color(0xFF00B9F1),
-                              size: 16,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Payment Request: ${_requestReason != null ? (_requestReason == 'wrongly_sent'
-                                        ? 'Wrongly Sent'
-                                        : _requestReason == 'wrong_amount'
-                                        ? 'Wrong Amount'
-                                        : 'Other') : ''}',
-                              style: GoogleFonts.outfit(
-                                color: const Color(0xFF00B9F1),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.warning_rounded,
+                                color: Colors.orange,
+                                size: 20,
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 32),
-
-            // 2. Amount Input Section (Middle - Expanded)
-            Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Amount TextField
-                  IntrinsicWidth(
-                    child: TextField(
-                      controller: _amountController,
-                      keyboardType: TextInputType.number,
-                      autofocus: !_isRequestPayment,
-                      readOnly: _isRequestPayment,
-                      enabled: !_isRequestPayment,
-                      inputFormatters: _isRequestPayment
-                          ? []
-                          : [
-                              MaxValueTextInputFormatter(
-                                500000,
-                                onMaxValueExceeded: () {
-                                  if (!_isAmountTooHigh) {
-                                    setState(() => _isAmountTooHigh = true);
-                                  }
-                                },
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  "Attention: QR codes are ONLY for sending money. Never scan a QR code to receive money.",
+                                  style: GoogleFonts.outfit(
+                                    color: isDark
+                                        ? const Color.fromARGB(255, 246, 31, 2)
+                                        : const Color.fromARGB(255, 255, 1, 1),
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                               ),
                             ],
-                      style: GoogleFonts.outfit(
-                        color: textColor,
-                        fontSize: 64, // Large text like screenshot
-                        fontWeight: FontWeight.w500,
-                      ),
-                      decoration: InputDecoration(
-                        filled: false,
-                        prefixText: "₹ ",
-                        prefixStyle: GoogleFonts.outfit(
-                          color: textColor,
-                          fontSize: 64,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        hintText: "0",
-                        hintStyle: GoogleFonts.outfit(
-                          color: isDark ? Colors.grey[700] : Colors.grey[300],
-                          fontSize: 64,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ),
-                  ),
-
-                  // Amount Too High Warning
-                  if (_isAmountTooHigh)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        "Max limit: ₹5,00,000",
-                        style: GoogleFonts.outfit(
-                          color: Colors.red[300],
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
-                    ),
 
-                  const SizedBox(height: 24),
+                    // QR Limit Warning
+                    if (_isQrLimitExceeded)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 32.0,
+                          vertical: 12.0,
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.warning_amber_rounded,
+                                color: Color.fromARGB(255, 253, 2, 2),
+                                size: 20,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  "You not able to send more than 2000 rupees by uploading QR code as a alte",
+                                  style: GoogleFonts.outfit(
+                                    color: const Color.fromARGB(255, 255, 2, 2),
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
 
-                  // "Add note" Pill Button
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? const Color(0xFF1E2630)
-                          : Colors.grey[100],
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: IntrinsicWidth(
+                    // Self-transfer warning
+                    if (_isSelfTransfer)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Text(
+                          "Cannot transfer to self",
+                          style: GoogleFonts.outfit(
+                            color: const Color.fromARGB(255, 248, 5, 5),
+                            fontSize: 15,
+                          ),
+                        ),
+                      ),
+
+                    // Request payment info banner
+                    if (_isRequestPayment)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 24),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFF00B9F1,
+                            ).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.info_outline,
+                                color: Color(0xFF00B9F1),
+                                size: 16,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Payment Request: ${_requestReason != null ? (_requestReason == 'wrongly_sent'
+                                          ? 'Wrongly Sent'
+                                          : _requestReason == 'wrong_amount'
+                                          ? 'Wrong Amount'
+                                          : 'Other') : ''}',
+                                style: GoogleFonts.outfit(
+                                  color: const Color(0xFF00B9F1),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              const SizedBox(height: 32),
+
+              // 2. Amount Input Section (Middle - Expanded)
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Amount TextField
+                    IntrinsicWidth(
                       child: TextField(
-                        controller: _noteController,
-                        textAlign: TextAlign.center,
+                        controller: _amountController,
+                        keyboardType: TextInputType.number,
+                        autofocus: !_isRequestPayment,
+                        readOnly: _isRequestPayment,
+                        enabled: !_isRequestPayment,
+                        inputFormatters: _isRequestPayment
+                            ? []
+                            : [
+                                MaxValueTextInputFormatter(
+                                  500000,
+                                  onMaxValueExceeded: () {
+                                    if (!_isAmountTooHigh) {
+                                      setState(() => _isAmountTooHigh = true);
+                                    }
+                                  },
+                                ),
+                              ],
                         style: GoogleFonts.outfit(
                           color: textColor,
-                          fontSize: 14,
+                          fontSize: 64, // Large text like screenshot
                           fontWeight: FontWeight.w500,
                         ),
                         decoration: InputDecoration(
                           filled: false,
-                          isDense: true,
-                          hintText: "Add note",
+                          prefixText: "₹ ",
+                          prefixStyle: GoogleFonts.outfit(
+                            color: textColor,
+                            fontSize: 64,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          hintText: "0",
                           hintStyle: GoogleFonts.outfit(
-                            color: secondaryTextColor,
-                            fontSize: 14,
+                            color: isDark ? Colors.grey[700] : Colors.grey[300],
+                            fontSize: 64,
                             fontWeight: FontWeight.w500,
                           ),
                           border: InputBorder.none,
@@ -911,37 +955,90 @@ class _AmountScreenState extends State<AmountScreen> {
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
 
-            const Spacer(flex: 2),
+                    // Amount Too High Warning
+                    if (_isAmountTooHigh)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          "Max limit: ₹5,00,000",
+                          style: GoogleFonts.outfit(
+                            color: Colors.red[300],
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
 
-            // 3. Powered By Info (Always Visible)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 24),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.shield_outlined,
-                    color: Colors.blue[300],
-                    size: 14,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    "Powered by SafePay",
-                    style: GoogleFonts.outfit(
-                      color: Colors.blue[300],
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
+                    const SizedBox(height: 24),
+
+                    // "Add note" Pill Button
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? const Color(0xFF1E2630)
+                            : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: IntrinsicWidth(
+                        child: TextField(
+                          controller: _noteController,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.outfit(
+                            color: textColor,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          decoration: InputDecoration(
+                            filled: false,
+                            isDense: true,
+                            hintText: "Add note",
+                            hintStyle: GoogleFonts.outfit(
+                              color: secondaryTextColor,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+
+              const SizedBox(height: 40),
+
+              // 3. Powered By Info (Always Visible)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 24),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.shield_outlined,
+                      color: Colors.blue[300],
+                      size: 14,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      "Powered by ZaferPay",
+                      style: GoogleFonts.outfit(
+                        color: Colors.blue[300],
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

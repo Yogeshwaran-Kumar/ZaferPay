@@ -17,6 +17,7 @@ class PaymentPinScreen extends StatefulWidget {
   final bool skipFraudCheck;
   final String? acknowledgedRisk;
   final int? requestId;
+  final String? paymentSource;
 
   const PaymentPinScreen({
     super.key,
@@ -29,6 +30,7 @@ class PaymentPinScreen extends StatefulWidget {
     this.skipFraudCheck = false,
     this.acknowledgedRisk,
     this.requestId,
+    this.paymentSource,
   });
 
   @override
@@ -37,11 +39,12 @@ class PaymentPinScreen extends StatefulWidget {
 
 class _PaymentPinScreenState extends State<PaymentPinScreen> {
   String _enteredPin = '';
-  int _pinAttempts = 0;
   final ApiService _api = ApiService();
   bool _isOnCall = false;
   StreamSubscription<bool>? _callStateSub;
-  static const _securityChannel = MethodChannel('com.company.safepay/security');
+  static const _securityChannel = MethodChannel(
+    'com.company.zaferpay/security',
+  );
 
   @override
   void initState() {
@@ -102,7 +105,7 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
     }
 
     // 1. FAST Local Check (Avoids navigation if PIN is definitely wrong)
-    final pinStatus = await _api.verifyPinSmart(_enteredPin);
+    final pinStatus = await _api.verifyUpiPin(_enteredPin);
 
     if (pinStatus == PinVerificationStatus.lockedOut) {
       _handleLockedOut();
@@ -110,6 +113,32 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
     }
     if (pinStatus == PinVerificationStatus.incorrect) {
       _handleIncorrectPin();
+      return;
+    }
+    if (pinStatus == PinVerificationStatus.expired) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text("PIN Expired"),
+          content: const Text(
+            "Security requirement: Your UPI PIN has expired (6 months old). Please update it to continue.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.pushNamed(context, '/change-upi-pin');
+              },
+              child: const Text("Update PIN"),
+            ),
+          ],
+        ),
+      );
+      setState(() {
+        _enteredPin = '';
+      });
       return;
     }
 
@@ -130,6 +159,7 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
           skipFraudCheck: widget.skipFraudCheck,
           acknowledgedRisk: widget.acknowledgedRisk,
           requestId: widget.requestId,
+          paymentSource: widget.paymentSource,
         ),
       ),
     );
@@ -234,19 +264,19 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
   }
 
   Future<void> _handleIncorrectPin() async {
+    if (!mounted) return;
     setState(() {
-      _pinAttempts++;
       _enteredPin = ''; // Reset PIN field
     });
 
-    if (_pinAttempts == 1) {
+    if (_api.failedAttempts == 1) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Incorrect PIN. Please try again.'),
           backgroundColor: Colors.red,
         ),
       );
-    } else if (_pinAttempts == 2) {
+    } else if (_api.failedAttempts == 2) {
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -263,7 +293,7 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
           ],
         ),
       );
-    } else if (_pinAttempts >= 3) {
+    } else if (_api.failedAttempts >= 3) {
       _handleLockedOut();
     }
   }
@@ -281,8 +311,8 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
       ),
     );
 
-    // Wait for user to read it
-    await Future.delayed(const Duration(seconds: 4));
+    // Wait for user to read it (shortened to less than 1 second)
+    await Future.delayed(const Duration(milliseconds: 500));
 
     await _api.logout();
 

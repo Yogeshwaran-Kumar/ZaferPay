@@ -88,19 +88,21 @@ class TransactionService {
     final txnId = 'TXN${DateTime.now().millisecondsSinceEpoch}';
 
     // 1. PIN Check
-    final pinStatus = await _authService.verifyPinSmart(pin);
+    final pinStatus = await _authService.verifyUpiPin(pin);
     if (pinStatus == PinVerificationStatus.incorrect) {
-      return {'detail': 'Incorrect PIN'};
+      return {'status': 'FAILED', 'detail': 'Incorrect PIN'};
     }
     if (pinStatus == PinVerificationStatus.lockedOut) {
-      return {'detail': 'Account Locked', 'status': 'LOCKED'};
+      return {'status': 'LOCKED', 'detail': 'Account Locked'};
     }
 
     // 2. Check Balance & Optimistic Update
     final homeData = _userService.getCachedHomeDataSync();
     if (homeData != null && homeData['user'] != null) {
       final double currentBalance = homeData['user']['balance'] ?? 0.0;
-      if (currentBalance < amount) return {'detail': 'Insufficient funds'};
+      if (currentBalance < amount) {
+        return {'status': 'FAILED', 'detail': 'Insufficient funds'};
+      }
 
       homeData['user']['balance'] = currentBalance - amount;
 
@@ -146,6 +148,13 @@ class TransactionService {
 
     // 4. Handle result
     _pendingTransactions.removeWhere((tx) => tx['id'] == txnId);
+
+    // If the server didn't reject the PIN, it means the PIN was correct.
+    if (result['detail'] != 'Incorrect PIN' &&
+        result['detail'] != 'Connection Error' &&
+        result['detail'] != 'Server Error') {
+      await _authService.resetFailedAttempts();
+    }
 
     if (result['status'] == 'SUCCESS' || result['transaction_id'] != null) {
       _userService.getHomeScreenData();
@@ -205,16 +214,31 @@ class TransactionService {
       if (response.statusCode == 200 || response.statusCode == 201) {
         return json.decode(response.body);
       }
-      if (response.statusCode >= 500) return {'detail': 'Server Error'};
+
+      if (response.statusCode == 401) {
+        await _authService.recordFailedAttempt();
+        if (_authService.failedAttempts >= 3) {
+          return {'status': 'LOCKED', 'detail': 'Account Locked'};
+        }
+        return {'status': 'FAILED', 'detail': 'Incorrect PIN'};
+      }
+
+      if (response.statusCode >= 500) {
+        return {'status': 'FAILED', 'detail': 'Server Error'};
+      }
 
       try {
-        return json.decode(response.body);
+        final error = json.decode(response.body);
+        return {
+          'status': 'FAILED',
+          'detail': error['detail'] ?? 'Transaction Failed',
+        };
       } catch (_) {
-        return {'detail': 'Transaction Failed'};
+        return {'status': 'FAILED', 'detail': 'Transaction Failed'};
       }
     } catch (e) {
       if (kDebugMode) print("Tx Error: $e");
-      return {'detail': 'Connection Error'};
+      return {'status': 'FAILED', 'detail': 'Connection Error'};
     }
   }
 

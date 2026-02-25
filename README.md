@@ -1,6 +1,6 @@
 <div align="center">
 
-  <img src="mobile_app/assets/icon.png" alt="SafePay Logo" width="140" height="140" style="border-radius: 28px; box-shadow: 0 15px 40px rgba(0,0,0,0.25);">
+  <img src="mobile_app/assets/zaferpay_logo.png" alt="ZaferPay Logo" width="140" height="140" style="border-radius: 28px; box-shadow: 0 15px 40px rgba(0,0,0,0.25);">
 
   <h1 style="font-size: 3.5rem; margin: 20px 0; font-weight: 800; letter-spacing: -1px;">Safe Pay</h1>
 
@@ -122,8 +122,8 @@ Get the "Truth" environment running in under 5 minutes.
 ### 1. Backend Setup
 ```bash
 # 1. Clone & Enter
-git clone https://github.com/Dhanush-M2005/SafePay.git
-cd SafePay/backend
+git clone https://github.com/Dhanush-M2005/ZaferPay.git
+cd ZaferPay/backend
 
 # 2. Virtual Env
 python -m venv .venv
@@ -176,10 +176,10 @@ The Flutter app isn't just a shell; it's a fully engineered client.
 ## 📄 License & Attribution
 
 This project is proprietary software developed for high-end demonstration purposes. 
-**Copyright © 2026 SafePay Team.**
+**Copyright © 2026 ZaferPay Team.**
 
 <br>
 
 <div align="center">
-  <sub>Built with precision by the SafePay Engineering Team</sub>
+  <sub>Built with precision by the ZaferPay Engineering Team</sub>
 </div>

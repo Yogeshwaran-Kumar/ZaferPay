@@ -46,7 +46,11 @@ class User(Base):
     email_hash = Column(String, unique=True, index=True)  # SHA-256 hash for search
     email_encrypted = Column(String)  # AES-256 encrypted for display
     
-    # Password/PIN moved to BankAccount table
+    # App Login mPIN (Stored securely in User table)
+    hashed_mpin = Column(String, nullable=True)  # Argon2id hash of mPIN
+    pin_updated_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=True)
+    
+    # Password/PIN moved to BankAccount table (for UPI transactions)
     
     # UPI ID (Shareable - kept plain for QR/contacts sharing)
     upi_id = Column(String, unique=True, index=True)  # Plain (designed to be shared)
@@ -74,6 +78,10 @@ class User(Base):
     
     # New: Total Device Count (Summary)
     total_device_count = Column(Integer, default=0)
+    
+    # Settings Persistence (survives app reinstall)
+    biometric_enabled = Column(Boolean, default=False)
+    app_lock_enabled = Column(Boolean, default=True)
 
     # Relationships
     sender_profile = relationship("SenderProfile", back_populates="user", uselist=False)
@@ -94,12 +102,19 @@ class User(Base):
         except:
             return None
     
+
+
     @property
     def bank_name(self):
         """Get bank name from BankAccount for Pydantic serialization"""
         if self.bank_account:
             return self.bank_account.bank_name
         return None
+        
+    @property
+    def has_mpin(self):
+        """Check if App Login PIN (mPIN) is set"""
+        return self.hashed_mpin is not None
     
     @property
     def secure_balance(self):

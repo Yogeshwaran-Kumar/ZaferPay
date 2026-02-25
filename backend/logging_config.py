@@ -15,7 +15,7 @@ LOG_DIR = os.path.join(os.path.dirname(__file__), 'logs')
 os.makedirs(LOG_DIR, exist_ok=True)
 
 # Log file with date
-LOG_FILE = os.path.join(LOG_DIR, f'safepay_{datetime.now().strftime("%Y%m%d")}.log')
+LOG_FILE = os.path.join(LOG_DIR, f'zaferpay_{datetime.now().strftime("%Y%m%d")}.log')
 
 
 def setup_logging(level: str = "INFO") -> logging.Logger:
@@ -29,7 +29,7 @@ def setup_logging(level: str = "INFO") -> logging.Logger:
         Configured logger instance
     """
     # Create logger
-    logger = logging.getLogger("safepay")
+    logger = logging.getLogger("zaferpay")
     logger.setLevel(getattr(logging, level.upper(), logging.INFO))
     
     # Prevent duplicate handlers

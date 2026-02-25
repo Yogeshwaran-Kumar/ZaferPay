@@ -3,7 +3,15 @@ import 'package:flutter/services.dart';
 import 'api_service.dart';
 
 class ChangePinScreen extends StatefulWidget {
-  const ChangePinScreen({super.key});
+  final bool isMpin;
+  final bool isSetOnly;
+  final bool isDisableOnly;
+  const ChangePinScreen({
+    super.key,
+    required this.isMpin,
+    this.isSetOnly = false,
+    this.isDisableOnly = false,
+  });
 
   @override
   State<ChangePinScreen> createState() => _ChangePinScreenState();
@@ -11,7 +19,9 @@ class ChangePinScreen extends StatefulWidget {
 
 class _ChangePinScreenState extends State<ChangePinScreen> {
   final _api = ApiService();
-  static const _securityChannel = MethodChannel('com.company.safepay/security');
+  static const _securityChannel = MethodChannel(
+    'com.company.zaferpay/security',
+  );
   String _enteredPin = '';
   String _firstPin = '';
   String _currentPin = '';
@@ -22,11 +32,13 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
   int _step = 0;
   bool _isLoading = false;
   String _upiId = '';
-  int _pinAttempts = 0;
 
   @override
   void initState() {
     super.initState();
+    if (widget.isSetOnly) {
+      _step = 1; // Skip Current PIN, go straight to New PIN
+    }
     _secureScreen();
     _fetchUser();
   }
@@ -112,19 +124,19 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
   }
 
   Future<void> _handleIncorrectPin() async {
+    if (!mounted) return;
     setState(() {
-      _pinAttempts++;
       _enteredPin = ''; // Reset
     });
 
-    if (_pinAttempts == 1) {
+    if (_api.failedAttempts == 1) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Incorrect Current PIN'),
           backgroundColor: Colors.red,
         ),
       );
-    } else if (_pinAttempts == 2) {
+    } else if (_api.failedAttempts == 2) {
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -141,7 +153,7 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
           ],
         ),
       );
-    } else if (_pinAttempts >= 3) {
+    } else if (_api.failedAttempts >= 3) {
       _handleLockedOut();
     }
   }
@@ -158,7 +170,7 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
       ),
     );
 
-    await Future.delayed(const Duration(seconds: 4));
+    await Future.delayed(const Duration(milliseconds: 500));
     await _api.logout();
 
     if (!mounted) return;
@@ -177,27 +189,80 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
 
     setState(() => _isLoading = true);
 
-    // We use the login endpoint to verify the PIN
-    final error = await _api.login(_username, _enteredPin, forceLogin: false);
+    if (widget.isMpin) {
+      // Check if we are disabling the mPIN
+      if (widget.isDisableOnly) {
+        final success = await _api.disableMpin(_enteredPin);
+        setState(() => _isLoading = false);
 
-    setState(() => _isLoading = false);
+        if (success) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('App Lock disabled successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          _removeSecureScreen();
+          Navigator.pop(context, true); // Return true to indicate change
+        } else {
+          if (mounted) _handleIncorrectPin();
+        }
+        return;
+      }
 
-    if (error == null) {
-      // Success - PIN is correct, save it for backend verification
-      setState(() {
-        _currentPin = _enteredPin;
-        _enteredPin = '';
-        _step = 1; // Move to New PIN
-      });
+      // We use the login endpoint to verify the mPIN
+      final error = await _api.login(_username, _enteredPin, forceLogin: false);
+      setState(() => _isLoading = false);
+
+      if (error == null) {
+        // Success - mPIN is correct, save it
+        setState(() {
+          _currentPin = _enteredPin;
+          _enteredPin = '';
+          _step = 1; // Move to New PIN
+        });
+      } else {
+        // Failed
+        if (error == 'LOCKED_OUT') {
+          _handleLockedOut();
+          return;
+        }
+        if (mounted) _handleIncorrectPin();
+      }
     } else {
-      // Failed
-      if (mounted) _handleIncorrectPin();
+      // Verify UPI PIN
+      final status = await _api.verifyUpiPin(_enteredPin);
+      setState(() => _isLoading = false);
+
+      if (status == PinVerificationStatus.success) {
+        setState(() {
+          _currentPin = _enteredPin;
+          _enteredPin = '';
+          _step = 1; // Move to New PIN
+        });
+      } else if (status == PinVerificationStatus.lockedOut) {
+        _handleLockedOut();
+      } else {
+        if (mounted) _handleIncorrectPin();
+      }
     }
   }
 
   Future<void> _changePinOnServer() async {
     setState(() => _isLoading = true);
-    final success = await _api.changePin(_currentPin, _enteredPin);
+    bool success = false;
+
+    if (widget.isMpin) {
+      if (widget.isSetOnly) {
+        success = await _api.enableMpin(_enteredPin);
+      } else {
+        success = await _api.changeMpin(_currentPin, _enteredPin);
+      }
+    } else {
+      success = await _api.changeUpiPin(_currentPin, _enteredPin);
+    }
+
     setState(() => _isLoading = false);
 
     if (mounted) {
@@ -209,7 +274,7 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
           ),
         );
         _removeSecureScreen();
-        Navigator.pop(context);
+        Navigator.pop(context, true);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -229,13 +294,17 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
   }
 
   String get _title {
+    if (widget.isDisableOnly) {
+      return "Confirm App Lock PIN";
+    }
+    String prefix = widget.isMpin ? "App Login PIN" : "UPI PIN";
     switch (_step) {
       case 0:
-        return "Enter Current PIN";
+        return "Enter Current $prefix";
       case 1:
-        return "Enter New PIN";
+        return "Enter New $prefix";
       case 2:
-        return "Confirm New PIN";
+        return "Confirm New $prefix";
       default:
         return "";
     }
@@ -273,10 +342,17 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(
-                      Icons.lock_outline,
-                      size: 48,
-                      color: Color(0xFF6200EE),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00B9F1).withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.lock_rounded,
+                        size: 48,
+                        color: Color(0xFF00B9F1),
+                      ),
                     ),
                     const SizedBox(height: 24),
                     Text(
@@ -303,19 +379,35 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: List.generate(4, (index) {
                         final filled = index < _enteredPin.length;
-                        return Container(
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
                           margin: const EdgeInsets.symmetric(horizontal: 12),
-                          width: 16,
-                          height: 16,
+                          width: filled ? 20 : 16,
+                          height: filled ? 20 : 16,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: filled
-                                ? const Color(0xFF6200EE)
-                                : Colors.transparent,
+                                ? const Color(0xFF00B9F1)
+                                : (isDark
+                                      ? Colors.grey.shade800
+                                      : Colors.grey.shade300),
                             border: Border.all(
-                              color: const Color(0xFF6200EE),
+                              color: filled
+                                  ? const Color(0xFF00B9F1)
+                                  : Colors.transparent,
                               width: 2,
                             ),
+                            boxShadow: filled
+                                ? [
+                                    BoxShadow(
+                                      color: const Color(
+                                        0xFF00B9F1,
+                                      ).withValues(alpha: 0.4),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ]
+                                : null,
                           ),
                         );
                       }),
@@ -333,12 +425,30 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
             Expanded(
               flex: 3,
               child: Container(
-                color: isDark ? Colors.grey[900] : Colors.grey[50],
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(32),
+                    topRight: Radius.circular(32),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(
+                        alpha: isDark ? 0.4 : 0.05,
+                      ),
+                      blurRadius: 20,
+                      offset: const Offset(0, -5),
+                    ),
+                  ],
+                ),
                 child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 10),
                     Expanded(
                       child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
                           _buildKey('1'),
                           _buildKey('2'),
@@ -348,6 +458,7 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
                     ),
                     Expanded(
                       child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
                           _buildKey('4'),
                           _buildKey('5'),
@@ -357,6 +468,7 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
                     ),
                     Expanded(
                       child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
                           _buildKey('7'),
                           _buildKey('8'),
@@ -366,8 +478,9 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
                     ),
                     Expanded(
                       child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          const Expanded(child: SizedBox()),
+                          const SizedBox(width: 75, height: 75),
                           _buildKey('0'),
                           _buildBackspaceKey(),
                         ],
@@ -385,19 +498,26 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
   }
 
   Widget _buildKey(String value) {
-    return Expanded(
-      child: InkWell(
-        onTap: () => _onKeypadTap(value),
-        splashColor: Colors.transparent,
-        highlightColor: Colors.transparent,
-        child: Center(
-          child: Text(
-            value,
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w500,
-              color: Theme.of(context).textTheme.bodyLarge?.color,
-            ),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return InkWell(
+      onTap: () => _onKeypadTap(value),
+      borderRadius: BorderRadius.circular(40),
+      splashColor: const Color(0xFF00B9F1).withValues(alpha: 0.2),
+      highlightColor: const Color(0xFF00B9F1).withValues(alpha: 0.1),
+      child: Container(
+        width: 75,
+        height: 75,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          value,
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.w600,
+            color: Theme.of(context).textTheme.bodyLarge?.color,
           ),
         ),
       ),
@@ -405,17 +525,24 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
   }
 
   Widget _buildBackspaceKey() {
-    return Expanded(
-      child: InkWell(
-        onTap: () => _onKeypadTap('BACK'),
-        splashColor: Colors.transparent,
-        highlightColor: Colors.transparent,
-        child: Center(
-          child: Icon(
-            Icons.backspace_outlined,
-            size: 28,
-            color: Theme.of(context).iconTheme.color,
-          ),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return InkWell(
+      onTap: () => _onKeypadTap('BACK'),
+      borderRadius: BorderRadius.circular(40),
+      splashColor: Colors.red.withValues(alpha: 0.2),
+      highlightColor: Colors.red.withValues(alpha: 0.1),
+      child: Container(
+        width: 75,
+        height: 75,
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.transparent,
+        ),
+        alignment: Alignment.center,
+        child: Icon(
+          Icons.backspace_rounded,
+          size: 28,
+          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
         ),
       ),
     );

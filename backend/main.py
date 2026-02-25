@@ -14,6 +14,7 @@ import traceback
 from sqlalchemy.orm import joinedload
 
 # AI Auto-Learning Scheduler
+import daily_summary
 try:
     import ai_scheduler
     AI_SCHEDULER_AVAILABLE = True
@@ -115,6 +116,11 @@ async def startup_event():
             print("AI Auto-Learning Scheduler started (retrains every 24 hours)")
         except Exception as e:
             print(f"Failed to start AI scheduler: {e}")
+            
+    try:
+        daily_summary.start_daily_summary_scheduler()
+    except Exception as e:
+        print(f"Failed to start Daily Summary scheduler: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -125,6 +131,11 @@ async def shutdown_event():
             print("AI Scheduler stopped")
         except Exception:
             pass
+            
+    try:
+        daily_summary.stop_daily_summary_scheduler()
+    except Exception:
+        pass
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -263,9 +274,19 @@ def login_for_access_token(
     if not user:
          user = db.query(models.User).filter(models.User.username == identifier).first()
 
-    # Verify PIN from BankAccount table
+    # Verify mPIN from User table (fallback to BankAccount for migration)
+    mpin = user.hashed_mpin if user else None
     bank_pin = user.bank_account.hashed_pin if (user and user.bank_account) else None
-    if not user or not bank_pin or not auth.verify_password(form_data.password, bank_pin):
+    
+    is_valid_pin = False
+    if mpin:
+        if auth.verify_password(form_data.password, mpin):
+            is_valid_pin = True
+    elif bank_pin:
+        if auth.verify_password(form_data.password, bank_pin):
+            is_valid_pin = True
+
+    if not user or not is_valid_pin:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect valid Mobile/Email or PIN",
@@ -645,6 +666,8 @@ def set_pin(
             # Balance: Dual storage (plain for speed, encrypted for security)
             balance=1000.0,  # Welcome Bonus (plain for fast queries)
             encrypted_balance=security.encrypt_value("1000.0"),  # Welcome Bonus (encrypted)
+            hashed_mpin=auth.get_password_hash(req.pin),  # App Login mPIN
+            pin_updated_at=datetime.utcnow()
         )
         db.add(new_user)
         db.commit()
@@ -668,16 +691,19 @@ def set_pin(
         
         return {"msg": "User created and PIN set successfully"}
         
-    # Existing user -> Update PIN in BankAccount
+    # Existing user -> Update both mPIN and Bank PIN
+    hashed_req_pin = auth.get_password_hash(req.pin)
+    user.hashed_mpin = hashed_req_pin
+    user.pin_updated_at = datetime.utcnow()
     if user.bank_account:
-        user.bank_account.hashed_pin = auth.get_password_hash(req.pin)
+        user.bank_account.hashed_pin = hashed_req_pin
     else:
         # Create BankAccount if it doesn't exist (migration case)
         bank_account = models.BankAccount(
             user_id=user.id,
             bank_name=models.detect_bank(user.upi_id),
             upi_id=user.upi_id,
-            hashed_pin=auth.get_password_hash(req.pin)
+            hashed_pin=hashed_req_pin
         )
         db.add(bank_account)
     db.commit()
@@ -799,6 +825,25 @@ def migrate_bank_accounts(db: Session = Depends(get_db)):
         "total_users": len(all_users)
     }
 
+@app.post("/admin/test-daily-summary")
+def test_daily_summary(current_user: models.User = Depends(get_current_user)):
+    """
+    Test endpoint to manually trigger the daily summary notifications.
+    It runs the same logic that the 10 PM scheduler runs.
+    """
+    if current_user.username != "admin": # Basic auth for test endpoint
+         import logging
+         logger = logging.getLogger("auth")
+         logger.warning(f"User {current_user.username} tried to trigger daily summaries manually.")
+         # Allow anyway for testing, or restrict
+    
+    try:
+        # Run synchronously for the test
+        daily_summary.send_daily_summaries()
+        return {"msg": "Successfully triggered daily summary notifications."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # BANK ENDPOINTS — Hierarchical (Bank Name → Details)
@@ -849,6 +894,24 @@ def get_bank_details(bank_name: str, db: Session = Depends(get_db)):
 def read_users_me(current_user: models.User = Depends(get_current_user)):
     return current_user
 
+@app.patch("/users/me/settings", response_model=schemas.UserResponse)
+def update_user_settings(
+    settings: schemas.SettingsUpdateRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Update user-specific app settings (e.g. biometrics) to persist across installs.
+    """
+    if settings.biometric_enabled is not None:
+        current_user.biometric_enabled = settings.biometric_enabled
+    if settings.app_lock_enabled is not None:
+        current_user.app_lock_enabled = settings.app_lock_enabled
+    
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
 @app.get("/users/me/devices", response_model=schemas.DeviceSummaryResponse)
 def read_user_devices(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
@@ -869,10 +932,10 @@ def read_user_devices(current_user: models.User = Depends(get_current_user), db:
          # But user asked for "Count", which is now pre-calculated.
          # To give the "Timings" array, we still query history for that device.
          
-         timings = db.query(models.LoginHistory.login_time)\
+         timings = db.query(models.LoginHistory.timestamp)\
              .filter(models.LoginHistory.user_id == current_user.id)\
              .filter(models.LoginHistory.device_id_hash == p.device_id_hash)\
-             .order_by(models.LoginHistory.login_time.asc()).all()
+             .order_by(models.LoginHistory.timestamp.asc()).all()
          
          # Convert list of tuples to list of datetimes
          timings_list = [t[0] for t in timings]
@@ -905,7 +968,7 @@ def read_device_history(device_hash: str, current_user: models.User = Depends(ge
     history = db.query(models.LoginHistory).filter(
         models.LoginHistory.user_id == current_user.id,
         models.LoginHistory.device_id_hash == device_hash
-    ).order_by(models.LoginHistory.login_time.desc()).all()
+    ).order_by(models.LoginHistory.timestamp.desc()).all()
     
     return history
 
@@ -969,11 +1032,11 @@ def lookup_user_by_upi(upi_id: str, current_user: models.User = Depends(get_curr
             
     return user
 
-@app.get("/users/history/login", response_model=list[schemas.LoginHistoryResponse])
+@app.get("/users/login-history", response_model=list[schemas.LoginHistoryResponse])
 def get_login_history(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     history = db.query(models.LoginHistory).filter(
         models.LoginHistory.user_id == current_user.id
-    ).order_by(models.LoginHistory.login_time.desc()).all()
+    ).order_by(models.LoginHistory.timestamp.desc()).all()
     return history
 
 @app.get("/users/lookup-phone/{phone_number}", response_model=schemas.UserResponse)
@@ -1077,22 +1140,101 @@ def lookup_contacts(
             
     return schemas.ContactLookupResponse(matches=matches)
 
-@app.put("/users/me/change-pin")
-def change_pin(
+@app.put("/users/me/change-mpin")
+def change_mpin(
     req: schemas.ChangePinRequest,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    # Verify current PIN from BankAccount
-    if not current_user.bank_account or not current_user.bank_account.hashed_pin:
+    # Verify current mPIN (fallback to bank account PIN if mPIN not set)
+    current_hash = current_user.hashed_mpin or (current_user.bank_account.hashed_pin if current_user.bank_account else None)
+    
+    if not current_hash:
         raise HTTPException(status_code=400, detail="No PIN set. Use set-pin first.")
     
-    if not auth.verify_password(req.current_pin, current_user.bank_account.hashed_pin):
+    if not auth.verify_password(req.current_pin, current_hash):
         raise HTTPException(status_code=401, detail="Incorrect current PIN")
     
-    current_user.bank_account.hashed_pin = auth.get_password_hash(req.new_pin)
+    current_user.hashed_mpin = auth.get_password_hash(req.new_pin)
     db.commit()
-    return {"msg": "PIN updated successfully"}
+    return {"msg": "App Login PIN updated successfully"}
+
+@app.put("/users/me/disable-mpin")
+def disable_mpin(
+    req: schemas.VerifyPinRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Turns off App Lock by clearing the mPIN. Requires current mPIN."""
+    current_hash = current_user.hashed_mpin
+    
+    if not current_hash:
+        raise HTTPException(status_code=400, detail="mPIN is already disabled.")
+    
+    if not auth.verify_password(req.pin, current_hash):
+        raise HTTPException(status_code=401, detail="Incorrect current mPIN")
+    
+    current_user.hashed_mpin = None
+    db.commit()
+    return {"msg": "App Lock has been disabled"}
+
+@app.put("/users/me/enable-mpin")
+def enable_mpin(
+    req: schemas.VerifyPinRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Turns on App Lock by setting a new mPIN."""
+    if current_user.hashed_mpin:
+        raise HTTPException(status_code=400, detail="mPIN is already enabled.")
+        
+    current_user.hashed_mpin = auth.get_password_hash(req.pin)
+    db.commit()
+    return {"msg": "App Lock has been enabled"}
+
+@app.put("/users/me/change-upi-pin")
+def change_upi_pin(
+    req: schemas.ChangePinRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not current_user.bank_account or not current_user.bank_account.hashed_pin:
+        raise HTTPException(status_code=400, detail="No UPI PIN set. Use set-pin first.")
+    
+    if not auth.verify_password(req.current_pin, current_user.bank_account.hashed_pin):
+        raise HTTPException(status_code=401, detail="Incorrect current UPI PIN")
+    
+    current_user.bank_account.hashed_pin = auth.get_password_hash(req.new_pin)
+    current_user.pin_updated_at = datetime.utcnow()
+    db.commit()
+    return {"msg": "UPI PIN updated successfully"}
+
+@app.post("/auth/verify-upi-pin")
+@limiter.limit("5/minute")
+def verify_upi_pin(
+    request: Request,
+    req: schemas.VerifyPinRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Fast pre-verification of UPI PIN before high-risk actions.
+    """
+    if not current_user.bank_account or not current_user.bank_account.hashed_pin:
+        raise HTTPException(status_code=400, detail="No UPI PIN set.")
+        
+    if not auth.verify_password(req.pin, current_user.bank_account.hashed_pin):
+        current_user.last_active_at = datetime.now()
+        db.commit()
+        raise HTTPException(status_code=401, detail="Incorrect UPI PIN")
+        
+    # Check 6-month expiration rule
+    if current_user.pin_updated_at:
+        age_days = (datetime.utcnow() - current_user.pin_updated_at).days
+        if age_days >= 180:
+            raise HTTPException(status_code=403, detail="PIN_EXPIRED")
+        
+    return {"msg": "UPI PIN verified successfully"}
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PRE-PIN RISK ANALYSIS ENDPOINT
@@ -1734,6 +1876,52 @@ def get_home_aggregate(
         
     total_unread_global = sum(unread_tx_counts.values()) + sum(unread_msg_counts.values()) + sum(unread_req_counts.values())
 
+    # D. Daily Summary (Fixed Snapshot - Last 10 PM cycle)
+    now = datetime.now()
+    # Find the most recent 10 PM boundary
+    end_time = now.replace(hour=22, minute=0, second=0, microsecond=0)
+    if now < end_time:
+        end_time -= timedelta(days=1)
+        
+    start_time = end_time - timedelta(days=1)
+    
+    daily_received = db.query(func.sum(models.Transaction.amount)).filter(
+        models.Transaction.receiver_id == current_user.id,
+        models.Transaction.status == "SUCCESS",
+        models.Transaction.timestamp >= start_time,
+        models.Transaction.timestamp <= end_time
+    ).scalar() or 0.0
+    
+    daily_sent = db.query(func.sum(models.Transaction.amount)).filter(
+        models.Transaction.sender_id == current_user.id,
+        models.Transaction.status == "SUCCESS",
+        models.Transaction.timestamp >= start_time,
+        models.Transaction.timestamp <= end_time
+    ).scalar() or 0.0
+
+    last_received = db.query(models.Transaction.timestamp).filter(
+        models.Transaction.receiver_id == current_user.id,
+        models.Transaction.status == "SUCCESS",
+        models.Transaction.timestamp >= start_time,
+        models.Transaction.timestamp <= end_time
+    ).order_by(models.Transaction.timestamp.desc()).first()
+    
+    last_sent = db.query(models.Transaction.timestamp).filter(
+        models.Transaction.sender_id == current_user.id,
+        models.Transaction.status == "SUCCESS",
+        models.Transaction.timestamp >= start_time,
+        models.Transaction.timestamp <= end_time
+    ).order_by(models.Transaction.timestamp.desc()).first()
+
+    summary_schema = schemas.DailySummarySchema(
+        received_amount=daily_received,
+        sent_amount=daily_sent,
+        start_time=start_time,
+        end_time=end_time,
+        last_received_at=last_received[0] if last_received else None,
+        last_sent_at=last_sent[0] if last_sent else None
+    )
+
     history_list = []
     for t in history_txs:
         # Check manual mapping validity
@@ -1853,7 +2041,8 @@ def get_home_aggregate(
         people=people_list,
         merchants=merchants_list,
         pending_requests=pending_list,
-        total_unread=total_unread_global
+        total_unread=total_unread_global,
+        daily_summary=summary_schema
     )
     
     # Update Cache
@@ -1900,6 +2089,43 @@ def mark_conversation_read(
         del HOME_DATA_CACHE[current_user.id]
 
     return {"msg": "Marked as read"}
+
+@app.post("/notifications/mark-all-read")
+def mark_all_read(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Mark ALL unread items for the current user as READ.
+    Used when the app opens to clear all badges.
+    """
+    now = datetime.now()
+    
+    # 1. Messages
+    db.query(models.Message).filter(
+        models.Message.receiver_id == current_user.id,
+        models.Message.read_at == None
+    ).update({models.Message.read_at: now})
+    
+    # 2. Transactions
+    db.query(models.Transaction).filter(
+        models.Transaction.receiver_id == current_user.id,
+        models.Transaction.read_at == None
+    ).update({models.Transaction.read_at: now})
+    
+    # 3. Payment Requests
+    db.query(models.PaymentRequest).filter(
+        models.PaymentRequest.payer_id == current_user.id,
+        models.PaymentRequest.read_at == None
+    ).update({models.PaymentRequest.read_at: now})
+    
+    db.commit()
+    
+    # Invalidate Cache
+    if current_user.id in HOME_DATA_CACHE:
+        del HOME_DATA_CACHE[current_user.id]
+
+    return {"msg": "All notifications marked as read"}
 
 @app.get("/transactions/history", response_model=list[schemas.TransactionResponse])
 def read_history(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):

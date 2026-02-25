@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'main.dart';
 import 'api_service.dart';
 import 'services/notification_service.dart';
 import 'services/biometric_service.dart';
@@ -19,7 +20,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final _mobileController = TextEditingController();
   final _api = ApiService();
   final _biometric = BiometricService();
-  static const _securityChannel = MethodChannel('com.company.safepay/security');
+  static const _securityChannel = MethodChannel(
+    'com.company.zaferpay/security',
+  );
 
   // Steps:
   // 0 = Mobile Entry
@@ -36,7 +39,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _forceLogoutApproved = false; // Track if user approved force logout
   bool _isUnlocking = false; // Track unlock animation state
   bool _hasError = false; // Track error state for incorrect PIN
-  int _pinAttempts = 0; // Track incorrect PIN attempts
   bool _biometricAvailable = false; // Whether biometric is enabled & available
   bool _biometricVerified = false; // True after biometric step passes
 
@@ -63,13 +65,29 @@ class _LoginScreenState extends State<LoginScreen> {
     // Check for "Identity" (Saved Mobile) instantly from RAM cache
     final syncMobile = _api.getSavedMobileSync();
 
+    // Check if we can bypass entirely
+    final bool hasMpin = MyApp.appLockEnabled;
+    final bool hasBiometric = MyApp.biometricEnabled;
+
     if (syncMobile != null && syncMobile.isNotEmpty) {
+      if (!hasMpin && !hasBiometric && !widget.isUnlockMode) {
+        // Zero-Latency complete bypass to Home Screen (Only if BOTH are disabled)
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) Navigator.pushReplacementNamed(context, '/home');
+        });
+        return;
+      }
+
+      // If mPIN is off BUT Biometric is on, we still need to show the unlock screen
+      // and trigger the fingerprint prompt natively.
       _currentStep = 3;
       _mobileController.text = syncMobile;
-      _isCheckingAuth = false; // Zero-Latency bypass
+      _isCheckingAuth = false;
       _populateCachedUserForUnlock();
       _tryBiometricUnlock();
-    } else if (widget.isUnlockMode) {
+    } else if (widget.isUnlockMode || (!hasMpin && hasBiometric)) {
+      // If we are globally unlocking OR if mPIN is disabled but Biometric is required
+      // fallback to the biometric prompt natively.
       _currentStep = 3;
       _isCheckingAuth = false;
       _populateCachedUserForUnlock();
@@ -129,7 +147,19 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
 
     if (success) {
-      // Biometric passed — show a checkmark and wait for PIN (step 2)
+      // Biometric passed
+
+      // If mPIN is completely disabled, this biometric check WAS the only lock.
+      // We can securely bypass to home directly without asking for a PIN.
+      if (!MyApp.appLockEnabled && !widget.isUnlockMode) {
+        if (mounted) Navigator.pushReplacementNamed(context, '/home');
+        return;
+      } else if (!MyApp.appLockEnabled && widget.isUnlockMode) {
+        if (mounted) Navigator.pop(context, true);
+        return;
+      }
+
+      // Otherwise, show a checkmark and wait for PIN (step 2)
       setState(() => _biometricVerified = true);
     }
   }
@@ -162,6 +192,15 @@ class _LoginScreenState extends State<LoginScreen> {
           final user = await _api.getCachedMe();
           if (user != null) {
             setState(() => _upiId = user['upi_id'] ?? '');
+
+            // If app lock is disabled OR user has no mPIN, bypass entirely
+            final bool appLockEnabled = user['app_lock_enabled'] ?? true;
+            final bool hasMpin = user['has_mpin'] ?? true;
+
+            if ((!appLockEnabled || !hasMpin) && !widget.isUnlockMode) {
+              if (mounted) Navigator.pushReplacementNamed(context, '/home');
+              return;
+            }
           }
         } catch (_) {}
 
@@ -364,13 +403,13 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleIncorrectPin() async {
+    if (!mounted) return;
     setState(() {
-      _pinAttempts++;
       _enteredPin = ''; // Reset PIN field
       _hasError = true;
     });
 
-    if (_pinAttempts == 2) {
+    if (_api.failedAttempts == 2) {
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -387,7 +426,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ],
         ),
       );
-    } else if (_pinAttempts >= 3) {
+    } else if (_api.failedAttempts >= 3) {
       _handleLockedOut();
     }
   }
@@ -405,8 +444,8 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
 
-    // Wait for user to read it
-    await Future.delayed(const Duration(seconds: 4));
+    // Wait for user to read it (shortened to less than 1 second)
+    await Future.delayed(const Duration(milliseconds: 500));
 
     await _api.logout();
 
@@ -428,7 +467,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
           // Sync Notification Token (background/unlock mode)
           try {
-            NotificationService().initialize();
+            NotificationService.instance.initialize();
+            NotificationService.instance.resetBadgeCount();
           } catch (_) {}
 
           await Future.delayed(const Duration(milliseconds: 600));
@@ -468,10 +508,13 @@ class _LoginScreenState extends State<LoginScreen> {
     if (error == null) {
       // Success
       await _api.saveMobile(_mobileController.text);
+      await _api
+          .syncUserSettings(); // Restores biometric settings etc. from backend
 
       // Sync Notification Token
       try {
-        NotificationService().initialize();
+        NotificationService.instance.initialize(askPermission: true);
+        NotificationService.instance.resetBadgeCount();
       } catch (_) {}
 
       if (mounted) {
@@ -480,7 +523,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
         if (!mounted) return;
         if (widget.isUnlockMode) {
-          Navigator.pop(context); // Unlock successful
+          Navigator.pop(context, true); // Unlock successful
         } else {
           // Optimistic Navigation:
           Navigator.pushReplacementNamed(context, '/home');
@@ -489,6 +532,8 @@ class _LoginScreenState extends State<LoginScreen> {
     } else if (error == 'INCORRECT_PIN') {
       // Incorrect PIN
       if (mounted) _handleIncorrectPin();
+    } else if (error == 'LOCKED_OUT') {
+      if (mounted) _handleLockedOut();
     } else if (error == 'CONNECTION_ERROR') {
       // Connection error
       if (mounted) {
@@ -682,8 +727,8 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // SafePay Logo
-              _buildSafePayLogo(),
+              // ZaferPay Logo
+              _buildZaferPayLogo(),
               const SizedBox(height: 20),
 
               // Welcome Text
@@ -819,7 +864,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               // Terms
               Text(
-                'By continuing, you agree to SafePay\'s\nTerms of Service and Privacy Policy',
+                'By continuing, you agree to ZaferPay\'s\nTerms of Service and Privacy Policy',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 12,
@@ -835,7 +880,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildSafePayLogo() {
+  Widget _buildZaferPayLogo() {
     return Container(
       constraints: const BoxConstraints(
         maxWidth: 220,
@@ -843,7 +888,7 @@ class _LoginScreenState extends State<LoginScreen> {
       ), // Decreased size
       padding: const EdgeInsets.symmetric(vertical: 20),
       child: Image.asset(
-        'assets/safepay_logo.png',
+        'assets/zaferpay_logo.png',
         fit: BoxFit.contain,
         // Use errorBuilder to fallback gracefully if asset isn't found immediately (dev hot reload)
         errorBuilder: (context, error, stackTrace) {
@@ -856,7 +901,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 8),
               const Text(
-                "SafePay",
+                "ZaferPay",
                 style: TextStyle(
                   color: Color(0xFF00B9F1),
                   fontSize: 24,
@@ -881,7 +926,7 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const SizedBox(height: 20), // Add top padding for safety
-                _buildSafePayLogo(),
+                _buildZaferPayLogo(),
 
                 // Lock Icon or Title
                 if (_currentStep == 3)
@@ -998,63 +1043,121 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
-        // Keypad
+        // Keypad or Biometric-Only Prompt
         Expanded(
           flex: 3,
           child: Container(
             padding: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
-            child: Column(
-              children: [
-                _buildKeyRow(['1', '2', '3']),
-                const SizedBox(height: 16),
-                _buildKeyRow(['4', '5', '6']),
-                const SizedBox(height: 16),
-                _buildKeyRow(['7', '8', '9']),
-                const SizedBox(height: 16),
-
-                Row(
-                  children: [
-                    // Empty Space (Left)
-                    const Expanded(child: SizedBox(height: 72)),
-
-                    // '0' Key (Center)
-                    Expanded(
-                      child: _buildAnimatedKey(
-                        label: "0",
-                        onTap: () => _onKeypadTap('0'),
+            child:
+                (!MyApp.appLockEnabled &&
+                    MyApp.biometricEnabled &&
+                    _currentStep == 3)
+                ? Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        "App Lock is disabled.",
+                        style: TextStyle(color: Colors.black54, fontSize: 16),
                       ),
-                    ),
-
-                    // Backspace Button (Right)
-                    Expanded(
-                      child: _buildAnimatedKey(
-                        icon: Icons.backspace_outlined,
-                        onTap: () => _onKeypadTap('BACK'),
+                      const SizedBox(height: 8),
+                      const Text(
+                        "Verify Biometric to Continue",
+                        style: TextStyle(
+                          color: Colors.black87,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                      const SizedBox(height: 32),
+                      GestureDetector(
+                        onTap: _tryBiometricUnlock,
+                        child: Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(
+                              0xFF00B9F1,
+                            ).withValues(alpha: 0.1),
+                          ),
+                          child: const Icon(
+                            Icons.fingerprint,
+                            size: 64,
+                            color: Color(0xFF00B9F1),
+                          ),
+                        ),
+                      ),
+                      const Expanded(child: SizedBox()),
+                      TextButton(
+                        onPressed: () async {
+                          await _api.removeSavedMobile();
+                          _removeSecureScreen();
+                          setState(() {
+                            _currentStep = 0;
+                            _enteredPin = '';
+                            _mobileController.clear();
+                          });
+                        },
+                        child: const Text(
+                          "Not you? Change Number",
+                          style: TextStyle(color: Colors.black54),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                  )
+                : Column(
+                    children: [
+                      _buildKeyRow(['1', '2', '3']),
+                      const SizedBox(height: 16),
+                      _buildKeyRow(['4', '5', '6']),
+                      const SizedBox(height: 16),
+                      _buildKeyRow(['7', '8', '9']),
+                      const SizedBox(height: 16),
 
-                const SizedBox(height: 20),
-                if (_currentStep == 3)
-                  TextButton(
-                    onPressed: () async {
-                      await _api.removeSavedMobile(); // Clear saved session
-                      _removeSecureScreen();
-                      setState(() {
-                        _currentStep = 0;
-                        _enteredPin = '';
-                        _mobileController.clear();
-                      });
-                    },
-                    child: const Text(
-                      "Not you? Change Number",
-                      style: TextStyle(color: Colors.black54),
-                    ),
+                      Row(
+                        children: [
+                          // Empty Space (Left)
+                          const Expanded(child: SizedBox(height: 72)),
+
+                          // '0' Key (Center)
+                          Expanded(
+                            child: _buildAnimatedKey(
+                              label: "0",
+                              onTap: () => _onKeypadTap('0'),
+                            ),
+                          ),
+
+                          // Backspace Button (Right)
+                          Expanded(
+                            child: _buildAnimatedKey(
+                              icon: Icons.backspace_outlined,
+                              onTap: () => _onKeypadTap('BACK'),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 20),
+                      if (_currentStep == 3)
+                        TextButton(
+                          onPressed: () async {
+                            await _api
+                                .removeSavedMobile(); // Clear saved session
+                            _removeSecureScreen();
+                            setState(() {
+                              _currentStep = 0;
+                              _enteredPin = '';
+                              _mobileController.clear();
+                            });
+                          },
+                          child: const Text(
+                            "Not you? Change Number",
+                            style: TextStyle(color: Colors.black54),
+                          ),
+                        ),
+                      const SizedBox(height: 10),
+                    ],
                   ),
-                const SizedBox(height: 10),
-              ],
-            ),
           ),
         ),
       ],

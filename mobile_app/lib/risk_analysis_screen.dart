@@ -28,6 +28,7 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
   String? _mcc;
   String? _note;
   int? _paymentRequestId;
+  String? _paymentSource;
 
   // Analysis Results (from backend)
   String _riskScore = "SAFE"; // 'SAFE', 'WARN', 'HIGH'
@@ -47,6 +48,7 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
       _mcc = args['mcc'];
       _note = args['note'];
       _paymentRequestId = args['paymentRequestId']; // Extract Request ID
+      _paymentSource = args['payment_source']; // Extract Telemetry
 
       _analyzeRisk();
     }
@@ -67,6 +69,7 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
         _amount,
         mcc: _mcc,
         note: _note,
+        paymentSource: _paymentSource, // Pass Telemetry
       );
 
       if (kDebugMode) {
@@ -182,6 +185,7 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
         'skipFraudCheck': _isRisk, // Skip if user saw warning
         'acknowledgedRisk': _isRisk ? _riskScore : null,
         'paymentRequestId': _paymentRequestId, // Pass Request ID Forward
+        'payment_source': _paymentSource, // Pass Telemetry Forward
       },
     );
 
@@ -254,7 +258,7 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
                   Icon(Icons.security, size: 16, color: Colors.grey[400]),
                   const SizedBox(width: 8),
                   Text(
-                    "Powered by SafePay AI",
+                    "Powered by ZaferPay AI",
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -487,7 +491,7 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
       // SAFE STATE - Same as before
       return [
         _buildRiskItem(
-          "Receiver identity has been successfully verified by SafePay.",
+          "Receiver identity has been successfully verified by ZaferPay.",
           Icons.verified_rounded,
           true,
           textColor,

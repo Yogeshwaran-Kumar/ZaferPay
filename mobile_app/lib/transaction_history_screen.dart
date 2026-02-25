@@ -191,6 +191,10 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
     // 6. Category Filter (from Spend Analysis)
     if (widget.initialCategory != null) {
       temp = temp.where((tx) {
+        final note = tx['note'] ?? tx['remark'];
+        final categoryFromNote = MccHelper.getCategoryFromNote(note);
+        if (categoryFromNote == widget.initialCategory) return true;
+
         final mcc = tx['receiver_mcc'] ?? tx['sender_mcc'];
         final domain = MccHelper.getDomain(mcc?.toString());
         final category = MccHelper.getGroupedCategory(domain);

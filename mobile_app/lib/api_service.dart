@@ -42,6 +42,11 @@ class ApiService {
   Future<void> warmUpIdentity() =>
       _auth.getSavedMobile(); // Triggers cache populate
 
+  // Global PIN Security Tracking
+  Future<void> recordFailedAttempt() => _auth.recordFailedAttempt();
+  Future<void> resetFailedAttempts() => _auth.resetFailedAttempts();
+  int get failedAttempts => _auth.failedAttempts;
+
   // Mobile Persistence
   Future<String?> getSavedMobile() => _auth.getSavedMobile();
   String? getSavedMobileSync() => _auth.getSavedMobileSync();
@@ -50,9 +55,21 @@ class ApiService {
   void clearCachedMobile() => _auth.clearCachedMobile();
   Future<Map<String, dynamic>> checkMobile(String m) => _auth.checkMobile(m);
   Future<bool> setPin(String m, String p) => _auth.setPin(m, p);
-  Future<bool> changePin(String currentPin, String newPin) =>
-      _auth.changePin(currentPin, newPin);
+  Future<bool> changeMpin(String currentPin, String newPin) =>
+      _auth.changeMpin(currentPin, newPin);
+  Future<bool> disableMpin(String currentPin) => _auth.disableMpin(currentPin);
+  Future<bool> enableMpin(String newPin) => _auth.enableMpin(newPin);
+  Future<bool> changeUpiPin(String currentPin, String newPin) =>
+      _auth.changeUpiPin(currentPin, newPin);
+  Future<PinVerificationStatus> verifyUpiPin(String pin) =>
+      _auth.verifyUpiPin(pin);
   Future<List<dynamic>?> getLoginHistory() => _auth.getLoginHistory();
+  Future<bool> updateSettings({bool? biometricEnabled, bool? appLockEnabled}) =>
+      _auth.updateSettings(
+        biometricEnabled: biometricEnabled,
+        appLockEnabled: appLockEnabled,
+      );
+  Future<void> syncUserSettings() => _auth.syncUserSettings();
 
   // --- User Delegates ---
   Future<Map<String, dynamic>> getHomeScreenData() => _user.getHomeScreenData();
@@ -192,6 +209,14 @@ class ApiService {
     }
   }
 
+  Future<void> markAllRead() async {
+    try {
+      await _client.post('/notifications/mark-all-read');
+    } catch (_) {
+      // Best effort
+    }
+  }
+
   // --- Admin Methods ---
   Future<Map<String, dynamic>> getAiStats() async {
     final response = await _client.get('/admin/ai-stats');
@@ -232,6 +257,8 @@ class ApiService {
     }
     return {'success': false, 'message': 'Failed to reject'};
   }
+
+  Future<void> clearCachedUnreadCounts() => _user.clearCachedUnreadCounts();
 
   Future<void> clearUserDataCaches() => _user.clearCaches();
 

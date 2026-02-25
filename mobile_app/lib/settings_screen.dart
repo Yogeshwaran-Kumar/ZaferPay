@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'main.dart';
 import 'api_service.dart';
 import 'services/biometric_service.dart';
@@ -20,10 +21,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _biometricEnabled = false;
   bool _biometricAvailable = false;
 
+  bool _hasMpin = true;
+  bool _appLockEnabled = true; // New persistent flag
+  String _pinUpdatedAtText = 'Update the PIN used for transactions';
+
   @override
   void initState() {
     super.initState();
     _loadBiometricState();
+    _loadUserState();
   }
 
   Future<void> _loadBiometricState() async {
@@ -34,6 +40,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _biometricAvailable = available;
         _biometricEnabled = enabled;
       });
+    }
+  }
+
+  Future<void> _loadUserState() async {
+    final user = await _api.getMe();
+    if (user != null) {
+      final bool serverLock = user['app_lock_enabled'] ?? true;
+      final bool serverBio = user['biometric_enabled'] ?? false;
+
+      // Update local storage
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('app_lock_enabled', serverLock);
+      await prefs.setBool('biometric_enabled', serverBio);
+
+      // Update global state
+      MyApp.appLockEnabled = serverLock;
+      MyApp.biometricEnabled = serverBio;
+
+      if (mounted) {
+        setState(() {
+          _hasMpin = user['has_mpin'] ?? true;
+          _appLockEnabled = serverLock;
+          _biometricEnabled = serverBio;
+          _biometric.setBiometricEnabled(_biometricEnabled);
+
+          final pinUpdatedAt = user['pin_updated_at'];
+          if (pinUpdatedAt != null) {
+            try {
+              final date = DateTime.parse(pinUpdatedAt);
+              final diff = DateTime.now().difference(date).inDays;
+              if (diff == 0) {
+                _pinUpdatedAtText = 'Last changed: Today';
+              } else {
+                _pinUpdatedAtText = 'Last changed: $diff days ago';
+              }
+            } catch (_) {}
+          }
+        });
+      }
     }
   }
 
@@ -104,105 +149,301 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 16),
 
-              // ── Change PIN ──────────────────────────────────────────────────
-              ListTile(
-                leading: const Icon(Icons.lock_reset, color: Color(0xFF6200EE)),
-                title: Text(
-                  'Change PIN',
-                  style: TextStyle(
-                    color: Theme.of(context).textTheme.bodyLarge?.color,
+              // ── App Lock Toggle ──────────────────────────────────────────────
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(
+                        alpha: isDark ? 0.3 : 0.05,
+                      ),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: SwitchListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 8,
                   ),
-                ),
-                subtitle: Text(
-                  'Update your account security PIN',
-                  style: TextStyle(
-                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                  secondary: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00B9F1).withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.security_rounded,
+                      color: Color(0xFF00B9F1),
+                      size: 24,
+                    ),
                   ),
-                ),
-                trailing: Icon(
-                  Icons.arrow_forward_ios,
-                  size: 16,
-                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-                ),
-                onTap: () {
-                  Navigator.pushNamed(context, '/change-pin');
-                },
-                tileColor: Theme.of(context).cardColor,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(
-                    color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+                  title: Text(
+                    'App Lock',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      color: Theme.of(context).textTheme.bodyLarge?.color,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Require PIN to open ZaferPay',
+                    style: TextStyle(
+                      color: isDark
+                          ? Colors.grey.shade400
+                          : Colors.grey.shade600,
+                      fontSize: 13,
+                    ),
+                  ),
+                  value: _appLockEnabled,
+                  onChanged: (value) async {
+                    if (value) {
+                      if (!_hasMpin) {
+                        // If no PIN set, must set one first
+                        await Navigator.pushNamed(
+                          context,
+                          '/change-mpin',
+                          arguments: {'isSetOnly': true},
+                        );
+                      } else {
+                        // Persist to Backend
+                        await _api.updateSettings(appLockEnabled: true);
+                        MyApp.appLockEnabled = true;
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setBool('app_lock_enabled', true);
+                      }
+                      _loadUserState(); // Refresh state
+                    } else {
+                      // Turning OFF lock screen
+                      bool? confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Disable App Lock?'),
+                          content: const Text(
+                            'Your app will open without a PIN.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, false),
+                              child: const Text('Cancel'),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, true),
+                              child: const Text('Disable'),
+                            ),
+                          ],
+                        ),
+                      );
+
+                      if (confirmed == true) {
+                        // Persist to Backend
+                        await _api.updateSettings(appLockEnabled: false);
+                        MyApp.appLockEnabled = false;
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setBool('app_lock_enabled', false);
+                        _loadUserState(); // Refresh state
+                      }
+                    }
+                  },
+                  activeThumbColor: const Color(0xFF00B9F1),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
               ),
 
               const SizedBox(height: 12),
 
-              // ── Biometric Login ─────────────────────────────────────────────
+              // ── PIN Settings Cards ──────────────────────────────────────────────
               Container(
                 decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-                  ),
+                  color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(
+                        alpha: isDark ? 0.3 : 0.05,
+                      ),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
-                child: SwitchListTile(
-                  secondary: Icon(
-                    Icons.fingerprint,
-                    color: _biometricAvailable
-                        ? const Color(0xFF00B9F1)
-                        : Colors.grey,
-                  ),
-                  title: Text(
-                    'Biometric Login',
-                    style: TextStyle(
-                      color: _biometricAvailable
-                          ? Theme.of(context).textTheme.bodyLarge?.color
-                          : Colors.grey,
+                child: Column(
+                  children: [
+                    if (_hasMpin) ...[
+                      ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 8,
+                        ),
+                        leading: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFF8A2BE2,
+                            ).withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.password_rounded,
+                            color: Color(0xFF8A2BE2),
+                            size: 24,
+                          ),
+                        ),
+                        title: const Text(
+                          'Change App Login PIN',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Update the PIN used to open ZaferPay',
+                          style: TextStyle(
+                            color: isDark
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade600,
+                            fontSize: 13,
+                          ),
+                        ),
+                        trailing: const Icon(Icons.chevron_right_rounded),
+                        onTap: () async {
+                          await Navigator.pushNamed(context, '/change-mpin');
+                          _loadUserState(); // Reload state unconditionally
+                        },
+                      ),
+                      Divider(
+                        height: 1,
+                        indent: 20,
+                        endIndent: 20,
+                        color: isDark
+                            ? Colors.grey.shade800
+                            : Colors.grey.shade200,
+                      ),
+                    ],
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 8,
+                      ),
+                      leading: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6200EE).withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.pin_rounded,
+                          color: Color(0xFF6200EE),
+                          size: 24,
+                        ),
+                      ),
+                      title: const Text(
+                        'Change UPI PIN',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
+                      subtitle: Text(
+                        _pinUpdatedAtText,
+                        style: TextStyle(
+                          color: isDark
+                              ? Colors.grey.shade400
+                              : Colors.grey.shade600,
+                          fontSize: 13,
+                        ),
+                      ),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () async {
+                        await Navigator.pushNamed(context, '/change-upi-pin');
+                        _loadUserState(); // Reload state unconditionally
+                      },
                     ),
-                  ),
-                  subtitle: Text(
-                    _biometricAvailable
-                        ? 'Use fingerprint or face to unlock the app'
-                        : 'Not available on this device',
-                    style: TextStyle(
+                    Divider(
+                      height: 1,
+                      indent: 20,
+                      endIndent: 20,
                       color: isDark
-                          ? Colors.grey.shade400
-                          : Colors.grey.shade600,
-                      fontSize: 12,
+                          ? Colors.grey.shade800
+                          : Colors.grey.shade200,
                     ),
-                  ),
-                  value: _biometricAvailable && _biometricEnabled,
-                  onChanged: _biometricAvailable
-                      ? (value) async {
-                          // 1. Enabling: Confirm via auth
-                          if (value) {
-                            final confirmed = await _biometric.authenticate(
-                              reason:
-                                  'Confirm your biometric to ENABLE this feature',
-                            );
-                            if (!confirmed) return;
-                          }
-                          // 2. Disabling: Security Check - Must auth to disable
-                          else {
-                            final confirmed = await _biometric.authenticate(
-                              reason:
-                                  'Security Check: Confirm biometric to DISABLE this feature',
-                            );
-                            if (!confirmed) return;
-                          }
+                    SwitchListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 8,
+                      ),
+                      secondary: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00A2A7).withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.fingerprint_rounded,
+                          color: Color(0xFF00A2A7),
+                          size: 24,
+                        ),
+                      ),
+                      title: const Text(
+                        'Biometric Login',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
+                      subtitle: Text(
+                        _biometricAvailable
+                            ? 'Use fingerprint or face to unlock the app'
+                            : 'Not available on this device',
+                        style: TextStyle(
+                          color: isDark
+                              ? Colors.grey.shade400
+                              : Colors.grey.shade600,
+                          fontSize: 13,
+                        ),
+                      ),
+                      value: _biometricAvailable && _biometricEnabled,
+                      onChanged: _biometricAvailable
+                          ? (value) async {
+                              bool confirmed = false;
+                              if (value) {
+                                // Enabling: Confirm via auth
+                                confirmed = await _biometric.authenticate(
+                                  reason:
+                                      'Confirm your biometric to ENABLE this feature',
+                                );
+                              } else {
+                                // Disabling: Security Check - Must auth to disable
+                                confirmed = await _biometric.authenticate(
+                                  reason:
+                                      'Security Check: Confirm biometric to DISABLE this feature',
+                                );
+                              }
 
-                          await _biometric.setBiometricEnabled(value);
-                          if (mounted) {
-                            setState(() => _biometricEnabled = value);
-                          }
-                        }
-                      : null,
-                  activeThumbColor: const Color(0xFF00B9F1),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                              if (confirmed) {
+                                await _biometric.setBiometricEnabled(value);
+                                // Persist to Backend for multi-device/reinstall support
+                                await _api.updateSettings(
+                                  biometricEnabled: value,
+                                );
+
+                                if (mounted) {
+                                  setState(() {
+                                    _biometricEnabled = value;
+                                  });
+                                }
+                              }
+                            }
+                          : null,
+                      activeThumbColor: const Color(0xFF00B9F1),
+                    ),
+                  ],
                 ),
               ),
 
@@ -217,27 +458,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              Card(
-                elevation: 0,
-                color: Theme.of(context).cardColor,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(
-                    color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-                  ),
+              Container(
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(
+                        alpha: isDark ? 0.3 : 0.05,
+                      ),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
                 child: ExpansionTile(
                   shape: const Border(), // Remove expanded border
                   collapsedShape: const Border(), // Remove collapsed border
-                  leading: const Icon(
-                    Icons.brightness_6,
-                    color: Color(0xFF00B9F1),
-                  ),
-                  title: Text(
-                    'Theme',
-                    style: TextStyle(
-                      color: Theme.of(context).textTheme.bodyLarge?.color,
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00B9F1).withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
                     ),
+                    child: Icon(
+                      isDark
+                          ? Icons.dark_mode_rounded
+                          : Icons.light_mode_rounded,
+                      color: const Color(0xFF00B9F1),
+                      size: 24,
+                    ),
+                  ),
+                  title: const Text(
+                    'Theme',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
                   ),
                   subtitle: ValueListenableBuilder<ThemeMode>(
                     valueListenable: themeNotifier,
@@ -312,26 +566,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 32),
 
               // ── Logout ──────────────────────────────────────────────────────
-              ListTile(
-                leading: const Icon(Icons.logout, color: Colors.red),
-                title: const Text(
-                  'Logout',
-                  style: TextStyle(
-                    color: Colors.red,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+              InkWell(
                 onTap: _handleLogout,
-                tileColor: Colors.red.withValues(alpha: 0.05),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.red.withValues(alpha: 0.1)),
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.red.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.logout_rounded, color: Colors.red),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Logout',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 30),
               Center(
                 child: Text(
-                  'Powered by SafePay',
+                  'Powered by ZaferPay',
                   style: GoogleFonts.outfit(
                     color: Colors.grey.shade400,
                     fontWeight: FontWeight.bold,

@@ -69,12 +69,16 @@ class _SpendAnalysisScreenState extends State<SpendAnalysisScreen> {
 
             // Categorize outward
             final mcc = tx['receiver_mcc'];
-            String category = 'Others';
-            if (mcc != null && MccHelper.isMerchant(mcc)) {
-              final domain = MccHelper.getDomain(mcc.toString());
-              category = MccHelper.getGroupedCategory(domain);
-            } else if (MccHelper.isPersonal(mcc)) {
-              category = 'People';
+            final note = tx['note'] ?? tx['remark'];
+            String category = MccHelper.getCategoryFromNote(note) ?? 'Others';
+
+            if (category == 'Others') {
+              if (mcc != null && MccHelper.isMerchant(mcc)) {
+                final domain = MccHelper.getDomain(mcc.toString());
+                category = MccHelper.getGroupedCategory(domain);
+              } else if (MccHelper.isPersonal(mcc)) {
+                category = 'People';
+              }
             }
             categorySpends[category] = (categorySpends[category] ?? 0) + amount;
           } else {
@@ -204,6 +208,10 @@ class _SpendAnalysisScreenState extends State<SpendAnalysisScreen> {
         return Icons.medical_services;
       case 'People':
         return Icons.people;
+      case 'Education':
+        return Icons.school;
+      case 'Investments':
+        return Icons.trending_up;
       default:
         return Icons.category;
     }
@@ -225,6 +233,10 @@ class _SpendAnalysisScreenState extends State<SpendAnalysisScreen> {
         return Colors.teal;
       case 'People':
         return Colors.indigo;
+      case 'Education':
+        return Colors.lightBlue;
+      case 'Investments':
+        return Colors.green;
       default:
         return Colors.grey.shade500;
     }
@@ -827,7 +839,7 @@ class _SpendAnalysisScreenState extends State<SpendAnalysisScreen> {
               // Footer
               Center(
                 child: Text(
-                  'Powered by SafePay',
+                  'Powered by ZaferPay',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,

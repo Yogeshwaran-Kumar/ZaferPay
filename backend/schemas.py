@@ -45,6 +45,9 @@ class ChangePinRequest(BaseModel):
     current_pin: str
     new_pin: str
 
+class VerifyPinRequest(BaseModel):
+    pin: str
+
 class UserResponse(UserBase):
     id: int
     upi_id: str
@@ -52,7 +55,18 @@ class UserResponse(UserBase):
     mcc: Optional[str] = None
     mobile_number: Optional[str] = None
     bank_name: Optional[str] = None
+    has_mpin: bool = True
+    biometric_enabled: bool = False
+    app_lock_enabled: bool = True
+    pin_updated_at: Optional[datetime] = None
     # We don't return hashed_password or sensitive fields
+    class Config:
+        from_attributes = True
+
+class SettingsUpdateRequest(BaseModel):
+    biometric_enabled: Optional[bool] = None
+    app_lock_enabled: Optional[bool] = None
+    # Future settings can be added here
     
     class Config:
         from_attributes = True
@@ -117,7 +131,7 @@ class TransactionCreate(BaseModel):
     acknowledged_risk: Optional[str] = None  # 'WARN' or 'HIGH' if user proceeded despite warning
     request_id: Optional[int] = None  # Link to a payment request if this is a payment for one
     # v5.0: Scam telemetry fields (sent by mobile app)
-    payment_source: Optional[str] = None  # 'qr_scan', 'deep_link', 'manual_entry', 'contact_list'
+    payment_source: Optional[str] = None  # 'qr_scan', 'qr_upload', 'qr_share', 'deep_link', 'manual_entry', 'contact_list'
     is_screen_sharing: bool = False  # True if remote-access app (AnyDesk/TeamViewer) detected
 
 class TransactionResponse(BaseModel):
@@ -145,7 +159,7 @@ class TransactionAnalyze(BaseModel):
     note: Optional[str] = None
     is_contact: bool = False
     # v5.0: Scam telemetry fields (sent by mobile app)
-    payment_source: Optional[str] = None  # 'qr_scan', 'deep_link', 'manual_entry', 'contact_list'
+    payment_source: Optional[str] = None  # 'qr_scan', 'qr_upload', 'qr_share', 'deep_link', 'manual_entry', 'contact_list'
     is_screen_sharing: bool = False  # True if remote-access app detected
 
 class TransactionAnalyzeResponse(BaseModel):
@@ -164,9 +178,10 @@ class TransactionAnalyzeResponse(BaseModel):
 # ═══════════════════════════════════════════════════════════════════════════
 
 class LoginHistoryResponse(BaseModel):
-    login_time: datetime
-    logout_time: Optional[datetime]
-    is_active: bool
+    event_type: str
+    device_id_hash: str
+    timestamp: datetime
+    ip_hash: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -246,6 +261,15 @@ class PaymentRequestResponse(BaseModel):
         from_attributes = True
 
 
+class DailySummarySchema(BaseModel):
+    received_amount: float
+    sent_amount: float
+    start_time: datetime
+    end_time: datetime
+    last_received_at: Optional[datetime] = None
+    last_sent_at: Optional[datetime] = None
+
+
 class HomeAggregateResponse(BaseModel):
     user: UserResponse
     history: List[TransactionResponse]
@@ -253,6 +277,7 @@ class HomeAggregateResponse(BaseModel):
     merchants: List[UserLookupResponse]
     pending_requests: List[PaymentRequestResponse] = []
     total_unread: int = 0
+    daily_summary: Optional[DailySummarySchema] = None
 
 
 # ═══════════════════════════════════════════════════════════════════════════

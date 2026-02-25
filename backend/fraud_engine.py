@@ -306,7 +306,7 @@ def get_mcc_tier(mcc: str) -> str:
     Resolve the Risk Tier for a given MCC.
     Returns 'PERSONAL' for unknown/null MCCs.
     """
-    if not mcc or mcc == "" or all(c == '0' for c in mcc):
+    if not mcc or mcc == "" or mcc == "0" or all(c == '0' for c in mcc):
         return "PERSONAL"
     return MCC_REGISTRY.get(mcc, "SERVICES")  # Default to SERVICES if unknown MCC
 
@@ -1199,26 +1199,26 @@ def evaluate_fraud(db: Session, sender: models.User, receiver: models.User, amou
         
         if city and city != "Local":
             # AUTO-REGISTRATION: If this is their first time, save the location
-            if not sender.registered_city:
+            if not receiver.registered_city:
                 print(f"📍 Auto-registering merchant location: {city}, {country}")
-                sender.registered_city = city
-                sender.registered_country = country
+                receiver.registered_city = city
+                receiver.registered_country = country
                 # We can also save state if available, but city/country is key
                 
                 # Encrypt and save first IP for audit
                 try:
                     import security
-                    sender.merchant_first_ip_encrypted = security.encrypt_value(current_ip)
+                    receiver.merchant_first_ip_encrypted = security.encrypt_value(current_ip)
                 except:
                     pass
                 
                 db.commit() # Save immediately
                 
             # VALIDATION: If registered, check if current city matches
-            elif sender.registered_city != city:
+            elif receiver.registered_city != city:
                 # Mismatch! Merchant should be stationary.
-                print(f"🚨 MERCHANT LOCATION MISMATCH: Registered in {sender.registered_city}, detected in {city}")
-                features['registered_city'] = sender.registered_city
+                print(f"🚨 MERCHANT LOCATION MISMATCH: Registered in {receiver.registered_city}, detected in {city}")
+                features['registered_city'] = receiver.registered_city
                 features['detected_city'] = city
                 return "HIGH", "F30_MERCHANT_LOCATION_FRAUD", features
 
@@ -1669,8 +1669,8 @@ def evaluate_fraud(db: Session, sender: models.User, receiver: models.User, amou
     # Showing "This is a personal account, not a shop" prevents this.
     #
     # This is NOT a hard block — user can proceed if they intend to pay a person.
-    if payment_source == "qr_scan":
-        features['payment_source'] = "qr_scan"
+    if payment_source in ["qr_scan", "qr_upload", "qr_share"]:
+        features['payment_source'] = payment_source
 
         if tier == "PERSONAL":
             # ── AWARENESS: Strangers (depth=0) AND FoF (depth=2) get warning ──

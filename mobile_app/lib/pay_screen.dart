@@ -7,7 +7,6 @@ import 'package:share_plus/share_plus.dart';
 import 'api_service.dart';
 import 'mcc_helper.dart';
 import 'main.dart';
-import 'conversation_screen.dart';
 
 class PayScreen extends StatefulWidget {
   const PayScreen({super.key});
@@ -137,13 +136,8 @@ class _PayScreenState extends State<PayScreen> {
     } else if (query.contains('@')) {
       _lookupUserByUpi(query);
     } else {
-      // Name Search
-      // Name Search: Only show local contacts.
-      // Do NOT search the global user database for names to respect privacy/user request.
-      setState(() {
-        _databaseUser = null;
-        _isLookingUp = false;
-      });
+      // Name Search: Now restricted to local contacts only
+      // No more global search for names as per user request
     }
   }
 
@@ -330,19 +324,18 @@ class _PayScreenState extends State<PayScreen> {
   }
 
   void _openConversation(dynamic person) {
-    Navigator.push(
+    Navigator.pushNamed(
       context,
-      MaterialPageRoute(
-        builder: (context) => ConversationScreen(
-          args: {
-            'upi': person['upi_id'] ?? '',
-            'name': person['username'] ?? 'User',
-            'mobile': person['mobile_encrypted'] ?? '',
-            'isMerchant': person['isMerchant'] ?? false,
-            'isValid': person['isValid'] ?? false,
-          },
-        ),
-      ),
+      '/conversation',
+      arguments: {
+        'upi': person['upi_id'] ?? person['upi'] ?? '',
+        'name': person['username'] ?? person['name'] ?? 'User',
+        'mobile': person['mobile_encrypted'] ?? person['mobile'] ?? '',
+        'isMerchant': person['isMerchant'] ?? false,
+        'isValid':
+            person['isValid'] ??
+            true, // Default to true for backend data (e.g. Recent People)
+      },
     );
   }
 
@@ -463,20 +456,20 @@ class _PayScreenState extends State<PayScreen> {
           isValid = true;
         }
       } else {
-        // If found in contacts, we need to verify if it's a valid SafePay user
+        // If found in contacts, we need to verify if it's a valid ZaferPay user
         // But for search by number, we can assume valid for now or do a quick check
-        // Ideally we should check if they are on SafePay.
+        // Ideally we should check if they are on ZaferPay.
         // For now, let's mark true if they were found via explicit number search and we assume user knows.
         // Or better, do a background check if not already done.
         isValid =
             true; // defaulting to true for explicit number entry, but let's check.
-        // Actually, if it's a contact, we might not know if they are on SafePay yet unless we checked.
+        // Actually, if it's a contact, we might not know if they are on ZaferPay yet unless we checked.
         // Let's do a quick check if not checked.
         try {
           final user = await _api.lookupUserByPhone(normalizedValue);
           if (user != null) isValid = true;
         } catch (e) {
-          // Ignore: Contact might not be on SafePay or network issue
+          // Ignore: Contact might not be on ZaferPay or network issue
         }
       }
 
@@ -506,7 +499,7 @@ class _PayScreenState extends State<PayScreen> {
           'isMerchant': false,
           'isValid':
               upiId !=
-              null, // Valid only if we found a UPI ID (meaning they are on SafePay)
+              null, // Valid only if we found a UPI ID (meaning they are on ZaferPay)
         });
         return;
       }
@@ -638,95 +631,19 @@ class _PayScreenState extends State<PayScreen> {
 
                 // Search Results
                 if (_isSearching) ...[
+                  // Global Results (Database search by phone, UPI or name)
+                  // Global Results (Database search by phone or UPI)
                   if (_databaseUser != null) ...[
                     const Text(
-                      "Found on UPI",
+                      "Global Search Results",
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: Colors.green,
+                        color: Colors.blue,
                       ),
                     ),
                     const SizedBox(height: 12),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: CircleAvatar(
-                        backgroundColor: Colors.blue,
-                        child: Text(
-                          _getDisplayName(_databaseUser!).isNotEmpty
-                              ? _getDisplayName(_databaseUser!)[0].toUpperCase()
-                              : 'U',
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                      ),
-                      title: Text(
-                        _getDisplayName(_databaseUser!),
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).textTheme.bodyLarge?.color,
-                        ),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _databaseUser!['upi_id'] ?? _searchQuery,
-                            style: TextStyle(
-                              color: isDark
-                                  ? Colors.grey.shade400
-                                  : Colors.grey.shade600,
-                            ),
-                          ),
-                          if (MccHelper.isMerchant(_databaseUser!['mcc'])) ...[
-                            const SizedBox(height: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.orange.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                '🏪 ${MccHelper.getDomain(_databaseUser!['mcc'])}',
-                                style: const TextStyle(
-                                  color: Colors.orange,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      trailing: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.green,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Text(
-                          "Pay",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      onTap: () => _openConversation({
-                        'upi_id': _databaseUser!['upi_id'] ?? _searchQuery,
-                        'username': _getDisplayName(_databaseUser!),
-                        'mobile_encrypted': _searchQuery,
-                        'isMerchant': MccHelper.isMerchant(
-                          _databaseUser!['mcc'],
-                        ),
-                        'isValid': true,
-                      }),
-                    ),
+                    _buildUserSearchResult(_databaseUser!),
                     const SizedBox(height: 16),
                   ],
 
@@ -793,7 +710,7 @@ class _PayScreenState extends State<PayScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            "No matching contacts found",
+                            "No matching users found",
                             style: TextStyle(color: Colors.grey.shade600),
                           ),
                         ],
@@ -984,6 +901,78 @@ class _PayScreenState extends State<PayScreen> {
       onTap: () {
         _openConversation(item);
       },
+    );
+  }
+
+  Widget _buildUserSearchResult(Map<String, dynamic> user) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final displayName = _getDisplayName(user);
+    final upiId = user['upi_id'] ?? '';
+    final mcc = user['mcc'];
+    final isMerchant = MccHelper.isMerchant(mcc);
+
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: CircleAvatar(
+        backgroundColor: Colors.blue,
+        child: Text(
+          displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
+          style: const TextStyle(color: Colors.white),
+        ),
+      ),
+      title: Text(
+        displayName,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Theme.of(context).textTheme.bodyLarge?.color,
+        ),
+      ),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            upiId,
+            style: TextStyle(
+              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+            ),
+          ),
+          if (isMerchant) ...[
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                '🏪 ${MccHelper.getDomain(mcc)}',
+                style: const TextStyle(
+                  color: Colors.orange,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+      trailing: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.green,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Text(
+          "Pay",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+      ),
+      onTap: () => _openConversation({
+        'upi_id': upiId,
+        'username': displayName,
+        'isMerchant': isMerchant,
+        'isValid': true,
+      }),
     );
   }
 }

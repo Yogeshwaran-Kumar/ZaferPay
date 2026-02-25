@@ -6,8 +6,9 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'api_client.dart';
+import '../main.dart';
 
-enum PinVerificationStatus { success, incorrect, lockedOut, unknown }
+enum PinVerificationStatus { success, incorrect, lockedOut, expired, unknown }
 
 class AuthService {
   final ApiClient _apiClient;
@@ -15,10 +16,19 @@ class AuthService {
   final StreamController<void> _authStateController =
       StreamController<void>.broadcast();
 
-  // PIN Security - Attempt tracking only (no local storage)
+  // PIN Security - Attempt tracking
   static int _failedPinAttempts = 0;
 
-  AuthService(this._apiClient);
+  AuthService(this._apiClient) {
+    _initFailedAttempts();
+  }
+
+  Future<void> _initFailedAttempts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _failedPinAttempts = prefs.getInt('failed_pin_attempts') ?? 0;
+    } catch (_) {}
+  }
 
   Stream<void> get authStateChanges => _authStateController.stream;
 
@@ -41,7 +51,7 @@ class AuthService {
         final data = json.decode(response.body);
         await _storage.write(key: 'token', value: data['access_token']);
         // SECURITY: No PIN storage - server verifies via /token call
-        _failedPinAttempts = 0; // Reset on successful login
+        await resetFailedAttempts(); // Reset on successful login
 
         if (data['refresh_token'] != null) {
           await _storage.write(
@@ -55,6 +65,10 @@ class AuthService {
       } else if (response.statusCode == 429) {
         return 'RATE_LIMIT_EXCEEDED';
       } else if (response.statusCode == 401) {
+        await recordFailedAttempt();
+        if (failedAttempts >= 3) {
+          return 'LOCKED_OUT';
+        }
         return 'INCORRECT_PIN';
       }
 
@@ -81,6 +95,7 @@ class AuthService {
       // Explicit manual logout clears the "Identity" (saved mobile)
       // so the next user has to start from the mobile number entry page.
       await removeSavedMobile();
+      await resetFailedAttempts();
       _authStateController.add(null);
     } catch (_) {}
   }
@@ -98,12 +113,20 @@ class AuthService {
   }
 
   // Track failed attempts for lockout (client-side UX only, server also enforces)
-  void recordFailedAttempt() {
+  Future<void> recordFailedAttempt() async {
     _failedPinAttempts++;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('failed_pin_attempts', _failedPinAttempts);
+    } catch (_) {}
   }
 
-  void resetFailedAttempts() {
+  Future<void> resetFailedAttempts() async {
     _failedPinAttempts = 0;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('failed_pin_attempts');
+    } catch (_) {}
   }
 
   int get failedAttempts => _failedPinAttempts;
@@ -197,15 +220,77 @@ class AuthService {
     }
   }
 
-  Future<bool> changePin(String currentPin, String newPin) async {
+  Future<bool> changeMpin(String currentPin, String newPin) async {
     try {
       final response = await _apiClient.put(
-        '/users/me/change-pin',
+        '/users/me/change-mpin',
         body: {'current_pin': currentPin, 'new_pin': newPin},
       );
       return response.statusCode == 200;
     } catch (_) {
       return false;
+    }
+  }
+
+  Future<bool> changeUpiPin(String currentPin, String newPin) async {
+    try {
+      final response = await _apiClient.put(
+        '/users/me/change-upi-pin',
+        body: {'current_pin': currentPin, 'new_pin': newPin},
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> disableMpin(String currentPin) async {
+    try {
+      final response = await _apiClient.put(
+        '/users/me/disable-mpin',
+        body: {'pin': currentPin},
+      );
+      if (response.statusCode == 401) {
+        await recordFailedAttempt();
+      }
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> enableMpin(String newPin) async {
+    try {
+      final response = await _apiClient.put(
+        '/users/me/enable-mpin',
+        body: {'pin': newPin},
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<PinVerificationStatus> verifyUpiPin(String pin) async {
+    try {
+      final response = await _apiClient.post(
+        '/auth/verify-upi-pin',
+        body: {'pin': pin},
+      );
+      if (response.statusCode == 200) {
+        return PinVerificationStatus.success;
+      } else if (response.statusCode == 401) {
+        await recordFailedAttempt();
+        if (failedAttempts >= 3) {
+          return PinVerificationStatus.lockedOut;
+        }
+        return PinVerificationStatus.incorrect;
+      } else if (response.statusCode == 403) {
+        return PinVerificationStatus.expired;
+      }
+      return PinVerificationStatus.unknown;
+    } catch (_) {
+      return PinVerificationStatus.unknown;
     }
   }
 
@@ -217,5 +302,44 @@ class AuthService {
       }
     } catch (_) {}
     return null;
+  }
+
+  Future<bool> updateSettings({
+    bool? biometricEnabled,
+    bool? appLockEnabled,
+  }) async {
+    try {
+      final body = <String, dynamic>{};
+      if (biometricEnabled != null) {
+        body['biometric_enabled'] = biometricEnabled;
+      }
+      if (appLockEnabled != null) {
+        body['app_lock_enabled'] = appLockEnabled;
+      }
+
+      final response = await _apiClient.patch('/users/me/settings', body: body);
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> syncUserSettings() async {
+    try {
+      final response = await _apiClient.get('/users/me');
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final bool serverBio = data['biometric_enabled'] ?? false;
+        final bool serverLock = data['app_lock_enabled'] ?? true;
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('biometric_enabled', serverBio);
+        await prefs.setBool('app_lock_enabled', serverLock);
+
+        // Update global MyApp state
+        MyApp.biometricEnabled = serverBio;
+        MyApp.appLockEnabled = serverLock;
+      }
+    } catch (_) {}
   }
 }
