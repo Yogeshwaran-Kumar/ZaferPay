@@ -37,13 +37,20 @@ def send_daily_summaries():
         users = db.query(models.User).filter(models.User.fcm_token.isnot(None)).all()
         logger.info(f"Found {len(users)} users with FCM tokens.")
 
-        # Time range: Last 24 hours
         end_time = datetime.now()
-        start_time = end_time - timedelta(days=1)
-
         sent_count = 0
 
         for user in users:
+            # Check summary frequency logic
+            frequency_days = user.summary_frequency or 1
+            last_sent = user.last_summary_sent_at
+            
+            # If never sent, or if enough time has passed based on frequency
+            if last_sent and (end_time - last_sent).days < frequency_days:
+                continue
+                
+            start_time = end_time - timedelta(days=frequency_days)
+        
             # 2. Calculate Receive Total
             received_sum = db.query(func.sum(models.Transaction.amount)).filter(
                 models.Transaction.receiver_id == user.id,
@@ -65,8 +72,12 @@ def send_daily_summaries():
 
             # Only send if there was some activity
             if received > 0 or sent > 0:
-                title = "📊 Your Daily Summary"
-                body = f"Today's Activity: You received ₹{received:.2f} and spent ₹{sent:.2f}."
+                period_str = "Daily" if frequency_days == 1 else f"{frequency_days}-Day"
+                if frequency_days == 7: period_str = "Weekly"
+                if frequency_days == 30: period_str = "Monthly"
+                
+                title = f"📊 Your {period_str} Summary"
+                body = f"Activity: You received ₹{received:.2f} and spent ₹{sent:.2f}."
                 
                 # Send the notification
                 success = notifications.send_fcm_notification(
@@ -77,6 +88,8 @@ def send_daily_summaries():
                 )
                 if success:
                     sent_count += 1
+                    user.last_summary_sent_at = end_time
+                    db.commit()
                     
         logger.info(f"Daily summaries sent successfully to {sent_count} users.")
 

@@ -25,6 +25,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _appLockEnabled = true; // New persistent flag
   String _pinUpdatedAtText = 'Update the PIN used for transactions';
 
+  int _summaryFrequency = 1;
+  bool _isLoadingSettings = true;
+
   @override
   void initState() {
     super.initState();
@@ -64,6 +67,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _appLockEnabled = serverLock;
           _biometricEnabled = serverBio;
           _biometric.setBiometricEnabled(_biometricEnabled);
+
+          _summaryFrequency = user['summary_frequency'] ?? 1;
+          _isLoadingSettings = false;
 
           final pinUpdatedAt = user['pin_updated_at'];
           if (pinUpdatedAt != null) {
@@ -449,6 +455,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               const SizedBox(height: 32),
 
+              // ── Preferences ──────────────────────────────────────────────────
+              if (!_isLoadingSettings) ...[
+                Text(
+                  'Preferences',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.grey[400] : Colors.grey[700],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(
+                          alpha: isDark ? 0.3 : 0.05,
+                        ),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(children: [_buildSummaryFrequencyTile(isDark)]),
+                ),
+                const SizedBox(height: 32),
+              ],
+
               // ── Appearance ──────────────────────────────────────────────────
               Text(
                 'Appearance',
@@ -612,6 +647,97 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  String _getFrequencyLabel(int p) {
+    if (p == 1) return 'Daily';
+    if (p == 7) return 'Weekly';
+    if (p == 14) return 'Bi-Weekly';
+    if (p == 30) return 'Monthly';
+    return '$p days';
+  }
+
+  Widget _buildSummaryFrequencyTile(bool isDark) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      leading: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF00B9F1).withValues(alpha: 0.1),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(
+          Icons.notifications_active_rounded,
+          color: Color(0xFF00B9F1),
+          size: 24,
+        ),
+      ),
+      title: const Text(
+        'Summary Notifications',
+        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+      ),
+      subtitle: Text(
+        'Frequency: ${_getFrequencyLabel(_summaryFrequency)}',
+        style: TextStyle(
+          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+          fontSize: 13,
+        ),
+      ),
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: () {
+        _showFrequencyBottomSheet(isDark);
+      },
+    );
+  }
+
+  void _showFrequencyBottomSheet(bool isDark) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 16),
+              Text(
+                'Summary Frequency',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.black,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ...[1, 7, 14, 30].map((f) {
+                return ListTile(
+                  title: Text(_getFrequencyLabel(f)),
+                  trailing: _summaryFrequency == f
+                      ? const Icon(
+                          Icons.check_circle_rounded,
+                          color: Color(0xFF00B9F1),
+                        )
+                      : null,
+                  onTap: () async {
+                    Navigator.pop(context);
+                    if (_summaryFrequency != f) {
+                      setState(() {
+                        _summaryFrequency = f;
+                      });
+                      await _api.updateSettings(summaryFrequency: f);
+                    }
+                  },
+                );
+              }),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
     );
   }
 }

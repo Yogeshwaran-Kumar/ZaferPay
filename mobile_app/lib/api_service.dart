@@ -64,11 +64,21 @@ class ApiService {
   Future<PinVerificationStatus> verifyUpiPin(String pin) =>
       _auth.verifyUpiPin(pin);
   Future<List<dynamic>?> getLoginHistory() => _auth.getLoginHistory();
-  Future<bool> updateSettings({bool? biometricEnabled, bool? appLockEnabled}) =>
-      _auth.updateSettings(
-        biometricEnabled: biometricEnabled,
-        appLockEnabled: appLockEnabled,
-      );
+  Future<bool> updateSettings({
+    bool? biometricEnabled,
+    bool? appLockEnabled,
+    int? summaryFrequency,
+    double? spendingLimit,
+    int? spendingLimitPeriod,
+    bool clearSpendingLimit = false,
+  }) => _auth.updateSettings(
+    biometricEnabled: biometricEnabled,
+    appLockEnabled: appLockEnabled,
+    summaryFrequency: summaryFrequency,
+    spendingLimit: spendingLimit,
+    spendingLimitPeriod: spendingLimitPeriod,
+    clearSpendingLimit: clearSpendingLimit,
+  );
   Future<void> syncUserSettings() => _auth.syncUserSettings();
 
   // --- User Delegates ---

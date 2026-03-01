@@ -82,6 +82,13 @@ class User(Base):
     # Settings Persistence (survives app reinstall)
     biometric_enabled = Column(Boolean, default=False)
     app_lock_enabled = Column(Boolean, default=True)
+    
+    # Custom Summaries and Spending Limits
+    summary_frequency = Column(Integer, default=1)  # 1 = Daily, 7 = Weekly, etc.
+    last_summary_sent_at = Column(DateTime, nullable=True)
+    spending_limit = Column(Float, nullable=True)
+    spending_limit_period = Column(Integer, default=1)  # 1, 2, 7, 30 days
+    spending_limit_updated_at = Column(DateTime, nullable=True)
 
     # Relationships
     sender_profile = relationship("SenderProfile", back_populates="user", uselist=False)

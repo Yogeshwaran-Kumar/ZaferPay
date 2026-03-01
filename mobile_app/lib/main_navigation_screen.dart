@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'home_screen.dart';
 import 'money_screen.dart';
-import 'profile_screen.dart';
+import 'spending_limit_tab_screen.dart';
+import 'settings_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -32,7 +34,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     final List<Widget> screens = [
       HomeScreen(onSwitchTab: _switchToTab),
       MoneyScreen(key: _moneyScreenKey, onBack: () => _switchToTab(0)),
-      ProfileScreen(onBack: () => _switchToTab(0)),
+      const SpendingLimitTabScreen(),
+      const SettingsScreen(),
     ];
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -41,38 +44,44 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       body: IndexedStack(index: _currentIndex, children: screens),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
+          color: isDark ? const Color(0xFF111318) : Colors.white,
           boxShadow: [
             BoxShadow(
-              color: isDark ? Colors.black26 : Colors.grey.shade300,
-              blurRadius: 10,
+              color: isDark ? Colors.black38 : Colors.grey.shade200,
+              blurRadius: 12,
               offset: const Offset(0, -2),
             ),
           ],
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _buildNavItem(
                   icon: Icons.home_outlined,
-                  activeIcon: Icons.home,
+                  activeIcon: Icons.home_rounded,
                   label: 'Home',
                   index: 0,
                 ),
                 _buildNavItem(
                   icon: Icons.account_balance_wallet_outlined,
-                  activeIcon: Icons.account_balance_wallet,
+                  activeIcon: Icons.account_balance_wallet_rounded,
                   label: 'Money',
                   index: 1,
                 ),
                 _buildNavItem(
-                  icon: Icons.person_outline,
-                  activeIcon: Icons.person,
-                  label: 'You',
+                  icon: Icons.donut_large_outlined,
+                  activeIcon: Icons.donut_large_rounded,
+                  label: 'Spending',
                   index: 2,
+                ),
+                _buildNavItem(
+                  icon: Icons.person_outline_rounded,
+                  activeIcon: Icons.person_rounded,
+                  label: 'You',
+                  index: 3,
                 ),
               ],
             ),
@@ -91,27 +100,26 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     final bool isActive = _currentIndex == index;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Theme-aware colors
     final activeBgColor = isDark
-        ? const Color(0xFF00B9F1).withValues(alpha: 0.2)
+        ? const Color(0xFF00B9F1).withValues(alpha: 0.18)
         : const Color(0xFF00B9F1).withValues(alpha: 0.1);
-    final activeIconColor = isDark
-        ? const Color(0xFF00B9F1)
-        : const Color(0xFF00B9F1);
+    final activeIconColor = const Color(0xFF00B9F1);
     final inactiveIconColor = isDark
-        ? Colors.grey.shade400
-        : Colors.grey.shade600;
+        ? Colors.grey.shade500
+        : Colors.grey.shade500;
 
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () {
-        // Lock balance when switching away from Money tab (index 1)
         if (_currentIndex == 1 && index != 1) {
           _moneyScreenKey.currentState?.lockBalance();
         }
         setState(() => _currentIndex = index);
       },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
           color: isActive ? activeBgColor : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
@@ -119,18 +127,22 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              isActive ? activeIcon : icon,
-              color: isActive ? activeIconColor : inactiveIconColor,
-              size: 26,
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: Icon(
+                isActive ? activeIcon : icon,
+                key: ValueKey('${index}_$isActive'),
+                color: isActive ? activeIconColor : inactiveIconColor,
+                size: 24,
+              ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 3),
             Text(
               label,
-              style: TextStyle(
-                fontSize: 12,
+              style: GoogleFonts.outfit(
+                fontSize: 11,
                 color: isActive ? activeIconColor : inactiveIconColor,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
           ],
