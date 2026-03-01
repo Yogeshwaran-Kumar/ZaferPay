@@ -307,6 +307,10 @@ class AuthService {
   Future<bool> updateSettings({
     bool? biometricEnabled,
     bool? appLockEnabled,
+    int? summaryFrequency,
+    double? spendingLimit,
+    int? spendingLimitPeriod,
+    bool clearSpendingLimit = false,
   }) async {
     try {
       final body = <String, dynamic>{};
@@ -315,6 +319,17 @@ class AuthService {
       }
       if (appLockEnabled != null) {
         body['app_lock_enabled'] = appLockEnabled;
+      }
+      if (summaryFrequency != null) {
+        body['summary_frequency'] = summaryFrequency;
+      }
+      if (clearSpendingLimit) {
+        body['spending_limit'] = null;
+      } else if (spendingLimit != null) {
+        body['spending_limit'] = spendingLimit;
+      }
+      if (spendingLimitPeriod != null) {
+        body['spending_limit_period'] = spendingLimitPeriod;
       }
 
       final response = await _apiClient.patch('/users/me/settings', body: body);

@@ -21,7 +21,7 @@ try:
 except ImportError:
     AI_SCHEDULER_AVAILABLE = False
     print("⚠️ ai_scheduler not available")
-
+# Trigger reload 2
 
 # ═══════════════════════════════════════════════════════════════════════════
 # RATE LIMITING - Brute Force Protection
@@ -903,10 +903,23 @@ def update_user_settings(
     """
     Update user-specific app settings (e.g. biometrics) to persist across installs.
     """
-    if settings.biometric_enabled is not None:
-        current_user.biometric_enabled = settings.biometric_enabled
-    if settings.app_lock_enabled is not None:
-        current_user.app_lock_enabled = settings.app_lock_enabled
+    update_data = settings.dict(exclude_unset=True)
+    
+    if 'biometric_enabled' in update_data:
+        current_user.biometric_enabled = update_data['biometric_enabled']
+    if 'app_lock_enabled' in update_data:
+        current_user.app_lock_enabled = update_data['app_lock_enabled']
+    if 'summary_frequency' in update_data:
+        current_user.summary_frequency = update_data['summary_frequency']
+    if 'spending_limit_period' in update_data:
+        current_user.spending_limit_period = update_data['spending_limit_period']
+        
+    if 'spending_limit' in update_data:
+        current_user.spending_limit = update_data['spending_limit']
+        if update_data['spending_limit'] is not None:
+            current_user.spending_limit_updated_at = datetime.utcnow()
+        else:
+            current_user.spending_limit_updated_at = None
     
     db.commit()
     db.refresh(current_user)
@@ -1387,6 +1400,24 @@ def create_transaction(
     if not bank_pin or not auth.verify_password(tx.pin, bank_pin):
         raise HTTPException(status_code=401, detail="Incorrect PIN")
 
+    # Custom Spending Limit Check
+    if current_user.spending_limit and current_user.spending_limit_period:
+        limit_period_days = current_user.spending_limit_period
+        limit_amount = current_user.spending_limit
+        
+        start_time = datetime.now() - timedelta(days=limit_period_days)
+        spent_sum = db.query(func.sum(models.Transaction.amount)).filter(
+            models.Transaction.sender_id == current_user.id,
+            models.Transaction.status == "SUCCESS",
+            models.Transaction.timestamp >= start_time
+        ).scalar() or 0.0
+        
+        if spent_sum + tx.amount > limit_amount:
+            period_str = "Daily" if limit_period_days == 1 else f"{limit_period_days}-day"
+            if limit_period_days == 7: period_str = "Weekly"
+            if limit_period_days == 30: period_str = "Monthly"
+            raise HTTPException(status_code=400, detail=f"{period_str} spending limit (₹{limit_amount}) reached.")
+
     # 1. Validate Receiver (outside lock - fail fast)
     receiver = db.query(models.User).filter(models.User.upi_id == tx.receiver_upi_id).first()
     if not receiver:
@@ -1812,7 +1843,8 @@ def create_transaction(
         amount=new_tx.amount,
         status="SUCCESS",
         risk_score=risk_label,
-        timestamp=new_tx.timestamp
+        timestamp=new_tx.timestamp,
+        note=new_tx.note
     )
 
 
@@ -2166,7 +2198,8 @@ def read_history(current_user: models.User = Depends(get_current_user), db: Sess
             risk_score=t.risk_score,
             timestamp=t.timestamp,
             sender_mcc=t.sender.mcc,
-            receiver_mcc=t.receiver.mcc
+            receiver_mcc=t.receiver.mcc,
+            note=t.note
         ))
         
     # Update Cache

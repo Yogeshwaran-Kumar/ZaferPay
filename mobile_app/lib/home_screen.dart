@@ -439,7 +439,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       icon: Icons.settings_outlined,
                       text: "View settings",
                       onTap: () {
-                        Navigator.pushNamed(context, '/settings');
+                        widget.onSwitchTab?.call(3);
                       },
                       isDark: isDark,
                     ),
@@ -567,7 +567,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // Profile Icon
           GestureDetector(
             onTap: () {
-              widget.onSwitchTab?.call(2);
+              widget.onSwitchTab?.call(3);
             },
             child: Container(
               width: 44,
@@ -1366,6 +1366,19 @@ class _HomeScreenState extends State<HomeScreen> {
       timeRange = "Last 24 hours";
     }
 
+    String summaryTitle = "Daily Summary";
+    if (_user != null && _user!['summary_frequency'] != null) {
+      int freq = _user!['summary_frequency'];
+      if (freq == 7)
+        summaryTitle = "Weekly Summary";
+      else if (freq == 14)
+        summaryTitle = "Bi-Weekly Summary";
+      else if (freq == 30)
+        summaryTitle = "Monthly Summary";
+      else if (freq != 1)
+        summaryTitle = "Spending Summary";
+    }
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1401,7 +1414,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    "Daily Summary",
+                    summaryTitle,
                     style: GoogleFonts.outfit(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,

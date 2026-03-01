@@ -59,6 +59,11 @@ class UserResponse(UserBase):
     biometric_enabled: bool = False
     app_lock_enabled: bool = True
     pin_updated_at: Optional[datetime] = None
+    summary_frequency: int = 1
+    last_summary_sent_at: Optional[datetime] = None
+    spending_limit: Optional[float] = None
+    spending_limit_period: int = 1
+    spending_limit_updated_at: Optional[datetime] = None
     # We don't return hashed_password or sensitive fields
     class Config:
         from_attributes = True
@@ -66,6 +71,9 @@ class UserResponse(UserBase):
 class SettingsUpdateRequest(BaseModel):
     biometric_enabled: Optional[bool] = None
     app_lock_enabled: Optional[bool] = None
+    summary_frequency: Optional[int] = None
+    spending_limit: Optional[float] = None
+    spending_limit_period: Optional[int] = None
     # Future settings can be added here
     
     class Config:
