@@ -22,7 +22,6 @@ build/
 .pub/
 
 # Android
-**/*.gradle
 **/.gradle/
 **/local.properties
 
@@ -41,6 +40,13 @@ build/
 # OS
 .DS_Store
 Thumbs.db
-*.exe
 
+# Executables
 cloudflared.exe
+
+# SafePay Specific
+backend/firebase_credentials.json
+backend/logs/
+backend/GeoLite2-City.mmdb
+backend/*.pkl
+tunnel_output.txt
