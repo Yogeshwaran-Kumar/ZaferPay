@@ -16,6 +16,7 @@ import 'settings_screen.dart';
 import 'change_pin_screen.dart';
 import 'risk_analysis_screen.dart'; // Import RiskAnalysisScreen
 import 'pending_requests_screen.dart'; // Import PendingRequestsScreen
+import 'profile_screen.dart'; // Import ProfileScreen
 import 'amount_screen.dart';
 import 'contacts_screen.dart';
 import 'transaction_details_screen.dart';
@@ -529,6 +530,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               );
             },
             '/settings': (context) => const SettingsScreen(),
+            '/profile': (context) => const ProfileScreen(),
 
             '/change-mpin': (context) {
               final args =

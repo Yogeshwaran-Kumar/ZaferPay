@@ -38,34 +38,40 @@ def resolve_db_host(hostname):
     except socket.gaierror:
         print(f"[WARN] System DNS failed for {hostname}. Trying Google DNS (8.8.8.8)...")
         try:
-            # 2. Fallback: Use nslookup with Google DNS
+            # 2. Fallback using PowerShell on Windows or dig on Linux
             if os.name == 'nt':
-                 cmd = ["nslookup", hostname, "8.8.8.8"]
+                 cmd = [
+                     "powershell", "-Command", 
+                     f"(Resolve-DnsName {hostname} -Server 8.8.8.8 -Type A -ErrorAction Stop).IPAddress"
+                 ]
             else:
                  cmd = ["dig", "+short", "@8.8.8.8", hostname]     
+            
+            # Using creationflags=0x08000000 (CREATE_NO_WINDOW) to prevent hanging and windows popups
+            creationflags = 0x08000000 if os.name == 'nt' else 0
             
             result = subprocess.run(
                 cmd, 
                 capture_output=True, 
                 text=True, 
-                timeout=5
+                timeout=10,
+                stdin=subprocess.DEVNULL,
+                creationflags=creationflags
             )
             
-            # Simple regex to find IPv4 addresses in output
-            # (matches standard dotted-quad format)
-            ipv4_matches = re.findall(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', result.stdout)
+            # Extract valid IPv4 addresses
+            ips = []
+            for line in result.stdout.strip().splitlines():
+                ip = line.strip()
+                # Basic IPv4 validation
+                if re.match(r'^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$', ip):
+                    if not ip.startswith("8.8.8.8") and ip != "127.0.0.1" and not ip.startswith("192.168."):
+                        ips.append(ip)
             
-            # Filter clearly irrelevant IPs
-            filtered_ips = []
-            for ip in ipv4_matches:
-                 # Exclude 8.8.8.8 (server) and clearly local non-routable (127.0.0.1)
-                 # Neon IPs are usually public cloud IPs
-                 if not ip.startswith("8.8.8.8") and ip != "127.0.0.1" and not ip.startswith("192.168."):
-                     filtered_ips.append(ip)
+            if ips:
+                 return ips[0] # Return first valid IP
             
-            if filtered_ips:
-                 return filtered_ips[0] # Return first valid IP
-            
+            print(f"[ERROR] Failed to extract IP. Command output: {result.stdout.strip()} | stderr: {result.stderr.strip()}")
             return None
         except Exception as e:
             print(f"[ERROR] Fallback DNS resolution failed: {e}")

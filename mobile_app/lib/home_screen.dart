@@ -567,7 +567,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // Profile Icon
           GestureDetector(
             onTap: () {
-              widget.onSwitchTab?.call(3);
+              Navigator.pushNamed(context, '/profile');
             },
             child: Container(
               width: 44,
