@@ -9,21 +9,28 @@ rootProject.layout.buildDirectory.set(rootProject.projectDir.parentFile.resolve(
 
 subprojects {
     project.layout.buildDirectory.set(rootProject.layout.buildDirectory.get().asFile.resolve(project.name))
-    afterEvaluate {
-        if (project.plugins.hasPlugin("com.android.library")) {
-            val android = project.extensions.getByName("android") as com.android.build.gradle.LibraryExtension
 
-            // Fix namespace for old plugins (e.g. flutter_app_badger) that don't specify one
-            if (android.namespace == null || android.namespace!!.isEmpty()) {
-                val manifestFile = project.file("src/main/AndroidManifest.xml")
-                if (manifestFile.exists()) {
-                    val manifest = groovy.xml.XmlSlurper().parse(manifestFile)
-                    val packageName = manifest.getProperty("@package")?.toString()
-                    if (!packageName.isNullOrEmpty()) {
-                        android.namespace = packageName
+    // Fix namespace EARLY — before AGP creates variant instances
+    project.plugins.whenPluginAdded {
+        if (this.javaClass.name == "com.android.build.gradle.LibraryPlugin") {
+            project.extensions.findByType(com.android.build.gradle.LibraryExtension::class.java)?.let { android ->
+                if (android.namespace.isNullOrEmpty()) {
+                    val manifestFile = project.file("src/main/AndroidManifest.xml")
+                    if (manifestFile.exists()) {
+                        val manifest = groovy.xml.XmlSlurper().parse(manifestFile)
+                        val packageName = manifest.getProperty("@package")?.toString()
+                        if (!packageName.isNullOrEmpty()) {
+                            android.namespace = packageName
+                        }
                     }
                 }
             }
+        }
+    }
+
+    afterEvaluate {
+        if (project.plugins.hasPlugin("com.android.library")) {
+            val android = project.extensions.getByName("android") as com.android.build.gradle.LibraryExtension
 
             // Bump compileSdk for old plugins that have compileSdk < 33
             if (android.compileSdkVersion != null) {

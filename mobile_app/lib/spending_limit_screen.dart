@@ -212,7 +212,7 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
                     onChanged: (val) {
                       setDialogState(() => isEnabled = val);
                     },
-                    activeColor: const Color(0xFF00B9F1),
+                    activeThumbColor: const Color(0xFF00B9F1),
                   ),
                   if (isEnabled) ...[
                     const SizedBox(height: 16),
@@ -234,7 +234,7 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
                     const SizedBox(height: 16),
                     DropdownButtonFormField<int>(
                       // Use -1 as sentinel for "Custom"
-                      value: [1, 7, 14, 30].contains(tempPeriod)
+                      initialValue: [1, 7, 14, 30].contains(tempPeriod)
                           ? tempPeriod
                           : -1,
                       dropdownColor: isDark
@@ -552,12 +552,13 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
     final isWarning = percent >= 0.75 && !isCritical && !isExceeded;
 
     Color progressColor = const Color(0xFF00C853);
-    if (isExceeded)
+    if (isExceeded) {
       progressColor = Colors.red;
-    else if (isCritical)
+    } else if (isCritical) {
       progressColor = Colors.red.shade400;
-    else if (isWarning)
+    } else if (isWarning) {
       progressColor = Colors.orange;
+    }
 
     String periodLabel = period == 1
         ? 'Daily'
@@ -1105,7 +1106,7 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
                 ),
               ),
             );
-          }).toList(),
+          }),
         ],
       ),
     );

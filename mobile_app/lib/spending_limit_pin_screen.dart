@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'api_service.dart';
 import 'utils.dart';
 
@@ -25,6 +26,33 @@ class _SpendingLimitPinScreenState extends State<SpendingLimitPinScreen> {
   bool _isVerifying = false;
   String? _errorMessage;
   final ApiService _api = ApiService();
+  static const _securityChannel = MethodChannel(
+    'com.company.zaferpay/security',
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _secureScreen();
+  }
+
+  @override
+  void dispose() {
+    _removeSecureScreen();
+    super.dispose();
+  }
+
+  Future<void> _secureScreen() async {
+    try {
+      await _securityChannel.invokeMethod('secureScreen');
+    } catch (_) {}
+  }
+
+  Future<void> _removeSecureScreen() async {
+    try {
+      await _securityChannel.invokeMethod('unsecureScreen');
+    } catch (_) {}
+  }
 
   void _onKeypadTap(String value) {
     if (_isVerifying) return;
@@ -38,11 +66,6 @@ class _SpendingLimitPinScreenState extends State<SpendingLimitPinScreen> {
         _enteredPin += value;
       }
     });
-
-    // Auto-submit when 4 digits are entered
-    if (_enteredPin.length == 4 && !_isVerifying) {
-      _verifyPin();
-    }
   }
 
   Future<void> _verifyPin() async {
