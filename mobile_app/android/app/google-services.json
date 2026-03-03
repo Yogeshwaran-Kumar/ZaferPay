@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "693347573977",
+    "project_id": "safepay1685",
+    "storage_bucket": "safepay1685.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:693347573977:android:b6c6b7729e055ef82b1ec8",
+        "android_client_info": {
+          "package_name": "com.company.zaferpay"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCcftG0J-1cslyRkdmxEjaIPpLNhUkEwMY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

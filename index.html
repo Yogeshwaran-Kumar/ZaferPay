@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafePay - Documentation Hub</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0a0a12;
+            --bg-card: #14141f;
+            --bg-hover: #1e1e2e;
+            --text-primary: #ffffff;
+            --text-secondary: #8888a0;
+            --accent-purple: #a55eea;
+            --accent-blue: #3742fa;
+            --accent-green: #2ed573;
+            --accent-orange: #ffa502;
+            --accent-red: #ff4757;
+            --accent-cyan: #1dd1a1;
+            --border: #2a2a40;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            text-align: center;
+            padding: 4rem 2rem;
+            background: radial-gradient(circle at center, rgba(55, 66, 250, 0.15) 0%, transparent 70%);
+            margin-bottom: 2rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        header h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #ffffff 0%, #8888a0 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+
+        header p {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2rem;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent-purple);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .card:hover::before {
+            opacity: 1;
+        }
+
+        .icon {
+            font-size: 2.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card h2 {
+            font-size: 1.5rem;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            flex-grow: 1;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-top: 1.5rem;
+            align-self: flex-start;
+        }
+
+        .tag.core {
+            background: rgba(55, 66, 250, 0.2);
+            color: var(--accent-blue);
+        }
+
+        .tag.ai {
+            background: rgba(46, 213, 115, 0.2);
+            color: var(--accent-green);
+        }
+
+        .tag.security {
+            background: rgba(255, 71, 87, 0.2);
+            color: var(--accent-red);
+        }
+
+        .tag.dev {
+            background: rgba(255, 165, 2, 0.2);
+            color: var(--accent-orange);
+        }
+
+        footer {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+            margin-top: 4rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .status-bar {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 3rem;
+            border: 1px solid var(--border);
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .status-item {
+            text-align: center;
+        }
+
+        .status-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .status-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>SafePay Documentation</h1>
+        <p>The complete A-Z reference for the SafePay secure payment platform.</p>
+    </header>
+
+    <div class="container">
+        <!-- Project Status Dashboard -->
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-value" style="color: var(--accent-green)">98/100</div>
+                <div class="status-label">Security Score</div>
+            </div>
+            <div class="status-item">
+                <div class="status-value" style="color: var(--accent-cyan)">54 Rules</div>
+                <div class="status-label">Fraud Protection</div>
+            </div>
+            <div class="status-item">
+                <div class="status-value" style="color: var(--accent-purple)">AI Powered</div>
+                <div class="status-label">Detection Engine</div>
+            </div>
+            <div class="status-item">
+                <div class="status-value" style="color: var(--accent-orange)">v2.0</div>
+                <div class="status-label">Current Version</div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <!-- 1. Setup & Installation -->
+            <a href="setup_guide.html" class="card">
+                <div class="icon">🚀</div>
+                <h2>Setup Guide</h2>
+                <p>Complete A-Z instructions to install, configure, and run the backend and mobile app from scratch.</p>
+                <span class="tag dev">FOR DEVELOPERS</span>
+            </a>
+
+            <!-- 2. Project Overview -->
+            <a href="project_documentation.html" class="card">
+                <div class="icon">📚</div>
+                <h2>Project Overview</h2>
+                <p>High-level architecture, technology stack, feature list, and system design documentation.</p>
+                <span class="tag core">ARCHITECTURE</span>
+            </a>
+
+            <!-- 2.5. Architecture Diagram -->
+            <a href="project_architecture_workflow.html" class="card">
+                <div class="icon">⚡</div>
+                <h2>Architecture & Logic</h2>
+                <p>System Diagram (A-Z), Atomic Workflows, and MCC Risk Tier policies.</p>
+                <span class="tag core">SYSTEM DESIGN</span>
+            </a>
+
+            <!-- 3. AI Engine -->
+            <a href="ai_engine_documentation.html" class="card">
+                <div class="icon">🧠</div>
+                <h2>AI Engine Internals</h2>
+                <p>Deep dive into the Isolation Forest model, 26 behavioral features, and training pipeline.</p>
+                <span class="tag ai">MACHINE LEARNING</span>
+            </a>
+
+            <!-- 4. Fraud Rules -->
+            <a href="fraud_rules_documentation.html" class="card">
+                <div class="icon">🛡️</div>
+                <h2>Fraud Rules Reference</h2>
+                <p>Catalog of all 54 active fraud detection rules, triggers, risk scores, and logic.</p>
+                <span class="tag security">SECURITY</span>
+            </a>
+
+            <!-- 5. Database Schema -->
+            <a href="database_schema_documentation.html" class="card">
+                <div class="icon">🗄️</div>
+                <h2>Database Schema</h2>
+                <p>Complete A-Z reference for all 14 tables, relationships, and security patterns (Hash+Encrypt).</p>
+                <span class="tag core">DATA</span>
+            </a>
+
+            <!-- 6. Testing Guide -->
+            <a href="testing_guide.html" class="card">
+                <div class="icon">🧪</div>
+                <h2>Testing Guide</h2>
+                <p>Comprehensive testing manual covering Unit Tests, Swagger API, Mobile App, and Fraud Scenarios.</p>
+                <span class="tag dev">QUALITY ASSURANCE</span>
+            </a>
+
+            <!-- 7. Security Audit -->
+
+        </div>
+    </div>
+
+</body>
+
+</html>

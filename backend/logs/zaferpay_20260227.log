@@ -1,0 +1,9 @@
+2026-02-27 14:18:39 | INFO     | zaferpay:27 | ✅ Firebase Admin SDK initialized successfully.
+2026-02-27 14:18:44 | INFO     | zaferpay:58 | 📲 Notification sent successfully: projects/safepay1685/messages/0:1772182124031931%e75cd53ae75cd53a
+2026-02-27 14:23:57 | ERROR    | zaferpay:61 | ❌ Error sending notification: Requested entity was not found.
+2026-02-27 14:26:18 | ERROR    | zaferpay:61 | ❌ Error sending notification: Requested entity was not found.
+2026-02-27 15:22:38 | INFO     | zaferpay:767 | 📲 Updating FCM token for user Kavitha
+2026-02-27 15:30:08 | INFO     | zaferpay:58 | 📲 Notification sent successfully: projects/safepay1685/messages/0:1772186408825793%e75cd53ae75cd53a
+2026-02-27 15:36:41 | INFO     | zaferpay:58 | 📲 Notification sent successfully: projects/safepay1685/messages/0:1772186802451477%e75cd53ae75cd53a
+2026-02-27 15:36:41 | INFO     | zaferpay:58 | 📲 Notification sent successfully: projects/safepay1685/messages/0:1772186802557781%e75cd53ae75cd53a
+2026-02-27 15:52:02 | INFO     | zaferpay:767 | 📲 Updating FCM token for user Dhanush

@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafePay - Complete Setup & Run Guide (A to Z)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0a0a12;
+            --bg-card: #14141f;
+            --bg-hover: #1e1e2e;
+            --text-primary: #ffffff;
+            --text-secondary: #8888a0;
+            --accent-purple: #a55eea;
+            --accent-blue: #3742fa;
+            --accent-green: #2ed573;
+            --accent-orange: #ffa502;
+            --accent-red: #ff4757;
+            --accent-cyan: #1dd1a1;
+            --border: #2a2a40;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            line-height: 1.7;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            text-align: center;
+            padding: 3rem 2rem;
+            background: linear-gradient(180deg, rgba(46, 213, 115, 0.15) 0%, transparent 100%);
+            border-bottom: 1px solid var(--border);
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #2ed573 0%, #3742fa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .section {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 2rem;
+            margin: 2rem 0;
+            border: 1px solid var(--border);
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .section-header .step {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--accent-green) 0%, var(--accent-blue) 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            font-weight: 800;
+        }
+
+        .cmd {
+            font-family: 'Fira Code', monospace;
+            background: #0d0d15;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            margin: 1rem 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .cmd code {
+            color: var(--accent-green);
+            font-size: 0.95rem;
+        }
+
+        .cmd .label {
+            font-family: 'Inter', sans-serif;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .cmd-block {
+            font-family: 'Fira Code', monospace;
+            background: #0d0d15;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin: 1rem 0;
+            font-size: 0.9rem;
+            overflow-x: auto;
+            line-height: 1.8;
+        }
+
+        .cmd-block .comment {
+            color: #666;
+        }
+
+        .cmd-block .prompt {
+            color: var(--accent-purple);
+        }
+
+        .cmd-block .command {
+            color: var(--accent-green);
+        }
+
+        .cmd-block .output {
+            color: var(--text-secondary);
+        }
+
+        .warning-box {
+            background: rgba(255, 165, 2, 0.1);
+            border: 1px solid rgba(255, 165, 2, 0.3);
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            margin: 1rem 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+
+        .warning-box .icon {
+            font-size: 1.25rem;
+        }
+
+        .warning-box p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .success-box {
+            background: rgba(46, 213, 115, 0.1);
+            border: 1px solid rgba(46, 213, 115, 0.3);
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            margin: 1rem 0;
+        }
+
+        .error-box {
+            background: rgba(255, 71, 87, 0.1);
+            border: 1px solid rgba(255, 71, 87, 0.3);
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            margin: 1rem 0;
+        }
+
+        h3 {
+            margin: 1.5rem 0 0.5rem 0;
+            color: var(--accent-cyan);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        th,
+        td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: rgba(46, 213, 115, 0.1);
+            font-weight: 600;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge.required {
+            background: rgba(255, 71, 87, 0.2);
+            color: var(--accent-red);
+        }
+
+        .badge.optional {
+            background: rgba(46, 213, 115, 0.2);
+            color: var(--accent-green);
+        }
+
+        .badge.auto {
+            background: rgba(55, 66, 250, 0.2);
+            color: var(--accent-blue);
+        }
+
+        .quick-ref {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .quick-ref-item {
+            background: var(--bg-hover);
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .quick-ref-item h4 {
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+            color: var(--accent-cyan);
+        }
+
+        .quick-ref-item code {
+            font-family: 'Fira Code', monospace;
+            color: var(--accent-green);
+            font-size: 0.85rem;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--border);
+            margin-top: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 1.75rem;
+            }
+
+            .cmd {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>🚀 SafePay - Complete Setup Guide</h1>
+        <p style="margin-top: 0.5rem; color: var(--text-secondary);">A to Z Commands to Run the Full Application</p>
+    </header>
+
+    <div class="container">
+        <!-- QUICK REFERENCE -->
+        <section class="section"
+            style="background: linear-gradient(135deg, rgba(46, 213, 115, 0.1), rgba(55, 66, 250, 0.1));">
+            <h2 style="margin-bottom: 1rem;">⚡ Quick Reference (TL;DR)</h2>
+
+            <div class="quick-ref">
+                <div class="quick-ref-item">
+                    <h4>1️⃣ One-Click Setup</h4>
+                    <code>.\setup_app.ps1</code>
+                </div>
+                <div class="quick-ref-item">
+                    <h4>2️⃣ Start Backend (Local)</h4>
+                    <code>.\start_backend.bat</code>
+                </div>
+                <div class="quick-ref-item">
+                    <h4>3️⃣ Start Backend (Remote)</h4>
+                    <code>.\start_remote.bat</code>
+                </div>
+                <div class="quick-ref-item">
+                    <h4>4️⃣ Run Mobile App</h4>
+                    <code>cd mobile_app && flutter run</code>
+                </div>
+            </div>
+        </section>
+
+        <!-- PREREQUISITES -->
+        <section class="section">
+            <div class="section-header">
+                <div class="step">0</div>
+                <div>
+                    <h2>Prerequisites (Install First)</h2>
+                    <p style="color: var(--text-secondary);">Before you begin</p>
+                </div>
+            </div>
+
+            <table>
+                <tr>
+                    <th>Software</th>
+                    <th>Required</th>
+                    <th>Download Link</th>
+                    <th>Verify Command</th>
+                </tr>
+                <tr>
+                    <td>Python 3.9+</td>
+                    <td><span class="badge required">REQUIRED</span></td>
+                    <td>python.org/downloads</td>
+                    <td><code>python --version</code></td>
+                </tr>
+                <tr>
+                    <td>Flutter SDK 3.10+</td>
+                    <td><span class="badge required">REQUIRED</span></td>
+                    <td>flutter.dev/get-started</td>
+                    <td><code>flutter --version</code></td>
+                </tr>
+                <tr>
+                    <td>Git</td>
+                    <td><span class="badge required">REQUIRED</span></td>
+                    <td>git-scm.com/downloads</td>
+                    <td><code>git --version</code></td>
+                </tr>
+                <tr>
+                    <td>Android Studio</td>
+                    <td><span class="badge required">REQUIRED</span></td>
+                    <td>developer.android.com/studio</td>
+                    <td><code>flutter doctor</code></td>
+                </tr>
+                <tr>
+                    <td>Ngrok</td>
+                    <td><span class="badge optional">OPTIONAL</span></td>
+                    <td>ngrok.com/download</td>
+                    <td><code>ngrok --version</code></td>
+                </tr>
+            </table>
+
+            <div class="warning-box">
+                <span class="icon">⚠️</span>
+                <p><strong>For Flutter:</strong> After installing, run <code>flutter doctor</code> and fix any issues it
+                    reports (Android SDK, licenses, etc.).</p>
+            </div>
+        </section>
+
+        <!-- STEP 1: CLONE/DOWNLOAD -->
+        <section class="section">
+            <div class="section-header">
+                <div class="step">1</div>
+                <div>
+                    <h2>Get the Project</h2>
+                    <p style="color: var(--text-secondary);">Clone or extract</p>
+                </div>
+            </div>
+
+            <h3>Option A: Clone from Git</h3>
+            <div class="cmd-block">
+                <span class="prompt">PS C:\Users\dhanu\Downloads></span> <span class="command">git clone
+                    https://github.com/your-repo/Safe-Pay.git</span>
+                <span class="prompt">PS C:\Users\dhanu\Downloads></span> <span class="command">cd "Safe Pay"</span>
+            </div>
+
+            <h3>Option B: Already Have the Folder</h3>
+            <div class="cmd-block">
+                <span class="comment"># Open PowerShell and navigate to the project</span>
+                <span class="prompt">PS C:\></span> <span class="command">cd "C:\Users\dhanu\Downloads\Safe Pay"</span>
+            </div>
+
+            <h3>Project Structure:</h3>
+            <div class="cmd-block" style="color: var(--text-secondary);">
+                Safe Pay/
+                ├── backend/ <span class="comment"># Python FastAPI server</span>
+                │ ├── main.py <span class="comment"># Main API endpoints</span>
+                │ ├── fraud_engine.py <span class="comment"># Fraud detection</span>
+                │ ├── requirements.txt <span class="comment"># Python dependencies</span>
+                │ └── .env <span class="comment"># Environment variables</span>
+                ├── mobile_app/ <span class="comment"># Flutter mobile app</span>
+                │ ├── lib/ <span class="comment"># Dart source code</span>
+                │ └── pubspec.yaml <span class="comment"># Flutter dependencies</span>
+                ├── setup_app.ps1 <span class="comment"># Auto setup script</span>
+                ├── start_backend.bat <span class="comment"># Local server launcher</span>
+                └── start_remote.bat <span class="comment"># Remote server launcher</span>
+            </div>
+        </section>
+
+        <!-- STEP 2: AUTOMATED SETUP -->
+        <section class="section">
+            <div class="section-header">
+                <div class="step">2</div>
+                <div>
+                    <h2>Run Automated Setup (Recommended)</h2>
+                    <p style="color: var(--text-secondary);">One-click backend setup</p>
+                </div>
+            </div>
+
+            <p>This script creates a virtual environment and installs all Python dependencies:</p>
+
+            <div class="cmd">
+                <code>.\setup_app.ps1</code>
+                <span class="label">Run in PowerShell from project root</span>
+            </div>
+
+            <div class="warning-box">
+                <span class="icon">⚠️</span>
+                <p><strong>If PowerShell blocks the script:</strong> Run this first:<br>
+                    <code
+                        style="color: var(--accent-green);">Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned</code>
+                </p>
+            </div>
+
+            <h3>What the script does:</h3>
+            <ol style="margin-left: 2rem; color: var(--text-secondary);">
+                <li>Checks if Python is installed</li>
+                <li>Creates <code>backend/venv/</code> virtual environment</li>
+                <li>Installs all packages from <code>requirements.txt</code></li>
+                <li>Checks if <code>.env</code> file exists</li>
+            </ol>
+
+            <div class="success-box">
+                <p>✅ <strong>Expected output:</strong> "[+] Backend setup complete!"</p>
+            </div>
+        </section>
+
+        <!-- STEP 3: MANUAL BACKEND SETUP -->
+        <section class="section">
+            <div class="section-header">
+                <div class="step">3</div>
+                <div>
+                    <h2>Manual Backend Setup (Alternative)</h2>
+                    <p style="color: var(--text-secondary);">If automated setup didn't work</p>
+                </div>
+            </div>
+
+            <div class="cmd-block">
+                <span class="comment"># Step 1: Navigate to backend folder</span>
+                <span class="prompt">PS C:\Users\dhanu\Downloads\Safe Pay></span> <span class="command">cd
+                    backend</span>
+
+                <span class="comment"># Step 2: Create virtual environment</span>
+                <span class="prompt">PS ...\Safe Pay\backend></span> <span class="command">python -m venv venv</span>
+
+                <span class="comment"># Step 3: Activate virtual environment</span>
+                <span class="prompt">PS ...\Safe Pay\backend></span> <span
+                    class="command">.\venv\Scripts\activate</span>
+                <span class="output">(venv) PS ...\Safe Pay\backend></span>
+
+                <span class="comment"># Step 4: Install dependencies</span>
+                <span class="output">(venv)</span> <span class="prompt">PS></span> <span class="command">pip install -r
+                    requirements.txt</span>
+
+                <span class="comment"># Step 5: Initialize database (first time only)</span>
+                <span class="output">(venv)</span> <span class="prompt">PS></span> <span class="command">python
+                    init_db.py</span>
+            </div>
+        </section>
+
+        <!-- STEP 4: ENVIRONMENT VARIABLES -->
+        <section class="section">
+            <div class="section-header">
+                <div class="step">4</div>
+                <div>
+                    <h2>Check Environment Variables (.env)</h2>
+                    <p style="color: var(--text-secondary);">Your backend/.env file</p>
+                </div>
+            </div>
+
+            <p>The <code>.env</code> file contains secrets. It already exists in your project:</p>
+
+            <div class="cmd-block">
+                <span class="comment"># File: backend/.env</span>
+
+                SECRET_KEY=xK9mP2vQ8nL5jR3wF6yT1bC4hA7gM0sE
+                HMAC_SECRET=hK7pL4xN9mQ2wT5yR8vB1cF6gA3jD0sE
+                ACCESS_TOKEN_EXPIRE_MINUTES=300
+                MASTER_KEY=M6AtRSL5HZIxbKlm-6ujeRbmv71ryR7DClxEpC_ruDg=
+                HASH_SALT=syUbCv0lzUSOKyfZxJ0oR4FYzVSi2AsC1y3sN1WZR6A
+
+                <span class="comment"># PostgreSQL Database (Neon Cloud)</span>
+                DATABASE_URL=postgresql://neondb_owner:****@ep-dry-sky-****.neon.tech/neondb?sslmode=require
+            </div>
+
+            <table>
+                <tr>
+                    <th>Variable</th>
+                    <th>Purpose</th>
+                </tr>
+                <tr>
+                    <td><code>SECRET_KEY</code></td>
+                    <td>JWT signing key</td>
+                </tr>
+                <tr>
+                    <td><code>HMAC_SECRET</code></td>
+                    <td>Request signing & model verification</td>
+                </tr>
+                <tr>
+                    <td><code>MASTER_KEY</code></td>
+                    <td>AES-256 encryption key (Fernet)</td>
+                </tr>
+                <tr>
+                    <td><code>HASH_SALT</code></td>
+                    <td>Additional salt for hashing</td>
+                </tr>
+                <tr>
+                    <td><code>DATABASE_URL</code></td>
+                    <td>PostgreSQL connection string (Neon Cloud)</td>
+                </tr>
+            </table>
+
+            <div class="error-box">
+                <p>🔒 <strong>Security:</strong> Never share your <code>.env</code> file publicly. These are real
+                    secrets!</p>
+            </div>
+        </section>
+
+        <!-- STEP 5: START BACKEND -->
+        <section class="section">
+            <div class="section-header">
+                <div class="step">5</div>
+                <div>
+                    <h2>Start the Backend Server</h2>
+                    <p style="color: var(--text-secondary);">Choose local or remote</p>
+                </div>
+            </div>
+
+            <h3>Option A: Local Network (Same WiFi)</h3>
+            <p>Use this when your phone is on the same WiFi as your computer.</p>
+
+            <div class="cmd">
+                <code>.\start_backend.bat</code>
+                <span class="label">Double-click or run from project root</span>
+            </div>
+
+            <div class="success-box">
+                <p>✅ <strong>Expected output:</strong></p>
+                <code style="color: var(--accent-green);">INFO: Uvicorn running on http://0.0.0.0:8000</code>
+            </div>
+
+            <div class="cmd-block">
+                <span class="comment"># Find your computer's IP address:</span>
+                <span class="prompt">PS></span> <span class="command">ipconfig</span>
+                <span class="output">
+                    ...
+                    Wireless LAN adapter Wi-Fi:
+                    IPv4 Address. . . . . . . . . . . : 192.168.1.5
+                    ...</span>
+
+                <span class="comment"># Your backend URL will be: http://192.168.1.5:8000</span>
+            </div>
+
+            <h3>Option B: Remote Access (Internet/Mobile Data)</h3>
+            <p>Use this when you want to access the backend from anywhere (requires Ngrok).</p>
+
+            <div class="cmd">
+                <code>.\start_remote.bat</code>
+                <span class="label">Starts backend + Ngrok tunnel</span>
+            </div>
+
+            <div class="success-box">
+                <p>✅ <strong>Ngrok output:</strong></p>
+                <code
+                    style="color: var(--accent-green);">Forwarding https://abc123.ngrok-free.app -> http://localhost:8000</code>
+            </div>
+
+            <h3>Option C: Manual Command (Without Batch Files)</h3>
+            <div class="cmd-block">
+                <span class="comment"># Activate venv and start server</span>
+                <span class="prompt">PS ...\Safe Pay></span> <span class="command">cd backend</span>
+                <span class="prompt">PS ...\backend></span> <span class="command">.\venv\Scripts\activate</span>
+                <span class="output">(venv)</span> <span class="prompt">PS></span> <span class="command">uvicorn
+                    main:app --host 0.0.0.0 --port 8000 --reload</span>
+            </div>
+        </section>
+
+        <!-- STEP 6: VERIFY BACKEND -->
+        <section class="section">
+            <div class="section-header">
+                <div class="step">6</div>
+                <div>
+                    <h2>Verify Backend is Working</h2>
+                    <p style="color: var(--text-secondary);">Test the API</p>
+                </div>
+            </div>
+
+            <h3>Open these URLs in your browser:</h3>
+            <table>
+                <tr>
+                    <th>URL</th>
+                    <th>What You Should See</th>
+                </tr>
+                <tr>
+                    <td><code>http://localhost:8000</code></td>
+                    <td>{"message": "SafePay Backend Running"}</td>
+                </tr>
+                <tr>
+                    <td><code>http://localhost:8000/docs</code></td>
+                    <td>Swagger UI - Interactive API docs</td>
+                </tr>
+                <tr>
+                    <td><code>http://localhost:8000/health</code></td>
+                    <td>{"status": "healthy"}</td>
+                </tr>
+            </table>
+
+            <div class="warning-box">
+                <span class="icon">💡</span>
+                <p>If using Ngrok, replace <code>localhost:8000</code> with your Ngrok URL (e.g.,
+                    <code>https://abc123.ngrok-free.app</code>)
+                </p>
+            </div>
+        </section>
+
+        <!-- STEP 7: MOBILE APP SETUP -->
+        <section class="section">
+            <div class="section-header">
+                <div class="step">7</div>
+                <div>
+                    <h2>Setup Mobile App (Flutter)</h2>
+                    <p style="color: var(--text-secondary);">Get dependencies</p>
+                </div>
+            </div>
+
+            <div class="cmd-block">
+                <span class="comment"># Step 1: Navigate to mobile_app folder</span>
+                <span class="prompt">PS ...\Safe Pay></span> <span class="command">cd mobile_app</span>
+
+                <span class="comment"># Step 2: Get Flutter dependencies</span>
+                <span class="prompt">PS ...\mobile_app></span> <span class="command">flutter pub get</span>
+                <span class="output">Running "flutter pub get" in mobile_app...
+                    Resolving dependencies...
+                    Got dependencies!</span>
+
+                <span class="comment"># Step 3: Check Flutter setup</span>
+                <span class="prompt">PS ...\mobile_app></span> <span class="command">flutter doctor</span>
+            </div>
+
+            <div class="success-box">
+                <p>✅ <strong>flutter doctor</strong> should show all green checkmarks for basic setup.</p>
+            </div>
+        </section>
+
+        <!-- STEP 8: RUN MOBILE APP -->
+        <section class="section">
+            <div class="section-header">
+                <div class="step">8</div>
+                <div>
+                    <h2>Run the Mobile App</h2>
+                    <p style="color: var(--text-secondary);">Launch on device/emulator</p>
+                </div>
+            </div>
+
+            <h3>Option A: On Physical Android Device</h3>
+            <ol style="margin-left: 2rem; color: var(--text-secondary);">
+                <li>Enable Developer Options on your phone (Settings → About → Tap "Build Number" 7 times)</li>
+                <li>Enable USB Debugging in Developer Options</li>
+                <li>Connect phone via USB cable</li>
+                <li>Accept "Allow USB Debugging" prompt on phone</li>
+            </ol>
+
+            <div class="cmd-block">
+                <span class="comment"># Check connected devices</span>
+                <span class="prompt">PS ...\mobile_app></span> <span class="command">flutter devices</span>
+                <span class="output">2 connected devices:
+                    SM G991B (mobile) • R5CR******* • android-arm64 • Android 13
+                    Chrome (web) • chrome • web-javascript</span>
+
+                <span class="comment"># Run on phone</span>
+                <span class="prompt">PS ...\mobile_app></span> <span class="command">flutter run</span>
+            </div>
+
+            <h3>Option B: On Android Emulator</h3>
+            <ol style="margin-left: 2rem; color: var(--text-secondary);">
+                <li>Open Android Studio → AVD Manager</li>
+                <li>Create or start an emulator</li>
+                <li>Wait for emulator to fully boot</li>
+            </ol>
+
+            <div class="cmd-block">
+                <span class="prompt">PS ...\mobile_app></span> <span class="command">flutter run</span>
+            </div>
+
+            <div class="success-box">
+                <p>✅ The app will build and install. First build takes 2-5 minutes.</p>
+            </div>
+        </section>
+
+        <!-- STEP 9: CONFIGURE APP -->
+        <section class="section">
+            <div class="section-header">
+                <div class="step">9</div>
+                <div>
+                    <h2>Configure Mobile App to Connect to Backend</h2>
+                    <p style="color: var(--text-secondary);">Set the server URL</p>
+                </div>
+            </div>
+
+            <ol style="margin-left: 2rem; line-height: 2;">
+                <li>Open the <strong>SafePay</strong> app on your phone/emulator</li>
+                <li>Tap the <strong>⚙️ Settings</strong> icon (top-right or in menu)</li>
+                <li>Find <strong>"Backend URL"</strong> or <strong>"Server URL"</strong> field</li>
+                <li>Enter your backend URL:
+                    <ul style="margin-left: 1.5rem; color: var(--text-secondary);">
+                        <li><strong>Local:</strong> <code>http://192.168.1.5:8000</code> (your IP)</li>
+                        <li><strong>Remote:</strong> <code>https://abc123.ngrok-free.app</code> (Ngrok URL)</li>
+                    </ul>
+                </li>
+                <li>Tap <strong>Save</strong></li>
+            </ol>
+
+            <div class="warning-box">
+                <span class="icon">⚠️</span>
+                <p><strong>For Local:</strong> Phone and computer MUST be on the same WiFi network.<br>
+                    <strong>For Emulator:</strong> Use <code>http://10.0.2.2:8000</code> (special Android emulator IP)
+                </p>
+            </div>
+        </section>
+
+        <!-- STEP 10: TEST THE APP -->
+        <section class="section">
+            <div class="section-header">
+                <div class="step">10</div>
+                <div>
+                    <h2>Test the Application</h2>
+                    <p style="color: var(--text-secondary);">Verify everything works</p>
+                </div>
+            </div>
+
+            <h3>Quick Tests:</h3>
+            <table>
+                <tr>
+                    <th>Test</th>
+                    <th>Action</th>
+                    <th>Expected Result</th>
+                </tr>
+                <tr>
+                    <td>Registration</td>
+                    <td>Sign up with new mobile number</td>
+                    <td>Account created, home screen loads</td>
+                </tr>
+                <tr>
+                    <td>Login</td>
+                    <td>Login with registered number + PIN</td>
+                    <td>Home screen shows balance</td>
+                </tr>
+                <tr>
+                    <td>Balance</td>
+                    <td>Check balance on home screen</td>
+                    <td>Shows ₹10,000 (default for new users)</td>
+                </tr>
+                <tr>
+                    <td>Transaction</td>
+                    <td>Send ₹100 to another registered user</td>
+                    <td>Processing shield → Success screen</td>
+                </tr>
+                <tr>
+                    <td>History</td>
+                    <td>View transaction history</td>
+                    <td>Shows recent transactions</td>
+                </tr>
+            </table>
+        </section>
+
+        <!-- COMMON ISSUES -->
+        <section class="section">
+            <div class="section-header">
+                <div class="step">!</div>
+                <div>
+                    <h2>Troubleshooting Common Issues</h2>
+                    <p style="color: var(--text-secondary);">If something goes wrong</p>
+                </div>
+            </div>
+
+            <div class="error-box">
+                <h4 style="color: var(--accent-red);">❌ "Connection refused" or "Cannot connect to server"</h4>
+                <ul style="margin-left: 1.5rem; margin-top: 0.5rem; color: var(--text-secondary);">
+                    <li>Make sure backend is running (terminal shows Uvicorn running)</li>
+                    <li>Check firewall isn't blocking port 8000</li>
+                    <li>For emulator, use <code>10.0.2.2</code> instead of <code>localhost</code></li>
+                    <li>For physical device, ensure same WiFi network</li>
+                </ul>
+            </div>
+
+            <div class="error-box">
+                <h4 style="color: var(--accent-red);">❌ "401 Unauthorized" errors</h4>
+                <ul style="margin-left: 1.5rem; margin-top: 0.5rem; color: var(--text-secondary);">
+                    <li>Token expired - log out and log back in</li>
+                    <li>Device binding issue - try clearing app data</li>
+                    <li>Check that <code>.env</code> file has correct SECRET_KEY</li>
+                </ul>
+            </div>
+
+            <div class="error-box">
+                <h4 style="color: var(--accent-red);">❌ Flutter build fails</h4>
+                <ul style="margin-left: 1.5rem; margin-top: 0.5rem; color: var(--text-secondary);">
+                    <li>Run <code>flutter clean</code> then <code>flutter pub get</code></li>
+                    <li>Run <code>flutter doctor</code> and fix any issues</li>
+                    <li>Ensure Android SDK and licenses are accepted</li>
+                </ul>
+            </div>
+
+            <div class="error-box">
+                <h4 style="color: var(--accent-red);">❌ Python "Module not found" errors</h4>
+                <ul style="margin-left: 1.5rem; margin-top: 0.5rem; color: var(--text-secondary);">
+                    <li>Make sure virtual environment is activated (see <code>(venv)</code> in prompt)</li>
+                    <li>Run <code>pip install -r requirements.txt</code> again</li>
+                </ul>
+            </div>
+
+            <div class="error-box">
+                <h4 style="color: var(--accent-red);">❌ Database errors</h4>
+                <ul style="margin-left: 1.5rem; margin-top: 0.5rem; color: var(--text-secondary);">
+                    <li>Current setup uses PostgreSQL on Neon Cloud</li>
+                    <li>Check DATABASE_URL in <code>.env</code> is correct</li>
+                    <li>Neon free tier may pause after inactivity - refresh the page</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- FULL COMMAND SUMMARY -->
+        <section class="section"
+            style="background: linear-gradient(135deg, rgba(46, 213, 115, 0.1), rgba(165, 94, 234, 0.1));">
+            <h2 style="margin-bottom: 1rem;">📋 Complete Command Summary</h2>
+
+            <div class="cmd-block">
+                <span class="comment"># ═══════════════════════════════════════════════════════════════════</span>
+                <span class="comment"># FULL SETUP (Run once)</span>
+                <span class="comment"># ═══════════════════════════════════════════════════════════════════</span>
+
+                <span class="comment"># 1. Open PowerShell, go to project folder</span>
+                <span class="command">cd "C:\Users\dhanu\Downloads\Safe Pay"</span>
+
+                <span class="comment"># 2. Run automated setup</span>
+                <span class="command">.\setup_app.ps1</span>
+
+                <span class="comment"># 3. Setup mobile app</span>
+                <span class="command">cd mobile_app</span>
+                <span class="command">flutter pub get</span>
+
+                <span class="comment"># ═══════════════════════════════════════════════════════════════════</span>
+                <span class="comment"># DAILY USE (Run every time you want to use the app)</span>
+                <span class="comment"># ═══════════════════════════════════════════════════════════════════</span>
+
+                <span class="comment"># Terminal 1: Start Backend</span>
+                <span class="command">cd "C:\Users\dhanu\Downloads\Safe Pay"</span>
+                <span class="command">.\start_backend.bat</span>
+
+                <span class="comment"># Terminal 2: Run Mobile App</span>
+                <span class="command">cd "C:\Users\dhanu\Downloads\Safe Pay\mobile_app"</span>
+                <span class="command">flutter run</span>
+
+                <span class="comment"># ═══════════════════════════════════════════════════════════════════</span>
+                <span class="comment"># OPTIONAL: Remote Access via Ngrok</span>
+                <span class="comment"># ═══════════════════════════════════════════════════════════════════</span>
+
+                <span class="command">cd "C:\Users\dhanu\Downloads\Safe Pay"</span>
+                <span class="command">.\start_remote.bat</span>
+            </div>
+        </section>
+    </div>
+
+
+</body>
+
+</html>
