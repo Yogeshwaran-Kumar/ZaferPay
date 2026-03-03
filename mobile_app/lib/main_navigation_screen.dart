@@ -74,7 +74,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 _buildNavItem(
                   icon: Icons.donut_large_outlined,
                   activeIcon: Icons.donut_large_rounded,
-                  label: 'Spending',
+                  label: 'Analytics',
                   index: 2,
                 ),
                 _buildNavItem(

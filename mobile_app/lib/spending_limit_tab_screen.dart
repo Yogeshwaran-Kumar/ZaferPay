@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'api_service.dart';
-import 'spend_analysis_screen.dart';
+import 'spending_limit_screen.dart';
 
 /// A self-contained tab screen that LIVE-polls user + history data
 /// and passes fresh data into SpendAnalysisScreen so the spending
@@ -134,7 +134,7 @@ class _SpendingLimitTabScreenState extends State<SpendingLimitTabScreen>
       );
     }
 
-    return SpendAnalysisScreen(
+    return SpendingLimitScreen(
       user: _user!,
       history: _history,
       showBackButton: false,

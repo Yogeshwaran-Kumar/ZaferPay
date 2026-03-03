@@ -165,36 +165,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Bank Name (if available)
-                    if (MccHelper.isMerchant(_user!['mcc']))
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.shade700,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.store,
-                              color: Colors.white,
-                              size: 16,
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Merchant Account',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
+                    // Account Type Badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
                       ),
+                      decoration: BoxDecoration(
+                        color: MccHelper.isMerchant(_user!['mcc'])
+                            ? Colors.orange.shade700
+                            : Colors.blue.shade700,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            MccHelper.isMerchant(_user!['mcc'])
+                                ? Icons.store
+                                : Icons.person,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            MccHelper.isMerchant(_user!['mcc'])
+                                ? 'Merchant Account'
+                                : 'Personal Account',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 16),
 
                     // UPI ID
@@ -283,7 +288,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       icon: const Icon(Icons.share, size: 20),
                       label: const Text('Share QR code'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00B9F1),
+                        backgroundColor: const Color(0xFF673AB7),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         elevation: 0,

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -81,27 +82,6 @@ class _BalanceOverviewScreenState extends State<BalanceOverviewScreen> {
     _topCategories = sortedCategories.take(2).map((e) {
       return {'name': e.key, 'amount': e.value};
     }).toList();
-  }
-
-  IconData _getCategoryIcon(String category) {
-    switch (category) {
-      case 'Food & Drinks':
-        return Icons.restaurant;
-      case 'Shopping':
-        return Icons.shopping_bag;
-      case 'Transport':
-        return Icons.directions_car;
-      case 'Bills & Utilities':
-        return Icons.receipt;
-      case 'Entertainment':
-        return Icons.movie;
-      case 'Health':
-        return Icons.medical_services;
-      case 'People':
-        return Icons.people;
-      default:
-        return Icons.category;
-    }
   }
 
   Color _getCategoryColor(String category) {
@@ -314,7 +294,7 @@ class _BalanceOverviewScreenState extends State<BalanceOverviewScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    // --- Top Categories List ---
+                    // --- Top Categories Chart ---
                     if (_topCategories.isEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 24.0),
@@ -325,14 +305,110 @@ class _BalanceOverviewScreenState extends State<BalanceOverviewScreen> {
                           ),
                         ),
                       )
-                    else
-                      ..._topCategories.map(
-                        (cat) => _buildCategoryItem(
-                          cat['name'],
-                          cat['amount'],
-                          isDark,
+                    else ...[
+                      // Donut pie chart
+                      Center(
+                        child: SizedBox(
+                          width: 200,
+                          height: 200,
+                          child: TweenAnimationBuilder<double>(
+                            tween: Tween<double>(begin: 0, end: 1),
+                            duration: const Duration(milliseconds: 900),
+                            curve: Curves.easeOutCubic,
+                            builder: (context, progress, _) {
+                              return CustomPaint(
+                                painter: _PieChartPainter(
+                                  categories: _topCategories,
+                                  getColor: (name) => _getCategoryColor(name),
+                                  total: _topCategories.fold(
+                                    0.0,
+                                    (sum, cat) =>
+                                        sum + (cat['amount'] as double),
+                                  ),
+                                  progress: progress,
+                                  isDark: isDark,
+                                ),
+                                child: Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'Top Spends',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: isDark
+                                              ? Colors.grey.shade500
+                                              : Colors.grey.shade500,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        child: Text(
+                                          '₹${formatAmount(_topCategories.fold(0.0, (sum, cat) => sum + (cat['amount'] as double)))}',
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: isDark
+                                                ? Colors.white
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                         ),
                       ),
+
+                      const SizedBox(height: 24),
+
+                      // Color-dot legend
+                      Center(
+                        child: Wrap(
+                          spacing: 16,
+                          runSpacing: 8,
+                          alignment: WrapAlignment.center,
+                          children: _topCategories.map((cat) {
+                            final total = _topCategories.fold(
+                              0.0,
+                              (sum, c) => sum + (c['amount'] as double),
+                            );
+                            final pct = total > 0
+                                ? (cat['amount'] as double) / total * 100
+                                : 0.0;
+                            return Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 10,
+                                  height: 10,
+                                  decoration: BoxDecoration(
+                                    color: _getCategoryColor(cat['name']),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '${cat['name']} ${pct.toStringAsFixed(1)}%',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isDark
+                                        ? Colors.grey.shade400
+                                        : Colors.grey.shade600,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ],
 
                     const SizedBox(height: 32),
 
@@ -411,92 +487,72 @@ class _BalanceOverviewScreenState extends State<BalanceOverviewScreen> {
             ),
     );
   }
+}
 
-  Widget _buildCategoryItem(String name, double amount, bool isDark) {
-    // Find max spend to calculate bar width, or just use a fixed percentage logic
-    double maxSpend = _topCategories.isNotEmpty
-        ? _topCategories.first['amount']
-        : 1;
-    if (maxSpend == 0) maxSpend = 1;
+// ── Pie chart painter ──────────────────────────────────────────────────────
+class _PieChartPainter extends CustomPainter {
+  final List<Map<String, dynamic>> categories;
+  final Color Function(String) getColor;
+  final double total;
+  final double progress;
+  final bool isDark;
 
-    // Make sure the bar is at least 10% wide so it's visible, up to 60% of the row
-    double fillFraction = amount / maxSpend;
-    // Base width as fraction of screen roughly
-    double barMaxWidth = 100.0;
-    double barWidth = (fillFraction * barMaxWidth).clamp(20.0, barMaxWidth);
+  _PieChartPainter({
+    required this.categories,
+    required this.getColor,
+    required this.total,
+    required this.progress,
+    required this.isDark,
+  });
 
-    IconData icon = _getCategoryIcon(name);
-    Color color = _getCategoryColor(name);
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (total <= 0 || categories.isEmpty) return;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 32.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Icon
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E2630) : const Color(0xFFF3F4F6),
-              shape: BoxShape.circle,
-              border: isDark ? Border.all(color: Colors.white10) : null,
-            ),
-            child: Icon(
-              icon,
-              color: isDark ? Colors.white : Colors.black87,
-              size: 24,
-            ),
-          ),
-          const SizedBox(width: 16),
-          // Name and Bar
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: GoogleFonts.outfit(
-                    fontSize: 16,
-                    color: isDark
-                        ? Colors.grey.shade300
-                        : const Color(0xFF4B5563),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 600),
-                  curve: Curves.easeOutQuart,
-                  height: 6,
-                  width: barWidth,
-                  decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Amount
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.35,
-            ),
-            child: FittedBox(
-              alignment: Alignment.centerRight,
-              fit: BoxFit.scaleDown,
-              child: Text(
-                '₹${formatAmount(amount)}',
-                style: GoogleFonts.outfit(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : Colors.black,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+    final center = Offset(size.width / 2, size.height / 2);
+    final outerRadius = size.width / 2;
+    final strokeWidth = size.width * 0.18; // donut ring width
+    final innerRadius = outerRadius - strokeWidth;
+    final rect = Rect.fromCircle(
+      center: center,
+      radius: outerRadius - strokeWidth / 2,
     );
+    const startAngle = -math.pi / 2; // start from 12 o'clock
+    const gapAngle = 0.025; // radians gap between slices
+
+    double currentAngle = startAngle;
+
+    for (int i = 0; i < categories.length; i++) {
+      final cat = categories[i];
+      final fraction = (cat['amount'] as double) / total;
+      final sweepAngle = fraction * 2 * math.pi * progress - gapAngle;
+      if (sweepAngle <= 0) continue;
+
+      final paint = Paint()
+        ..color = getColor(cat['name'] as String)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.butt;
+
+      canvas.drawArc(
+        rect,
+        currentAngle + gapAngle / 2,
+        sweepAngle,
+        false,
+        paint,
+      );
+      currentAngle += fraction * 2 * math.pi * progress;
+    }
+
+    // Draw inner shadow ring (subtle)
+    final shadowPaint = Paint()
+      ..color = (isDark ? Colors.white : Colors.black).withValues(alpha: 0.04)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    canvas.drawCircle(center, innerRadius, shadowPaint);
   }
+
+  @override
+  bool shouldRepaint(_PieChartPainter old) =>
+      old.progress != progress || old.categories != categories;
 }

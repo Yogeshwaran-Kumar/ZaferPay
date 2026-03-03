@@ -7,6 +7,8 @@ import 'utils.dart';
 
 class TransactionHistoryScreen extends StatefulWidget {
   final DateTime? initialMonth;
+  final DateTime?
+  initialDateFrom; // For date-range filtering (e.g. spending limit period)
   final String? initialCategory;
   final String? initialType; // 'Money sent' or 'Money received'
   final bool showFilters;
@@ -14,6 +16,7 @@ class TransactionHistoryScreen extends StatefulWidget {
   const TransactionHistoryScreen({
     super.key,
     this.initialMonth,
+    this.initialDateFrom,
     this.initialCategory,
     this.initialType,
     this.showFilters = true,
@@ -175,8 +178,20 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
       }).toList();
     }
 
-    // 5. Month Filter (from Spend Analysis)
-    if (widget.initialMonth != null) {
+    // 5. Date-range filter (from Spending Limit screen)
+    if (widget.initialDateFrom != null) {
+      temp = temp.where((tx) {
+        try {
+          final txDate = DateTime.parse(tx['timestamp']).toLocal();
+          return txDate.isAfter(
+            widget.initialDateFrom!.subtract(const Duration(seconds: 1)),
+          );
+        } catch (e) {
+          return false;
+        }
+      }).toList();
+    } else if (widget.initialMonth != null) {
+      // 5b. Month Filter (from Spend Analysis) — only when no date range
       final filterMonthStr = DateFormat('yyyy-MM').format(widget.initialMonth!);
       temp = temp.where((tx) {
         try {
@@ -188,7 +203,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
       }).toList();
     }
 
-    // 6. Category Filter (from Spend Analysis)
+    // 6. Category Filter (from Spend Analysis / Spending Limit)
     if (widget.initialCategory != null) {
       temp = temp.where((tx) {
         final note = tx['note'] ?? tx['remark'];
@@ -196,6 +211,9 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
         if (categoryFromNote == widget.initialCategory) return true;
 
         final mcc = tx['receiver_mcc'] ?? tx['sender_mcc'];
+        if (widget.initialCategory == 'People') {
+          return MccHelper.isPersonal(mcc);
+        }
         final domain = MccHelper.getDomain(mcc?.toString());
         final category = MccHelper.getGroupedCategory(domain);
         return category == widget.initialCategory;
