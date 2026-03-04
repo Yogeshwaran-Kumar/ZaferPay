@@ -30,6 +30,7 @@ class MobileCheckResponse(BaseModel):
 
 class UserBase(BaseModel):
     username: str
+    full_name: Optional[str] = None
 
 class UserRegister(UserBase):
     mobile_number: Optional[str] = None
@@ -148,6 +149,8 @@ class TransactionResponse(BaseModel):
     receiver_upi_id: str
     sender_name: str
     receiver_name: str
+    sender_full_name: Optional[str] = None
+    receiver_full_name: Optional[str] = None
     amount: float
     status: str
     risk_score: str
@@ -155,6 +158,8 @@ class TransactionResponse(BaseModel):
     sender_mcc: Optional[str] = None
     receiver_mcc: Optional[str] = None
     note: Optional[str] = None
+    sender_bank_name: Optional[str] = None
+    receiver_bank_name: Optional[str] = None
 
     class Config:
         from_attributes = True

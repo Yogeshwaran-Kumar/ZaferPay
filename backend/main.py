@@ -894,6 +894,20 @@ def get_bank_details(bank_name: str, db: Session = Depends(get_db)):
 def read_users_me(current_user: models.User = Depends(get_current_user)):
     return current_user
 
+@app.put("/users/profile", response_model=schemas.UserResponse)
+def update_profile(
+    profile_data: schemas.UserBase,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update user profile information (fullname)"""
+    if profile_data.full_name:
+        current_user.full_name = profile_data.full_name
+    
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
 @app.patch("/users/me/settings", response_model=schemas.UserResponse)
 def update_user_settings(
     settings: schemas.SettingsUpdateRequest,
@@ -1391,7 +1405,9 @@ def create_transaction(
                             amount=original_tx.amount,
                             status=original_tx.status,
                             risk_score=original_tx.risk_score,
-                            timestamp=original_tx.timestamp
+                            timestamp=original_tx.timestamp,
+                            sender_bank_name=current_user.bank_name,
+                            receiver_bank_name=original_tx.receiver.bank_name
                         )
                 raise HTTPException(status_code=409, detail="Transaction already processed")
     
@@ -1840,11 +1856,15 @@ def create_transaction(
         receiver_upi_id=receiver_user.upi_id,
         sender_name=sender_user.username,
         receiver_name=receiver_user.username,
+        sender_full_name=sender_user.full_name,
+        receiver_full_name=receiver_user.full_name,
         amount=new_tx.amount,
         status="SUCCESS",
         risk_score=risk_label,
         timestamp=new_tx.timestamp,
-        note=new_tx.note
+        note=new_tx.note,
+        sender_bank_name=sender_user.bank_name,
+        receiver_bank_name=receiver_user.bank_name
     )
 
 
@@ -1963,13 +1983,17 @@ def get_home_aggregate(
             receiver_upi_id=t.receiver.upi_id,
             sender_name=t.sender.username,
             receiver_name=t.receiver.username,
+            sender_full_name=t.sender.full_name,
+            receiver_full_name=t.receiver.full_name,
             amount=t.amount,
             status=t.status,
             risk_score=t.risk_score,
             timestamp=t.timestamp,
             sender_mcc=t.sender.mcc,
             receiver_mcc=t.receiver.mcc,
-            note=t.note
+            note=t.note,
+            sender_bank_name=t.sender.bank_name,
+            receiver_bank_name=t.receiver.bank_name
         ))
 
     # 2. Get Recent People (Limit 16)
@@ -2193,13 +2217,17 @@ def read_history(current_user: models.User = Depends(get_current_user), db: Sess
             receiver_upi_id=t.receiver.upi_id,
             sender_name=t.sender.username,
             receiver_name=t.receiver.username,
+            sender_full_name=t.sender.full_name,
+            receiver_full_name=t.receiver.full_name,
             amount=t.amount,
             status=t.status,
             risk_score=t.risk_score,
             timestamp=t.timestamp,
             sender_mcc=t.sender.mcc,
             receiver_mcc=t.receiver.mcc,
-            note=t.note
+            note=t.note,
+            sender_bank_name=t.sender.bank_name,
+            receiver_bank_name=t.receiver.bank_name
         ))
         
     # Update Cache

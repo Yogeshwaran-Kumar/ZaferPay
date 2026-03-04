@@ -14,6 +14,7 @@ import 'services/api_client.dart';
 import 'services/auth_service.dart';
 import 'services/transaction_service.dart';
 import 'services/user_service.dart';
+import 'report_complaint_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'utils.dart';
 
@@ -546,11 +547,15 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                                           )
                                         : Colors.red.shade200,
                                     onTap: () {
-                                      launchUrl(
-                                        Uri.parse(
-                                          'https://cybercrime.gov.in/Webform/Crime_AuthoLogin.aspx?rnt=5',
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              ReportComplaintScreen(
+                                                transaction: transaction,
+                                                currentUpiId: currentUpiId,
+                                              ),
                                         ),
-                                        mode: LaunchMode.externalApplication,
                                       );
                                     },
                                   ),

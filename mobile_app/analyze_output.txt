@@ -1,0 +1,3 @@
+[info] 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss (C:\Users\dhanu\Downloads\Safe Pay\mobile_app\lib\report_complaint_screen.dart:259:43)
+[info] 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss (C:\Users\dhanu\Downloads\Safe Pay\mobile_app\lib\report_complaint_screen.dart:260:62)
+[info] 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss (C:\Users\dhanu\Downloads\Safe Pay\mobile_app\lib\report_complaint_screen.dart:300:41)
