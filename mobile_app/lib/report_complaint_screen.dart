@@ -36,7 +36,17 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
     super.dispose();
   }
 
-  void _submitComplaint() {
+  Future<void> _submitComplaint({
+    required String senderName,
+    required String senderUpiId,
+    required String senderBank,
+    required String receiverName,
+    required String receiverUpiId,
+    required String receiverBank,
+    required String transactionDate,
+    required String transactionTime,
+    required String transactionAmount,
+  }) async {
     if (_selectedReason == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -64,105 +74,179 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
       return;
     }
 
-    // Show success dialog, then launch cyber crime link
+    // Determine the reported user UPI (Receiver UPI)
+    final reportedUserUpi = widget.transaction['receiver_upi_id'];
+
+    if (reportedUserUpi == null || reportedUserUpi == 'Unknown') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to identify the reported account.',
+            style: GoogleFonts.outfit(color: Colors.white),
+          ),
+          backgroundColor: Colors.red.shade600,
+        ),
+      );
+      return;
+    }
+
+    // Show loading indicator
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          contentPadding: const EdgeInsets.fromLTRB(24, 28, 24, 12),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade50,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.check_circle_rounded,
-                  color: Colors.green.shade600,
-                  size: 56,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'Complaint Submitted\nSuccessfully!',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.outfit(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Your complaint has been submitted to ZaferPay. You will now be redirected to the Cyber Crime portal to file an official report.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.outfit(
-                  fontSize: 14,
-                  color: Colors.grey.shade600,
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(ctx).pop(); // Close dialog
-                    // Launch the cyber crime website
-                    launchUrl(
-                      Uri.parse(
-                        'https://cybercrime.gov.in/Webform/Crime_AuthoLogin.aspx?rnt=5',
-                      ),
-                      mode: LaunchMode.externalApplication,
-                    );
-                    // Pop complaint screen so user returns to transaction details
-                    Navigator.of(context).pop();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00B9F1),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: Text(
-                    'Continue to Cyber Crime Portal',
-                    style: GoogleFonts.outfit(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () {
-                  Navigator.of(ctx).pop(); // Close dialog
-                  Navigator.of(context).pop(); // Go back to transaction details
-                },
-                child: Text(
-                  'Go Back',
-                  style: GoogleFonts.outfit(
-                    fontSize: 14,
-                    color: Colors.grey.shade500,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
+      builder: (ctx) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final result = await ApiService().submitComplaint(
+        transactionId:
+            widget.transaction['id'] ?? widget.transaction['transaction_id'],
+        reportedUserUpi: reportedUserUpi,
+        reason: _selectedReason!,
+        description: _otherReasonController.text.trim(),
+        senderName: senderName,
+        senderUpiId: senderUpiId,
+        senderBank: senderBank,
+        receiverName: receiverName,
+        receiverUpiId: receiverUpiId,
+        receiverBank: receiverBank,
+        transactionDate: transactionDate,
+        transactionTime: transactionTime,
+        transactionAmount: transactionAmount,
+      );
+
+      if (!mounted) return;
+
+      Navigator.of(context).pop(); // Remove loading indicator
+
+      if (!result['success']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              result['message'] ??
+                  'Failed to submit complaint. Please try again.',
+              style: GoogleFonts.outfit(color: Colors.white),
+            ),
+            backgroundColor: Colors.red.shade600,
           ),
         );
-      },
-    );
+        return;
+      }
+
+      // Show success dialog, then launch cyber crime link
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            contentPadding: const EdgeInsets.fromLTRB(24, 28, 24, 12),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.check_circle_rounded,
+                    color: Colors.green.shade600,
+                    size: 56,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Complaint Submitted\nSuccessfully!',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.outfit(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Your complaint has been submitted to ZaferPay. You will now be redirected to the Cyber Crime portal to file an official report.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.outfit(
+                    fontSize: 14,
+                    color: Colors.grey.shade600,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(ctx).pop(); // Close dialog
+                      // Launch the cyber crime website
+                      launchUrl(
+                        Uri.parse(
+                          'https://cybercrime.gov.in/Webform/Crime_AuthoLogin.aspx?rnt=5',
+                        ),
+                        mode: LaunchMode.externalApplication,
+                      );
+                      // Pop complaint screen so user returns to transaction details
+                      Navigator.of(context).pop();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00B9F1),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      'Continue to Cyber Crime Portal',
+                      style: GoogleFonts.outfit(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(ctx).pop(); // Close dialog
+                    Navigator.of(
+                      context,
+                    ).pop(); // Go back to transaction details
+                  },
+                  child: Text(
+                    'Go Back',
+                    style: GoogleFonts.outfit(
+                      fontSize: 14,
+                      color: Colors.grey.shade500,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop(); // Remove loading indicator
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'An error occurred. Please try again.',
+            style: GoogleFonts.outfit(color: Colors.white),
+          ),
+          backgroundColor: Colors.red.shade600,
+        ),
+      );
+    }
   }
 
   @override
@@ -260,6 +344,38 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
         .toString()
         .replaceAll('TXN', '');
 
+    // Parse transaction date and time from timestamp
+    String transactionDate = '-';
+    String transactionTime = '-';
+    final rawTimestamp = transaction['timestamp'];
+    if (rawTimestamp != null) {
+      try {
+        final dt = DateTime.parse(rawTimestamp.toString()).toLocal();
+        final months = [
+          'Jan',
+          'Feb',
+          'Mar',
+          'Apr',
+          'May',
+          'Jun',
+          'Jul',
+          'Aug',
+          'Sep',
+          'Oct',
+          'Nov',
+          'Dec',
+        ];
+        transactionDate =
+            '${dt.day.toString().padLeft(2, '0')} ${months[dt.month - 1]} ${dt.year}';
+        final hour = dt.hour > 12
+            ? dt.hour - 12
+            : (dt.hour == 0 ? 12 : dt.hour);
+        final amPm = dt.hour >= 12 ? 'PM' : 'AM';
+        transactionTime =
+            '${hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')} $amPm';
+      } catch (_) {}
+    }
+
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
       appBar: AppBar(
@@ -305,6 +421,16 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
                     _buildDetailRow('Receiver Name', receiverName, isDark),
                     _buildDetailRow('Receiver UPI ID', receiverUpiId, isDark),
                     _buildDetailRow('Transaction ID', transactionId, isDark),
+                    _buildDetailRow(
+                      'Transaction Date',
+                      transactionDate,
+                      isDark,
+                    ),
+                    _buildDetailRow(
+                      'Transaction Time',
+                      transactionTime,
+                      isDark,
+                    ),
                     _buildDetailRow('Sender Bank name', senderBank, isDark),
                     _buildDetailRow('Receiver Bank name', receiverBank, isDark),
 
@@ -505,7 +631,18 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
                       const SizedBox(width: 16),
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: _submitComplaint,
+                          onPressed: () => _submitComplaint(
+                            senderName: senderName,
+                            senderUpiId: senderUpiId,
+                            senderBank: senderBank,
+                            receiverName: receiverName,
+                            receiverUpiId: receiverUpiId,
+                            receiverBank: receiverBank,
+                            transactionDate: transactionDate,
+                            transactionTime: transactionTime,
+                            transactionAmount: (transaction['amount'] ?? 0)
+                                .toString(),
+                          ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red.shade600,
                             foregroundColor: Colors.white,

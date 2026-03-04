@@ -420,6 +420,23 @@ class _AmountScreenState extends State<AmountScreen> {
         paymentSource: _paymentSource,
       );
 
+      if (result['risk_score'] == 'FRAUD_BLOCKED') {
+        if (mounted) {
+          setState(() {
+            _isAnalyzingRisk = false;
+            _hasAnalyzedRisk = false;
+          });
+          _showResultDialog({
+            'status': 'FRAUD_BLOCKED',
+            'custom_message':
+                result['detail'] != null && result['detail']['message'] != null
+                ? result['detail']['message']
+                : 'Transaction blocked. This account has been flagged for fraudulent activity.',
+          });
+        }
+        return;
+      }
+
       if (mounted) {
         setState(() {
           _riskScore = result['risk_score'] ?? 'SAFE';
@@ -447,6 +464,15 @@ class _AmountScreenState extends State<AmountScreen> {
 
           _isAnalyzingRisk = false;
           _hasAnalyzedRisk = true;
+
+          // AUTO-PROCEED: If safe, go to PIN entry after 1 second
+          if (_riskScore == 'SAFE') {
+            Future.delayed(const Duration(seconds: 1), () {
+              if (mounted && _hasAnalyzedRisk && !_isAnalyzingRisk) {
+                _proceedToPin();
+              }
+            });
+          }
         });
       }
     } catch (e) {
@@ -458,6 +484,13 @@ class _AmountScreenState extends State<AmountScreen> {
               'Analysis unavailable - proceeding with standard checks';
           _isAnalyzingRisk = false;
           _hasAnalyzedRisk = true;
+
+          // AUTO-PROCEED: Proceed if analysis fails (defaults to SAFE)
+          Future.delayed(const Duration(seconds: 1), () {
+            if (mounted && _hasAnalyzedRisk && !_isAnalyzingRisk) {
+              _proceedToPin();
+            }
+          });
         });
       }
     }
@@ -617,7 +650,7 @@ class _AmountScreenState extends State<AmountScreen> {
   }
 
   void _showResultDialog(Map<String, dynamic> result) {
-    if (result.containsKey('detail')) {
+    if (result.containsKey('detail') && !result.containsKey('status')) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(result['detail'])));
@@ -783,7 +816,8 @@ class _AmountScreenState extends State<AmountScreen> {
               ] else ...[
                 // Error Case
                 Text(
-                  "Your transaction could not be completed.",
+                  result['custom_message'] ??
+                      "Your transaction could not be completed.",
                   textAlign: TextAlign.center,
                   style: GoogleFonts.outfit(
                     color: Colors.grey[600],
@@ -855,6 +889,7 @@ class _AmountScreenState extends State<AmountScreen> {
 
     return Scaffold(
       backgroundColor: bgColor,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         backgroundColor: bgColor,
         elevation: 0,
@@ -1482,27 +1517,35 @@ class _AmountScreenState extends State<AmountScreen> {
   }
 
   Widget _buildScanningState(Color textColor) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        FraudScanningAnimation(
-          isDark: Theme.of(context).brightness == Brightness.dark,
-        ),
-        const SizedBox(height: 24),
-        Text(
-          "Analyzing Transaction...",
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: textColor,
+    final screenHeight = MediaQuery.of(context).size.height;
+    final animSize = (screenHeight * 0.3).clamp(180.0, 280.0);
+
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const SizedBox(height: 40),
+          FraudScanningAnimation(
+            isDark: Theme.of(context).brightness == Brightness.dark,
+            size: animSize,
           ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          "Checking recipient pattern...",
-          style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-        ),
-      ],
+          const SizedBox(height: 24),
+          Text(
+            "Analyzing Transaction...",
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            "Checking recipient pattern...",
+            style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+          ),
+          const SizedBox(height: 40),
+        ],
+      ),
     );
   }
 

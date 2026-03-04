@@ -1,7 +1,8 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Header, Request, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, status, Header, Request, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
 from datetime import timedelta, datetime
@@ -98,6 +99,43 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ═══════════════════════════════════════════════════════════════════════════
+# WEBSOCKET MANAGER - Real-time Multi-Admin Sync (0.1s latency)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: dict):
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except:
+                pass # Already disconnected
+
+manager = ConnectionManager()
+
+@app.websocket("/ws/admin")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Just keep connection alive, we primarily push server -> client
+            data = await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 # Create Database Tables
 models.Base.metadata.create_all(bind=database.engine)
 
@@ -121,6 +159,25 @@ async def startup_event():
         daily_summary.start_daily_summary_scheduler()
     except Exception as e:
         print(f"Failed to start Daily Summary scheduler: {e}")
+
+    # Seed 5 Admin Accounts
+    db = database.SessionLocal()
+    try:
+        admins = ["admin1", "admin2", "admin3", "admin4", "admin5"]
+        for username in admins:
+            existing = db.query(models.AdminUser).filter(models.AdminUser.username == username).first()
+            if not existing:
+                # Use a default secure password for specific admins
+                # In production, these should be set via env vars or manual entry
+                hashed_pw = auth.get_password_hash("zaferadmin@2026")
+                new_admin = models.AdminUser(username=username, hashed_password=hashed_pw)
+                db.add(new_admin)
+                print(f"✅ Seeded Admin: {username}")
+        db.commit()
+    except Exception as e:
+        print(f"❌ Failed to seed admins: {e}")
+    finally:
+        db.close()
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -1301,6 +1358,17 @@ def analyze_transaction_risk(
             receiver_exists=False,
             detail={"message": "First time sending to this receiver", "risk": "WARN"}
         )
+        
+    if receiver.is_fraud:
+        return schemas.TransactionAnalyzeResponse(
+            risk_score="FRAUD_BLOCKED",
+            risk_reason="MANUAL_FLAG",
+            is_blocked=True,
+            receiver_name=receiver_name,
+            receiver_exists=True,
+            is_bypassable=False,
+            detail={"message": "Transaction blocked. This account has been flagged for fraudulent activity.", "risk": "FRAUD_BLOCKED"}
+        )
     
     if receiver.id == current_user.id:
         return schemas.TransactionAnalyzeResponse(
@@ -1436,6 +1504,13 @@ def create_transaction(
 
     # 1. Validate Receiver (outside lock - fail fast)
     receiver = db.query(models.User).filter(models.User.upi_id == tx.receiver_upi_id).first()
+    
+    if receiver and receiver.is_fraud:
+        raise HTTPException(
+            status_code=403, 
+            detail="Transaction blocked. This account has been flagged for fraudulent activity."
+        )
+
     if not receiver:
         # AUTO-REGISTER EXTERNAL USER
         # This allows payments to UPI IDs not yet in our system (Interop simulation)
@@ -2988,6 +3063,260 @@ def sync_contacts(
         "message": f"Successfully synced {synced_count} contacts. Created {new_links} new trust relationships."
     }
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+# COMPLAINT & FRAUD MANAGEMENT
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.post("/complaints")
+def submit_complaint(
+    complaint: schemas.ComplaintCreate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        # 1. Deduplication check — reject duplicates with friendly message
+        existing = db.query(models.UserFraudReport).filter(
+            models.UserFraudReport.user_id == current_user.id,
+            models.UserFraudReport.transaction_id == complaint.transaction_id
+        ).first()
+        
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail="You have already submitted a complaint for this transaction."
+            )
+
+        # 2. Get reported user from UPI
+        reported_user = db.query(models.User).filter(
+            models.User.upi_id == complaint.reported_user_upi
+        ).first()
+        
+        # 3. Create new report
+        new_report = models.UserFraudReport(
+            user_id=current_user.id,
+            reported_user_id=reported_user.id if reported_user else None,
+            transaction_id=complaint.transaction_id,
+            sender_name=complaint.sender_name,
+            sender_upi_id=complaint.sender_upi_id,
+            sender_bank=complaint.sender_bank,
+            receiver_name=complaint.receiver_name,
+            receiver_upi_id=complaint.receiver_upi_id,
+            receiver_bank=complaint.receiver_bank,
+            transaction_date=complaint.transaction_date,
+            transaction_time=complaint.transaction_time,
+            transaction_amount=complaint.transaction_amount,
+            reason=complaint.reason,
+            description=complaint.description,
+            status="pending"
+        )
+        
+        db.add(new_report)
+        db.commit()
+        db.refresh(new_report)
+        
+        return {
+            "success": True,
+            "id": new_report.id,
+            "message": "Complaint submitted successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"submit_complaint error: {e}")
+        import traceback
+        traceback.print_exc()
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+
+def get_current_admin(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate admin credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = auth.jwt.decode(token, auth.SECRET_KEY, algorithms=[auth.ALGORITHM])
+        username: str = payload.get("sub")
+        is_admin_token = payload.get("is_admin", False)
+        if username is None or not is_admin_token:
+            raise credentials_exception
+    except auth.JWTError:
+        raise credentials_exception
+    
+    admin = db.query(models.AdminUser).filter(models.AdminUser.username == username).first()
+    if admin is None:
+        raise credentials_exception
+    return admin
+
+@app.post("/admin/login", response_model=schemas.Token)
+def admin_login(form_data: schemas.AdminLogin, db: Session = Depends(get_db)):
+    admin = db.query(models.AdminUser).filter(models.AdminUser.username == form_data.username).first()
+    if not admin or not auth.verify_password(form_data.password, admin.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect admin username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    access_token = auth.create_access_token(
+        data={"sub": admin.username, "is_admin": True}
+    )
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "expires_in": auth.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    }
+
+@app.get("/admin/complaints", response_model=List[schemas.ComplaintResponse])
+def get_complaints(
+    db: Session = Depends(get_db),
+    admin: models.AdminUser = Depends(get_current_admin)
+):
+    return db.query(models.UserFraudReport).options(joinedload(models.UserFraudReport.resolved_by)).order_by(models.UserFraudReport.timestamp.desc()).all()
+
+@app.put("/admin/complaints/{report_id}/verdict")
+async def set_complaint_verdict(
+    report_id: int,
+    verdict: schemas.ComplaintVerdictRequest,
+    db: Session = Depends(get_db),
+    admin: models.AdminUser = Depends(get_current_admin)
+):
+    report = db.query(models.UserFraudReport).filter(models.UserFraudReport.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+        
+    if report.status != "pending":
+         raise HTTPException(status_code=400, detail=f"Report already {report.status} by {report.resolved_by.username if report.resolved_by else 'another admin'}")
+
+    # Update report status
+    report.status = verdict.status # "confirmed_fraud" or "dismissed"
+    report.reviewed_at = datetime.now()
+    report.resolved_by_admin_id = admin.id
+    
+    # If confirmed fraud, automatically flag the reported user
+    if verdict.status == "confirmed_fraud" and report.reported_user_id:
+        user = db.query(models.User).filter(models.User.id == report.reported_user_id).first()
+        if user:
+            user.is_fraud = True
+            # Log this action
+            log = models.AdminActionLog(
+                admin_id=admin.id,
+                target_user_id=user.id,
+                action_type="flag_fraud"
+            )
+            db.add(log)
+            
+    db.commit()
+    
+    # Broadcast update to all admins
+    await manager.broadcast({"type": "EVENT_COMPLAINT_RESOLVED", "id": report_id, "admin": admin.username})
+    
+    return {"status": "success", "verdict": verdict.status}
+
+@app.put("/admin/users/{user_id}/toggle-fraud")
+async def toggle_user_fraud_status(
+    user_id: int,
+    status: schemas.UserFraudStatusToggle,
+    db: Session = Depends(get_db),
+    admin: models.AdminUser = Depends(get_current_admin)
+):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    user.is_fraud = status.is_fraud
+    
+    # Log the action
+    log = models.AdminActionLog(
+        admin_id=admin.id,
+        target_user_id=user.id,
+        action_type="flag_fraud" if status.is_fraud else "unflag_safe"
+    )
+    db.add(log)
+    db.commit()
+    
+    # Broadcast update to all admins
+    await manager.broadcast({"type": "EVENT_USER_TOGGLED", "id": user_id, "is_fraud": user.is_fraud, "admin": admin.username})
+    
+    return {"status": "success", "is_fraud": user.is_fraud}
+
+@app.get("/admin/users", response_model=List[schemas.UserAdminResponse])
+def list_users(
+    db: Session = Depends(get_db),
+    admin: models.AdminUser = Depends(get_current_admin)
+):
+    users = db.query(models.User).all()
+    
+    # Enrich users with the last audit log
+    for user in users:
+        last_log = db.query(models.AdminActionLog)\
+            .filter(models.AdminActionLog.target_user_id == user.id)\
+            .order_by(models.AdminActionLog.timestamp.desc())\
+            .first()
+        
+        if last_log:
+            user.last_action_by = last_log.admin.username
+            user.last_action_at = last_log.timestamp
+            
+    return users
+
+@app.get("/admin/stats")
+def get_admin_stats(
+    db: Session = Depends(get_db),
+    admin: models.AdminUser = Depends(get_current_admin)
+):
+    total_complaints = db.query(models.UserFraudReport).count()
+    pending_complaints = db.query(models.UserFraudReport).filter(models.UserFraudReport.status == "pending").count()
+    confirmed_fraud = db.query(models.UserFraudReport).filter(models.UserFraudReport.status == "confirmed_fraud").count()
+    
+    total_users = db.query(models.User).count()
+    flagged_users = db.query(models.User).filter(models.User.is_fraud == True).count()
+    
+    # Growth check (Real-time data enabled)
+    from datetime import datetime
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    new_users_today = db.query(models.User).filter(models.User.created_at >= today).count()
+    
+    return {
+        "complaints": {
+            "total": total_complaints,
+            "pending": pending_complaints,
+            "confirmed": confirmed_fraud
+        },
+        "users": {
+            "total": total_users,
+            "flagged": flagged_users,
+            "new_today": new_users_today
+        }
+    }
+
+@app.get("/admin/audit-logs")
+def get_audit_logs(
+    db: Session = Depends(get_db),
+    admin: models.AdminUser = Depends(get_current_admin)
+):
+    logs = db.query(models.AdminActionLog).order_by(models.AdminActionLog.timestamp.desc()).limit(100).all()
+    
+    result = []
+    for log in logs:
+        result.append({
+            "id": log.id,
+            "admin": log.admin.username,
+            "target": log.target_user.full_name or log.target_user.username,
+            "action": log.action_type,
+            "timestamp": log.timestamp
+        })
+    return result
+
+from fastapi.responses import HTMLResponse
+
+@app.get("/admin-panel", response_class=HTMLResponse)
+def get_admin_panel():
+    # Note: browser access won't have the header unless requested via JS
+    # We serve the page, and the JS should handle the token
+    with open("admin.html", "r") as f:
+        return f.read()
 
 # ═══════════════════════════════════════════════════════════════════════════
 # END OF FILE

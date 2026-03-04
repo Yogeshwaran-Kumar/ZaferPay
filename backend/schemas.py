@@ -15,6 +15,17 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     username: Optional[str] = None
 
+class AdminLogin(BaseModel):
+    username: str
+    password: str
+
+class AdminSummary(BaseModel):
+    id: int
+    username: str
+
+    class Config:
+        from_attributes = True
+
 class MobileCheckRequest(BaseModel):
     mobile_number: str
 
@@ -48,7 +59,6 @@ class ChangePinRequest(BaseModel):
 
 class VerifyPinRequest(BaseModel):
     pin: str
-
 class UserResponse(UserBase):
     id: int
     upi_id: str
@@ -65,7 +75,23 @@ class UserResponse(UserBase):
     spending_limit: Optional[float] = None
     spending_limit_period: int = 1
     spending_limit_updated_at: Optional[datetime] = None
+    is_fraud: bool = False
     # We don't return hashed_password or sensitive fields
+    class Config:
+        from_attributes = True
+
+class UserAdminResponse(BaseModel):
+    id: int
+    username: str
+    full_name: Optional[str] = None
+    upi_id: str
+    mcc: Optional[str] = None
+    mobile_number: Optional[str] = None
+    is_fraud: bool = False
+    last_action_by: Optional[str] = None
+    last_action_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    
     class Config:
         from_attributes = True
 
@@ -324,6 +350,52 @@ class TransactionAuditResponse(BaseModel):
     transaction_id: str
     ip_address: Optional[str] = None
     decrypted_at: datetime
+
+class ComplaintCreate(BaseModel):
+    transaction_id: str
+    reported_user_upi: str
+    reason: str
+    description: Optional[str] = None
+    sender_name: Optional[str] = None
+    sender_upi_id: Optional[str] = None
+    sender_bank: Optional[str] = None
+    receiver_name: Optional[str] = None
+    receiver_upi_id: Optional[str] = None
+    receiver_bank: Optional[str] = None
+    transaction_date: Optional[str] = None
+    transaction_time: Optional[str] = None
+    transaction_amount: Optional[str] = None
+
+class ComplaintResponse(BaseModel):
+    id: int
+    transaction_id: str
+    reporter: UserAdminResponse
+    reported_user: Optional[UserAdminResponse] = None
+    reason: str
+    description: Optional[str] = None
+    status: str
+    timestamp: datetime
+    reviewed_at: Optional[datetime] = None
+    resolved_by: Optional[AdminSummary] = None
+    
+    sender_name: Optional[str] = None
+    sender_upi_id: Optional[str] = None
+    sender_bank: Optional[str] = None
+    receiver_name: Optional[str] = None
+    receiver_upi_id: Optional[str] = None
+    receiver_bank: Optional[str] = None
+    transaction_date: Optional[str] = None
+    transaction_time: Optional[str] = None
+    transaction_amount: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class ComplaintVerdictRequest(BaseModel):
+    status: str # "confirmed_fraud" or "dismissed"
+
+class UserFraudStatusToggle(BaseModel):
+    is_fraud: bool
 
 
 # ═══════════════════════════════════════════════════════════════════════════

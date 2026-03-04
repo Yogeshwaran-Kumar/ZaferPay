@@ -412,6 +412,63 @@ class TransactionService {
     }
   }
 
+  Future<Map<String, dynamic>> submitComplaint({
+    required String transactionId,
+    required String reportedUserUpi,
+    required String reason,
+    String? description,
+    String? senderName,
+    String? senderUpiId,
+    String? senderBank,
+    String? receiverName,
+    String? receiverUpiId,
+    String? receiverBank,
+    String? transactionDate,
+    String? transactionTime,
+    String? transactionAmount,
+  }) async {
+    try {
+      final body = {
+        'transaction_id': transactionId,
+        'reported_user_upi': reportedUserUpi,
+        'reason': reason,
+        if (description != null && description.isNotEmpty)
+          'description': description,
+        if (senderName != null) 'sender_name': senderName,
+        if (senderUpiId != null) 'sender_upi_id': senderUpiId,
+        if (senderBank != null) 'sender_bank': senderBank,
+        if (receiverName != null) 'receiver_name': receiverName,
+        if (receiverUpiId != null) 'receiver_upi_id': receiverUpiId,
+        if (receiverBank != null) 'receiver_bank': receiverBank,
+        if (transactionDate != null) 'transaction_date': transactionDate,
+        if (transactionTime != null) 'transaction_time': transactionTime,
+        if (transactionAmount != null) 'transaction_amount': transactionAmount,
+      };
+
+      final response = await _apiClient.post('/complaints', body: body);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {'success': true, 'data': json.decode(response.body)};
+      } else {
+        try {
+          final err = json.decode(response.body);
+          return {
+            'success': false,
+            'message': err['detail'] ?? 'Submission failed',
+          };
+        } catch (_) {
+          return {
+            'success': false,
+            'message': 'Server error: ${response.statusCode}',
+          };
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) print("Submit Complaint Error: $e");
+      return {'success': false, 'message': 'Connection error'};
+    }
+  }
+
   // --- Payment Requests ---
 
   /// Request money from another user

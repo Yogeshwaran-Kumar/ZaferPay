@@ -1,0 +1,1377 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZaferPay | Enterprise Cloud Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            /* Palette: Slate & Azure */
+            --primary: #0EA5E9;
+            /* Azure */
+            --primary-glow: rgba(14, 165, 233, 0.15);
+            --slate-50: #F8FAFC;
+            --slate-100: #F1F5F9;
+            --slate-200: #E2E8F0;
+            --slate-300: #CBD5E1;
+            --slate-400: #94A3B8;
+            --slate-500: #64748B;
+            --slate-600: #475569;
+            --slate-700: #334155;
+            --slate-800: #1E293B;
+            --slate-900: #0F172A;
+
+            --success: #10B981;
+            --danger: #EF4444;
+            --warning: #F59E0B;
+
+            --sidebar-w: 280px;
+            --header-h: 72px;
+
+            /* Spacing: 4px Grid */
+            --s-1: 4px;
+            --s-2: 8px;
+            --s-3: 12px;
+            --s-4: 16px;
+            --s-5: 20px;
+            --s-6: 24px;
+            --s-8: 32px;
+            --s-10: 40px;
+            --s-12: 48px;
+
+            /* Shadows: Ambient Occlusion */
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--slate-50);
+            color: var(--slate-800);
+            display: flex;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* --- Sidebar & Layout --- */
+        #sidebar {
+            width: var(--sidebar-w);
+            background: var(--slate-900);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+            z-index: 1000;
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .brand {
+            height: var(--header-h);
+            display: flex;
+            align-items: center;
+            padding: 0 var(--s-6);
+            gap: var(--s-3);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .brand img {
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(14, 165, 233, 0.3);
+        }
+
+        .brand span {
+            font-size: 1.15rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        .nav {
+            padding: var(--s-6) var(--s-3);
+            flex: 1;
+        }
+
+        .nav-link {
+            padding: var(--s-3) var(--s-4);
+            margin-bottom: var(--s-1);
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: var(--s-3);
+            color: var(--slate-400);
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .nav-link svg {
+            width: 22px;
+            height: 22px;
+            stroke-width: 2.2;
+        }
+
+        .nav-link:hover {
+            color: white;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .nav-link.active {
+            color: white;
+            background: var(--primary);
+            box-shadow: 0 8px 16px -4px var(--primary-glow);
+        }
+
+        #content-area {
+            margin-left: var(--sidebar-w);
+            flex: 1;
+            min-width: 0;
+        }
+
+        header {
+            height: var(--header-h);
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            padding: 0 var(--s-8);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 900;
+            border-bottom: 1px solid var(--slate-200);
+        }
+
+        .breadcrumb {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--slate-500);
+        }
+
+        .breadcrumb b {
+            color: var(--slate-900);
+        }
+
+        .btn-logout {
+            padding: var(--s-2) var(--s-5);
+            border: 1px solid var(--slate-200);
+            background: white;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: 0.2s;
+            color: var(--slate-700);
+        }
+
+        .btn-logout:hover {
+            background: var(--slate-50);
+            color: var(--danger);
+            border-color: #fecaca;
+        }
+
+        /* --- View Containers --- */
+        .container {
+            padding: var(--s-8);
+            max-width: 1440px;
+            margin: 0 auto;
+        }
+
+        /* --- Dashboard Widgets --- */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: var(--s-6);
+            margin-bottom: var(--s-10);
+        }
+
+        .stat {
+            background: white;
+            padding: var(--s-6);
+            border-radius: 20px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--slate-200);
+            display: flex;
+            flex-direction: column;
+            gap: var(--s-2);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .stat:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--primary);
+        }
+
+        .stat-icon {
+            width: 44px;
+            height: 44px;
+            background: var(--slate-50);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: var(--s-2);
+        }
+
+        .stat-icon svg {
+            width: 24px;
+            height: 24px;
+            stroke: var(--slate-600);
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--slate-500);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-val {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--slate-900);
+        }
+
+        .stat-meta {
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .m-up {
+            color: var(--success);
+        }
+
+        .m-warn {
+            color: var(--warning);
+        }
+
+        .m-risk {
+            color: var(--danger);
+        }
+
+        /* --- Segmented Controls --- */
+        .segmented {
+            background: var(--slate-100);
+            padding: 4px;
+            border-radius: 14px;
+            display: flex;
+            gap: 4px;
+            width: fit-content;
+        }
+
+        .seg-btn {
+            border: none;
+            background: transparent;
+            padding: var(--s-2) var(--s-5);
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--slate-600);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .seg-btn.active {
+            background: white;
+            color: var(--primary);
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* --- Cards & Layout --- */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: var(--s-6);
+            padding-bottom: var(--s-4);
+            border-bottom: 2px solid var(--slate-100);
+        }
+
+        .section-header h2 {
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: var(--slate-900);
+            letter-spacing: -0.5px;
+        }
+
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+            gap: var(--s-6);
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--slate-200);
+            padding: var(--s-6);
+            display: flex;
+            flex-direction: column;
+            gap: var(--s-5);
+            transition: 0.3s;
+        }
+
+        .card:hover {
+            border-color: var(--primary);
+            box-shadow: var(--shadow-md);
+        }
+
+        .card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .ref-tag {
+            font-family: 'Outfit';
+            font-weight: 800;
+            color: var(--primary);
+            background: var(--primary-glow);
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            letter-spacing: 1px;
+        }
+
+        .subject-info {
+            display: flex;
+            align-items: center;
+            gap: var(--s-4);
+        }
+
+        .subject-avatar {
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            background: var(--slate-100);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1.2rem;
+            color: var(--slate-600);
+        }
+
+        .subject-name {
+            font-weight: 800;
+            font-size: 1.05rem;
+        }
+
+        .subject-id {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--slate-500);
+            font-family: monospace;
+        }
+
+        .biz-badge {
+            background: #E0F2FE;
+            color: #0369A1;
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            border-radius: 6px;
+            font-weight: 800;
+            text-transform: uppercase;
+            margin-left: 6px;
+        }
+
+        .reason-well {
+            background: #F8FAFC;
+            border: 1px solid var(--slate-200);
+            padding: var(--s-4);
+            border-radius: 14px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .reason-well b {
+            display: block;
+            margin-bottom: 4px;
+            color: var(--slate-900);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            color: var(--slate-500);
+        }
+
+        .action-bar {
+            display: flex;
+            gap: var(--s-3);
+        }
+
+        .btn-action {
+            flex: 1;
+            padding: var(--s-3);
+            border: none;
+            border-radius: 12px;
+            font-weight: 800;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-action.confirm {
+            background: #FEF2F2;
+            color: var(--danger);
+        }
+
+        .btn-action.confirm:hover {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-action.safe {
+            background: #F0FDF4;
+            color: var(--success);
+        }
+
+        .btn-action.safe:hover {
+            background: var(--success);
+            color: white;
+        }
+
+        /* --- Modern Data Tables --- */
+        .table-wrap {
+            background: white;
+            border-radius: 20px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--slate-200);
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            text-align: left;
+            padding: var(--s-4) var(--s-6);
+            background: var(--slate-50);
+            color: var(--slate-500);
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            font-weight: 800;
+            letter-spacing: 1px;
+            border-bottom: 1px solid var(--slate-200);
+        }
+
+        td {
+            padding: var(--s-5) var(--s-6);
+            border-bottom: 1px solid var(--slate-100);
+            font-size: 0.95rem;
+            font-weight: 500;
+            vertical-align: middle;
+        }
+
+        tr:nth-child(even) td {
+            background: #FAFAFB;
+        }
+
+        tr:hover td {
+            background: #F1F5F9 !important;
+        }
+
+        .id-col {
+            width: 180px;
+            font-family: monospace;
+            font-weight: 700;
+            color: var(--slate-600);
+        }
+
+        .pill {
+            padding: var(--s-1) var(--s-3);
+            border-radius: 20px;
+            font-size: 0.72rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .pill::before {
+            content: "";
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .pill-safe {
+            background: #DCFCE7;
+            color: #166534;
+        }
+
+        .pill-risk {
+            background: #FEE2E2;
+            color: #991B1B;
+        }
+
+        .pill-warn {
+            background: #FEF3C7;
+            color: #92400E;
+        }
+
+        /* --- Auth Layer --- */
+        #auth-overlay {
+            position: fixed;
+            inset: 0;
+            background: var(--slate-900);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .auth-box {
+            background: white;
+            padding: var(--s-10);
+            border-radius: 32px;
+            width: 100%;
+            max-width: 440px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            text-align: center;
+        }
+
+        .auth-logo-top {
+            width: 72px;
+            height: 72px;
+            margin: 0 auto var(--s-6);
+            background: var(--primary);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px var(--primary-glow);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
+        .auth-input {
+            width: 100%;
+            padding: var(--s-4);
+            border: 1px solid var(--slate-200);
+            border-radius: 16px;
+            outline: none;
+            transition: 0.2s;
+            margin-bottom: var(--s-4);
+            font-size: 1rem;
+            font-weight: 600;
+            font-family: 'Outfit';
+        }
+
+        .auth-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px var(--primary-glow);
+        }
+
+        .auth-btn {
+            width: 100%;
+            background: var(--slate-900);
+            color: white;
+            border: none;
+            padding: var(--s-4);
+            border-radius: 16px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: 0.2s;
+            font-size: 1rem;
+        }
+
+        .auth-btn:hover {
+            background: var(--slate-800);
+        }
+
+        /* --- Switch Toggle --- */
+        .toggle {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+
+        .toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider-round {
+            position: absolute;
+            cursor: pointer;
+            inset: 0;
+            background: var(--slate-300);
+            transition: 0.3s;
+            border-radius: 34px;
+        }
+
+        .slider-round:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background: white;
+            transition: 0.3s;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        input:checked+.slider-round {
+            background: var(--danger);
+        }
+
+        input:checked+.slider-round:before {
+            transform: translateX(20px);
+        }
+
+        /* --- Transitions --- */
+        .view {
+            animation: slideUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* --- Custom Modal --- */
+        #modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(8px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        #modal-overlay.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        .modal-card {
+            background: white;
+            width: 100%;
+            max-width: 420px;
+            padding: var(--s-8);
+            border-radius: 24px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            transform: scale(0.9);
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        #modal-overlay.active .modal-card {
+            transform: scale(1);
+        }
+
+        .modal-icon {
+            width: 64px;
+            height: 64px;
+            background: var(--slate-100);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto var(--s-6);
+            color: var(--primary);
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 800;
+            margin-bottom: var(--s-2);
+            color: var(--slate-900);
+        }
+
+        .modal-desc {
+            font-size: 0.95rem;
+            color: var(--slate-500);
+            line-height: 1.5;
+            margin-bottom: var(--s-8);
+            font-weight: 500;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: var(--s-3);
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: var(--s-4);
+            border: none;
+            border-radius: 14px;
+            font-weight: 800;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: 0.2s;
+            text-transform: uppercase;
+        }
+
+        .modal-btn.cancel {
+            background: var(--slate-100);
+            color: var(--slate-600);
+        }
+
+        .modal-btn.confirm-btn {
+            background: var(--primary);
+            color: white;
+        }
+
+        .modal-btn.confirm-btn:hover {
+            box-shadow: 0 4px 12px var(--primary-glow);
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="auth-overlay" style="display: none;">
+        <div class="auth-box">
+            <div class="auth-logo-top">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                    <path d="M2 17l10 5 10-5" />
+                    <path d="M2 12l10 5 10-5" />
+                </svg>
+            </div>
+            <h1 style="font-weight: 800; margin-bottom: 4px;">ZaferPay Cloud</h1>
+            <p style="color: var(--slate-500); font-weight:600; margin-bottom: 32px;">Enterprise Security Infrastructure
+            </p>
+            <input type="text" id="ln-user" class="auth-input" placeholder="Operator ID">
+            <input type="password" id="ln-pass" class="auth-input" placeholder="Security Token">
+            <button class="auth-btn" onclick="loginAdmin()">Establish Secure Session</button>
+            <div id="ln-err"
+                style="color: var(--danger); font-size: 0.85rem; font-weight: 700; margin-top: 16px; display: none;">
+                Establishment Failed: Token Mismatch</div>
+        </div>
+    </div>
+
+    <aside id="sidebar">
+        <div class="brand">
+            <img src="/static/logo.png" alt="Z">
+            <span>ZaferPay Admin</span>
+        </div>
+        <nav class="nav">
+            <div class="nav-link active" onclick="navTo('dash', true)" id="nav-dash">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <rect x="3" y="3" width="7" height="7" />
+                    <rect x="14" y="3" width="7" height="7" />
+                    <rect x="14" y="14" width="7" height="7" />
+                    <rect x="3" y="14" width="7" height="7" />
+                </svg>
+                Cloud Overview
+            </div>
+            <div class="nav-link" onclick="navTo('comps', true)" id="nav-comps">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path
+                        d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+                Risk Reports
+            </div>
+            <div class="nav-link" onclick="navTo('users', true)" id="nav-users">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+                Entity Control
+            </div>
+            <div class="nav-link" onclick="navTo('audit', true)" id="nav-audit">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 1 1-7.6-10.6" />
+                    <polyline points="12 6 12 12 16 14" />
+                </svg>
+                Audit Stream
+            </div>
+        </nav>
+        <div style="padding: var(--s-6); border-top: 1px solid rgba(255,255,255,0.05);">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 40px; height: 40px; border-radius: 12px; background: var(--primary); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.1rem; color: white;"
+                    id="admin-p-avatar">A</div>
+                <div>
+                    <div style="font-weight: 700; font-size: 0.9rem;" id="admin-p-name">System Operator</div>
+                    <div
+                        style="font-size: 0.72rem; color: var(--slate-400); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+                        Level 1 Auth</div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <div id="content-area">
+        <header>
+            <div class="breadcrumb">ZAFERPAY CLOUD / <b id="view-title">DASHBOARD</b></div>
+            <button class="btn-logout" onclick="logoutAdmin()">TERMINATE SESSION</button>
+        </header>
+
+        <main class="container">
+            <!-- DASHBOARD -->
+            <div id="view-dash" class="view">
+                <div class="section-header">
+                    <h2>Infrastructure Lifecycle</h2>
+                </div>
+                <div class="stats">
+                    <div class="stat" onclick="navTo('comps'); setCompFilter('unsolved');">
+                        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path
+                                    d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                <line x1="12" y1="9" x2="12" y2="13" />
+                                <line x1="12" y1="17" x2="12.01" y2="17" />
+                            </svg></div>
+                        <span class="stat-label">Pending Reviews</span>
+                        <div class="stat-val" id="st-p-comps">0</div>
+                        <span class="stat-meta m-risk">Action Protocol Required</span>
+                    </div>
+                    <div class="stat" onclick="navTo('users'); setUserFilter('flagged');">
+                        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                            </svg></div>
+                        <span class="stat-label">Restricted Access</span>
+                        <div class="stat-val" id="st-f-users" style="color: var(--danger);">0</div>
+                        <span class="stat-meta m-risk">Fraud Detected</span>
+                    </div>
+                    <div class="stat" onclick="navTo('comps'); setCompFilter('solved');">
+                        <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polyline points="22 11.08 12 19 2 11.08" />
+                                <polyline points="22 4.08 12 12 2 4.08" />
+                            </svg></div>
+                        <span class="stat-label">Total Resolves</span>
+                        <div class="stat-val" id="st-res-comps" style="color: var(--success);">0</div>
+                        <span class="stat-meta m-up">System Integrity Logged</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- COMPLAINTS -->
+            <div id="view-comps" class="view hidden">
+                <div class="section-header">
+                    <h2>Risk Identity Reports</h2>
+                    <div class="segmented">
+                        <button class="seg-btn active" id="seg-c-unsolved"
+                            onclick="setCompFilter('unsolved')">Unsolved</button>
+                        <button class="seg-btn" id="seg-c-solved" onclick="setCompFilter('solved')">Archive</button>
+                    </div>
+                </div>
+
+                <div class="segmented" style="margin-bottom: var(--s-8); background: transparent; padding: 0;">
+                    <button class="seg-btn active" id="seg-ct-all" onclick="setCompType('all')">All Nodes</button>
+                    <button class="seg-btn" id="seg-ct-biz" onclick="setCompType('biz')">Business entities</button>
+                    <button class="seg-btn" id="seg-ct-pers" onclick="setCompType('pers')">Personal nodes</button>
+                </div>
+
+                <div class="card-grid" id="complaints-grid"></div>
+            </div>
+
+            <!-- USERS -->
+            <div id="view-users" class="view hidden">
+                <div class="section-header">
+                    <h2>Global Entity Control</h2>
+                    <div class="segmented">
+                        <button class="seg-btn active" id="seg-u-all" onclick="setUserFilter('all')">All
+                            Entities</button>
+                        <button class="seg-btn" id="seg-u-flag" onclick="setUserFilter('flagged')">Restricted</button>
+                        <button class="seg-btn" id="seg-u-safe" onclick="setUserFilter('safe')">Safe Path</button>
+                    </div>
+                </div>
+
+                <div class="segmented" style="margin-bottom: var(--s-8); background: transparent; padding: 0;">
+                    <button class="seg-btn active" id="seg-ut-all" onclick="setUserType('all')">Universal</button>
+                    <button class="seg-btn" id="seg-ut-biz" onclick="setUserType('biz')">Merchants</button>
+                    <button class="seg-btn" id="seg-ut-pers" onclick="setUserType('pers')">Individuals</button>
+                </div>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Subject Identity</th>
+                                <th>UPI Identifier</th>
+                                <th>Constraint Status</th>
+                                <th style="text-align: right;">Authorization Toggle</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- AUDIT -->
+            <div id="view-audit" class="view hidden">
+                <div class="section-header">
+                    <h2>Sequence Audit Stream</h2>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Operator</th>
+                                <th>Action Protocol</th>
+                                <th>Subject ID</th>
+                                <th>Event Timeline</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL OVERLAY -->
+    <div id="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-icon">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path
+                        d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+            </div>
+            <div class="modal-title" id="modal-title">System Verdict</div>
+            <div class="modal-desc" id="modal-desc">Are you sure you want to execute this infrastructure action?</div>
+            <div class="modal-actions">
+                <button class="modal-btn cancel" id="modal-cancel">Abort</button>
+                <button class="modal-btn confirm-btn" id="modal-confirm-btn">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let token = localStorage.getItem('admin_token');
+        let socket = null;
+        let cView = 'dash';
+
+        let cComps = [];
+        let cUsers = [];
+        let fComps = 'unsolved';
+        let ftComps = 'all';
+        let fUsers = 'all';
+        let ftUsers = 'all';
+
+        function setupWS() {
+            if (!token) return;
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            socket = new WebSocket(`${protocol}//${location.host}/ws/admin`);
+            socket.onmessage = (e) => {
+                const d = JSON.parse(e.data);
+                if (['EVENT_COMPLAINT_RESOLVED', 'EVENT_USER_TOGGLED'].includes(d.type)) {
+                    refresh();
+                }
+            };
+            socket.onclose = () => setTimeout(setupWS, 2000);
+        }
+
+        async function api(url, opt = {}) {
+            if (!token) { document.getElementById('auth-overlay').style.display = 'flex'; return null; }
+            opt.headers = {
+                ...opt.headers,
+                'Authorization': `Bearer ${token}`
+            };
+
+            // Simplest relative URL for better tunnel compatibility
+            const sep = url.includes('?') ? '&' : '?';
+            const finalUrl = url + sep + '_t=' + Date.now();
+
+            try {
+                const r = await fetch(finalUrl, opt);
+                if ([401, 403].includes(r.status)) logoutAdmin();
+                return r;
+            } catch (e) {
+                console.error("API Network Error:", e);
+                return null;
+            }
+        }
+
+        function navTo(v, shouldRefresh = false) {
+            cView = v;
+            document.querySelectorAll('.view').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`view-${v}`).classList.remove('hidden');
+            document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+            document.getElementById(`nav-${v}`).classList.add('active');
+            document.getElementById('view-title').innerText = v.toUpperCase();
+
+            // ZERO-LATENCY RENDERING (< 0.1s)
+            if (v === 'comps' && cComps.length > 0) renderComps();
+            if (v === 'users' && cUsers.length > 0) renderUsers();
+
+            // Only refresh from network if intentionally clicked from sidebar
+            if (shouldRefresh) {
+                refresh();
+            }
+        }
+
+        async function loginAdmin() {
+            const u = document.getElementById('ln-user').value.trim();
+            const p = document.getElementById('ln-pass').value;
+            if (!u || !p) return;
+            const r = await fetch('/admin/login', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: u, password: p })
+            });
+            if (r.ok) {
+                const d = await r.json();
+                localStorage.setItem('admin_token', d.access_token);
+                localStorage.setItem('admin_name', u);
+                location.reload();
+            } else {
+                document.getElementById('ln-err').style.display = 'block';
+            }
+        }
+
+        function logoutAdmin() {
+            localStorage.clear();
+            location.reload();
+        }
+
+        function refresh() {
+            if (cView === 'dash') fetchStats(true);
+            if (cView === 'comps') fetchComps(true);
+            if (cView === 'users') fetchUsers(true);
+            if (cView === 'audit') fetchAudit(true);
+        }
+
+        async function fetchStats() {
+            try {
+                const r = await api('/admin/stats');
+                if (r && r.ok) {
+                    const d = await r.json();
+                    if (!d.complaints || !d.users) throw new Error("Invalid API Data Format");
+
+                    document.getElementById('st-p-comps').innerText = d.complaints.pending ?? '0';
+                    document.getElementById('st-f-users').innerText = d.users.flagged ?? '0';
+
+                    const confirmed = d.complaints.confirmed || 0;
+                    const total = d.complaints.total || 0;
+                    const pending = d.complaints.pending || 0;
+                    const solved = confirmed + (total - pending - confirmed);
+
+                    document.getElementById('st-res-comps').innerText = solved;
+                } else {
+                    const err = r ? await r.text() : 'Network Fail';
+                    console.error('Stats fetch failed:', err);
+                    // Do not reset to 0 if it's already 0, but maybe show an error indicator
+                }
+            } catch (e) {
+                console.error('fetchStats Error:', e);
+            }
+        }
+
+        async function fetchComps(force = false) {
+            const url = force ? `/admin/complaints?_t=${Date.now()}` : '/admin/complaints';
+            const r = await api(url);
+            if (r) { cComps = await r.json(); if (cView === 'comps') renderComps(); }
+        }
+
+        function setCompFilter(f) {
+            fComps = f;
+            document.getElementById('seg-c-unsolved').classList.toggle('active', f === 'unsolved');
+            document.getElementById('seg-c-solved').classList.toggle('active', f === 'solved');
+            renderComps();
+        }
+
+        function setCompType(t) {
+            ftComps = t;
+            document.getElementById('seg-ct-all').classList.toggle('active', t === 'all');
+            document.getElementById('seg-ct-biz').classList.toggle('active', t === 'biz');
+            document.getElementById('seg-ct-pers').classList.toggle('active', t === 'pers');
+            renderComps();
+        }
+
+        function renderComps() {
+            const g = document.getElementById('complaints-grid');
+            g.innerHTML = '';
+            const filtered = cComps.filter(c => {
+                const matchF = fComps === 'unsolved' ? c.status === 'pending' : c.status !== 'pending';
+                const mcc = c.reported_user?.mcc || '0000';
+                const isB = mcc !== '0' && mcc !== '00' && mcc !== '000' && mcc !== '0000' && mcc !== null;
+                const matchT = ftComps === 'all' || (ftComps === 'biz' && isB) || (ftComps === 'pers' && !isB);
+                return matchF && matchT;
+            });
+
+            if (!filtered.length) { g.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding: 4rem; color: var(--slate-400); font-weight:700;">Zero Data Matching Protocol Filters</div>'; return; }
+
+            filtered.forEach(c => {
+                const mcc = c.reported_user?.mcc || '0000';
+                const isB = mcc !== '0' && mcc !== '00' && mcc !== '000' && mcc !== '0000' && mcc !== null;
+                const el = document.createElement('div');
+                el.className = 'card view';
+                el.innerHTML = `
+                    <div class="card-top">
+                        <span class="ref-tag">Report #${c.id}</span>
+                        <span class="pill pill-${c.status === 'pending' ? 'warn' : (c.status === 'confirmed_fraud' ? 'risk' : 'safe')}">${c.status.replace('_', ' ')}</span>
+                    </div>
+                    <div class="subject-info">
+                        <div class="subject-avatar" style="${isB ? 'background: #E0F2FE; color: #0369A1;' : ''}">${(c.reported_user?.full_name || c.receiver_name || 'U').charAt(0)}</div>
+                        <div>
+                            <div class="subject-name">${c.reported_user?.full_name || c.receiver_name || 'Unknown Subject'}${isB ? '<span class="biz-badge">Merchant</span>' : ''}</div>
+                            <div class="subject-id">${c.reported_user?.upi_id || c.receiver_upi_id || 'Unknown'}</div>
+                        </div>
+                    </div>
+                    <div class="reason-well">
+                        <b>Primary Vector: ${c.reason}</b>
+                        ${c.description || 'System bypass: No metadata provided.'}
+                    </div>
+                    ${c.sender_name || c.receiver_name ? `
+                    <div class="tx-details" style="font-size: 0.75rem; background: var(--slate-50); border: 1px solid var(--slate-200); border-radius: 6px; padding: 8px; margin-bottom: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <div><div style="color: var(--slate-500); font-size: 0.65rem; font-weight: 800; margin-bottom: 2px;">SENDER</div><b style="color: var(--slate-800);">${c.sender_name || '-'}</b><br/><span style="color: var(--slate-600);">${c.sender_upi_id || '-'}</span><br/><span style="color: var(--slate-500);">${c.sender_bank || '-'}</span></div>
+                        <div><div style="color: var(--slate-500); font-size: 0.65rem; font-weight: 800; margin-bottom: 2px;">RECEIVER</div><b style="color: var(--slate-800);">${c.receiver_name || '-'}</b><br/><span style="color: var(--slate-600);">${c.receiver_upi_id || '-'}</span><br/><span style="color: var(--slate-500);">${c.receiver_bank || '-'}</span></div>
+                        <div style="grid-column: 1/-1; border-top: 1px solid var(--slate-200); margin-top: 4px; padding-top: 6px; display: flex; justify-content: space-between; align-items: center;">
+                            <div><span style="color: var(--slate-500); font-weight: 800;">TXN:</span> <span style="font-family: monospace;">${c.transaction_id || '-'}</span></div>
+                            <div><span style="color: var(--slate-500); font-weight: 800;">AMT:</span> <b>&#8377;${c.transaction_amount || '-'}</b></div>
+                            <div><span style="color: var(--slate-500); font-weight: 800;">TIME:</span> ${(c.transaction_date || '').replace(' ', '')} ${c.transaction_time || '-'}</div>
+                        </div>
+                    </div>` : ''}
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--slate-500); font-weight:700;">
+                        <span>ENTRY: ${new Date(c.timestamp).toLocaleDateString()}</span>
+                        ${c.resolved_by ? `<span style="color:var(--primary);">OP: @${c.resolved_by.username}</span>` : ''}
+                    </div>
+                    ${c.status === 'pending' ? `
+                    <div class="action-bar">
+                        <button class="btn-action confirm" onclick="verdict(${c.id}, 'confirmed_fraud')">GIVE FLAG</button>
+                        <button class="btn-action safe" onclick="verdict(${c.id}, 'safe')">GIVE SAFE</button>
+                    </div>
+                    ` : ''}
+                `;
+                g.appendChild(el);
+            });
+        }
+
+        async function fetchUsers(force = false) {
+            const url = force ? `/admin/users?_t=${Date.now()}` : '/admin/users';
+            const r = await api(url);
+            if (r) { cUsers = await r.json(); if (cView === 'users') renderUsers(); }
+        }
+
+        function setUserFilter(f) {
+            fUsers = f;
+            document.getElementById('seg-u-all').classList.toggle('active', f === 'all');
+            document.getElementById('seg-u-flag').classList.toggle('active', f === 'flagged');
+            document.getElementById('seg-u-safe').classList.toggle('active', f === 'safe');
+            renderUsers();
+        }
+
+        function setUserType(t) {
+            ftUsers = t;
+            document.getElementById('seg-ut-all').classList.toggle('active', t === 'all');
+            document.getElementById('seg-ut-biz').classList.toggle('active', t === 'biz');
+            document.getElementById('seg-ut-pers').classList.toggle('active', t === 'pers');
+            renderUsers();
+        }
+
+        function renderUsers() {
+            const tbody = document.getElementById('users-tbody');
+            tbody.innerHTML = '';
+            const filtered = cUsers.filter(u => {
+                const matchF = fUsers === 'all' || (fUsers === 'flagged' && u.is_fraud) || (fUsers === 'safe' && !u.is_fraud);
+                const mcc = u.mcc || '0000';
+                const isB = mcc !== '0' && mcc !== '00' && mcc !== '000' && mcc !== '0000' && mcc !== null;
+                const matchT = ftUsers === 'all' || (ftUsers === 'biz' && isB) || (ftUsers === 'pers' && !isB);
+                return matchF && matchT;
+            });
+
+            filtered.forEach(u => {
+                const mcc = u.mcc || '0000';
+                const isB = mcc !== '0' && mcc !== '00' && mcc !== '000' && mcc !== '0000' && mcc !== null;
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div class="subject-avatar" style="${isB ? 'background: #E0F2FE; color: #0369A1;' : 'width:40px; height:40px; font-size:0.9rem;'}">${(u.full_name || u.username).charAt(0)}</div>
+                            <div>
+                                <div style="font-weight: 800;">${u.full_name || u.username}</div>
+                                <div style="font-size: 0.72rem; color: var(--slate-500); font-weight: 700; text-transform: uppercase;">${isB ? 'Merchant Infrastructure' : 'Private Account'}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="id-col">${u.upi_id}</td>
+                    <td>
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <span class="pill pill-${u.is_fraud ? 'risk' : 'safe'}">${u.is_fraud ? 'RESTRICTED' : 'AUTHORIZED'}</span>
+                            ${u.last_action_by ? `<span style="font-size: 0.65rem; color: var(--slate-500); padding-left: 8px;">OP: @${u.last_action_by}</span>` : ''}
+                        </div>
+                    </td>
+                    <td style="text-align: right;">
+                        <label class="toggle">
+                            <input type="checkbox" ${u.is_fraud ? 'checked' : ''} onchange="toggleF(${u.id}, this.checked)">
+                            <span class="slider-round"></span>
+                        </label>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function fetchAudit(force = false) {
+            const url = force ? `/admin/audit-logs?_t=${Date.now()}` : '/admin/audit-logs';
+            const r = await api(url);
+            if (r) {
+                const logs = await r.json();
+                const tbody = document.getElementById('audit-tbody');
+                tbody.innerHTML = '';
+                logs.forEach(l => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td><span style="font-weight: 800; color: var(--primary);">@${l.admin}</span></td>
+                        <td><span class="pill" style="background:var(--slate-100); color:var(--slate-700);">${l.action.replace('_', ' ')}</span></td>
+                        <td><span style="font-weight: 700;">${l.target}</span></td>
+                        <td style="font-size: 0.82rem; color: var(--slate-500); font-weight:600;">${new Date(l.timestamp).toLocaleString()}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        function showConfirm(title, desc) {
+            return new Promise((resolve) => {
+                const overlay = document.getElementById('modal-overlay');
+                document.getElementById('modal-title').innerText = title;
+                document.getElementById('modal-desc').innerText = desc;
+                overlay.classList.add('active');
+
+                const cleanup = (val) => {
+                    overlay.classList.remove('active');
+                    resolve(val);
+                };
+
+                document.getElementById('modal-confirm-btn').onclick = () => cleanup(true);
+                document.getElementById('modal-cancel').onclick = () => cleanup(false);
+            });
+        }
+
+        async function verdict(id, s) {
+            const confirmed = await showConfirm(
+                'Execute System Verdict',
+                `Are you sure you want to mark Report #${id} as ${s.replace('_', ' ').toUpperCase()}?`
+            );
+            if (!confirmed) return;
+
+            // OPTIMISTIC UPDATE: Update local state instantly
+            const oldComps = [...cComps];
+            const comp = cComps.find(c => c.id === id);
+            if (comp) {
+                comp.status = s;
+                renderComps();
+            }
+
+            const r = await api(`/admin/complaints/${id}/verdict`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: s })
+            });
+
+            if (!r) {
+                // ROLLBACK on failure
+                cComps = oldComps;
+                renderComps();
+                alert("Synchronous override failed. Reverting local state.");
+            } else {
+                fetchComps(true); // Final sync
+            }
+        }
+
+        async function toggleF(id, is_f) {
+            const confirmed = await showConfirm(
+                is_f ? 'Restrict Infrastructure Access' : 'Authorize Infrastructure Access',
+                `Execute system override for UID #${id}? This action will be logged in the audit stream.`
+            );
+
+            if (!confirmed) {
+                fetchUsers(true);
+                return;
+            }
+
+            // OPTIMISTIC UPDATE
+            const oldUsers = [...cUsers];
+            const user = cUsers.find(u => u.id === id);
+            if (user) {
+                user.is_fraud = is_f;
+                renderUsers();
+            }
+
+            const r = await api(`/admin/users/${id}/toggle-fraud`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ is_fraud: is_f })
+            });
+
+            if (!r) {
+                // ROLLBACK
+                cUsers = oldUsers;
+                renderUsers();
+                alert("Communication failure. State restored.");
+            } else {
+                fetchUsers(true); // Final sync
+            }
+        }
+
+        // Init
+        if (!token) {
+            document.getElementById('auth-overlay').style.display = 'flex';
+        } else {
+            const name = localStorage.getItem('admin_name') || 'Admin';
+            document.getElementById('admin-p-name').innerText = name;
+            document.getElementById('admin-p-avatar').innerText = name.charAt(0).toUpperCase();
+
+            // Set definite loading states
+            ['st-p-comps', 'st-f-users', 'st-res-comps'].forEach(id => document.getElementById(id).innerText = '...');
+
+            // Trigger fetches
+            fetchStats();
+            fetchComps(true);
+            fetchUsers(true);
+            fetchAudit(true);
+
+            navTo('dash');
+            setupWS();
+        }
+    </script>
+</body>
+
+</html>

@@ -34,6 +34,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True)
     full_name = Column(String, nullable=True)
+    is_fraud = Column(Boolean, default=False)  # Admin flag to block transactions
     
     
     # ═══════════════════════════════════════════════════════════════════════════
@@ -91,6 +92,7 @@ class User(Base):
     spending_limit = Column(Float, nullable=True)
     spending_limit_period = Column(Integer, default=1)  # 1, 2, 7, 30 days
     spending_limit_updated_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.now)
 
     # Relationships
     sender_profile = relationship("SenderProfile", back_populates="user", uselist=False)
@@ -502,15 +504,64 @@ class UserFraudReport(Base):
     __tablename__ = "user_fraud_reports"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id")) # Reporter
+    reported_user_id = Column(Integer, ForeignKey("users.id"), nullable=True) # The person being reported
     transaction_id = Column(String, index=True)
     
-    reason = Column(String)  # "not_me", "wrong_amount", "unknown_receiver", "other"
+    # Full complaint details (snapshot at time of filing)
+    sender_name = Column(String, nullable=True)
+    sender_upi_id = Column(String, nullable=True)
+    sender_bank = Column(String, nullable=True)
+    receiver_name = Column(String, nullable=True)
+    receiver_upi_id = Column(String, nullable=True)
+    receiver_bank = Column(String, nullable=True)
+    transaction_date = Column(String, nullable=True)
+    transaction_time = Column(String, nullable=True)
+    transaction_amount = Column(String, nullable=True)
+    
+    reason = Column(String)  # "fraud", "service_not_received", etc.
     description = Column(String, nullable=True)
     
-    status = Column(String, default="pending")  # pending, confirmed, dismissed
-    is_confirmed_fraud = Column(Boolean, default=False) # Manual flag by admin
+    status = Column(String, default="pending")  # pending, confirmed_fraud, dismissed
     
     timestamp = Column(DateTime, default=datetime.datetime.now)
+    reviewed_at = Column(DateTime, nullable=True)
+    resolved_by_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
     
-    user = relationship("User")
+    reporter = relationship("User", foreign_keys=[user_id])
+    reported_user = relationship("User", foreign_keys=[reported_user_id])
+    resolved_by = relationship("AdminUser", foreign_keys=[resolved_by_admin_id])
+
+    __table_args__ = (
+        Index('idx_user_tx', 'user_id', 'transaction_id', unique=True),
+    )
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ADMIN MODELS
+# ═══════════════════════════════════════════════════════════════════════════
+
+class AdminUser(Base):
+    """
+    Independent Admin Account Table
+    """
+    __tablename__ = "admin_users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class AdminActionLog(Base):
+    """
+    Audit Trail for Admin Actions (Flagging/Unflagging users)
+    """
+    __tablename__ = "admin_action_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    admin_id = Column(Integer, ForeignKey("admin_users.id"))
+    target_user_id = Column(Integer, ForeignKey("users.id"))
+    action_type = Column(String) # "flag_fraud", "unflag_safe"
+    timestamp = Column(DateTime, default=datetime.datetime.now)
+    
+    admin = relationship("AdminUser")
+    target_user = relationship("User")

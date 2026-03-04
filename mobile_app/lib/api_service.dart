@@ -199,15 +199,34 @@ class ApiService {
     return home?['user']?['balance'];
   }
 
-  // --- Fraud Reporting ---
-  Future<Map<String, dynamic>> reportFraud({
+  Future<Map<String, dynamic>> submitComplaint({
     required String transactionId,
+    required String reportedUserUpi,
     required String reason,
     String? description,
-  }) => _tx.reportFraud(
+    String? senderName,
+    String? senderUpiId,
+    String? senderBank,
+    String? receiverName,
+    String? receiverUpiId,
+    String? receiverBank,
+    String? transactionDate,
+    String? transactionTime,
+    String? transactionAmount,
+  }) => _tx.submitComplaint(
     transactionId: transactionId,
+    reportedUserUpi: reportedUserUpi,
     reason: reason,
     description: description,
+    senderName: senderName,
+    senderUpiId: senderUpiId,
+    senderBank: senderBank,
+    receiverName: receiverName,
+    receiverUpiId: receiverUpiId,
+    receiverBank: receiverBank,
+    transactionDate: transactionDate,
+    transactionTime: transactionTime,
+    transactionAmount: transactionAmount,
   );
 
   // --- Notifications ---

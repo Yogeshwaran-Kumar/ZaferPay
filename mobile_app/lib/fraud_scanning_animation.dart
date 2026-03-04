@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 
 class FraudScanningAnimation extends StatefulWidget {
   final bool isDark;
-  const FraudScanningAnimation({super.key, required this.isDark});
+  final double size;
+  const FraudScanningAnimation({
+    super.key,
+    required this.isDark,
+    this.size = 280.0,
+  });
 
   @override
   State<FraudScanningAnimation> createState() => _FraudScanningAnimationState();
@@ -41,8 +46,8 @@ class _FraudScanningAnimationState extends State<FraudScanningAnimation>
 
     return Center(
       child: SizedBox(
-        width: 280,
-        height: 280,
+        width: widget.size,
+        height: widget.size,
         child: Stack(
           alignment: Alignment.center,
           children: [
@@ -63,8 +68,8 @@ class _FraudScanningAnimationState extends State<FraudScanningAnimation>
                     ),
                   ),
                   child: Container(
-                    width: 200,
-                    height: 200,
+                    width: widget.size * (200 / 280),
+                    height: widget.size * (200 / 280),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(
@@ -81,8 +86,8 @@ class _FraudScanningAnimationState extends State<FraudScanningAnimation>
             RotationTransition(
               turns: _scanController,
               child: Container(
-                width: 220,
-                height: 220,
+                width: widget.size * (220 / 280),
+                height: widget.size * (220 / 280),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: SweepGradient(
@@ -106,8 +111,8 @@ class _FraudScanningAnimationState extends State<FraudScanningAnimation>
                 ),
               ),
               child: Container(
-                width: 100,
-                height: 100,
+                width: widget.size * (100 / 280),
+                height: widget.size * (100 / 280),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: bgColor,
@@ -123,13 +128,25 @@ class _FraudScanningAnimationState extends State<FraudScanningAnimation>
                     width: 2,
                   ),
                 ),
-                child: Icon(Icons.shield_outlined, size: 50, color: color),
+                child: Icon(
+                  Icons.shield_outlined,
+                  size: widget.size * (50 / 280),
+                  color: color,
+                ),
               ),
             ),
 
             // 4. "AI" Particles/Decorations (Static for now, could be animated)
-            Positioned(top: 40, right: 40, child: _buildDataPoint(color)),
-            Positioned(bottom: 40, left: 40, child: _buildDataPoint(color)),
+            Positioned(
+              top: widget.size * (40 / 280),
+              right: widget.size * (40 / 280),
+              child: _buildDataPoint(color),
+            ),
+            Positioned(
+              bottom: widget.size * (40 / 280),
+              left: widget.size * (40 / 280),
+              child: _buildDataPoint(color),
+            ),
           ],
         ),
       ),
