@@ -64,12 +64,104 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
       return;
     }
 
-    // Navigate to the Cyber Crime website
-    launchUrl(
-      Uri.parse(
-        'https://cybercrime.gov.in/Webform/Crime_AuthoLogin.aspx?rnt=5',
-      ),
-      mode: LaunchMode.externalApplication,
+    // Show success dialog, then launch cyber crime link
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          contentPadding: const EdgeInsets.fromLTRB(24, 28, 24, 12),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.check_circle_rounded,
+                  color: Colors.green.shade600,
+                  size: 56,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Complaint Submitted\nSuccessfully!',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Your complaint has been submitted to ZaferPay. You will now be redirected to the Cyber Crime portal to file an official report.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(ctx).pop(); // Close dialog
+                    // Launch the cyber crime website
+                    launchUrl(
+                      Uri.parse(
+                        'https://cybercrime.gov.in/Webform/Crime_AuthoLogin.aspx?rnt=5',
+                      ),
+                      mode: LaunchMode.externalApplication,
+                    );
+                    // Pop complaint screen so user returns to transaction details
+                    Navigator.of(context).pop();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00B9F1),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    'Continue to Cyber Crime Portal',
+                    style: GoogleFonts.outfit(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop(); // Close dialog
+                  Navigator.of(context).pop(); // Go back to transaction details
+                },
+                child: Text(
+                  'Go Back',
+                  style: GoogleFonts.outfit(
+                    fontSize: 14,
+                    color: Colors.grey.shade500,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
