@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'contact_service.dart';
 import 'api_service.dart';
+import 'cyber_chatbot_screen.dart';
 
 class ReportComplaintScreen extends StatefulWidget {
   final Map<String, dynamic> transaction;
@@ -416,8 +417,11 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
               elevation: 8,
               onSelected: (value) {
                 if (value == 'get_help') {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Help section coming soon')),
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const CyberChatbotScreen(),
+                    ),
                   );
                 }
               },

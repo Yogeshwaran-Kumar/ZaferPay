@@ -18,6 +18,7 @@ import 'api_service.dart';
 import 'report_complaint_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'utils.dart';
+import 'cyber_chatbot_screen.dart';
 
 class TransactionDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> transaction;
@@ -247,8 +248,11 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
               elevation: 8,
               onSelected: (value) {
                 if (value == 'get_help') {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Help section coming soon')),
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const CyberChatbotScreen(),
+                    ),
                   );
                 }
               },

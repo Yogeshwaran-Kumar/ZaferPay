@@ -15,8 +15,8 @@ import 'widgets/risk_status_widget.dart';
 // To reuse logic if needed, or better, keep logic in widget
 import 'mcc_helper.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'services/notification_service.dart';
+import 'cyber_chatbot_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final void Function(int)? onSwitchTab;
@@ -484,9 +484,14 @@ class _HomeScreenState extends State<HomeScreen> {
           height: 70,
           child: FloatingActionButton(
             onPressed: () {
-              launchUrl(Uri.parse('tel:1930'));
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const CyberChatbotScreen(),
+                ),
+              );
             },
-            backgroundColor: const Color(0xFF34A853),
+            backgroundColor: const Color(0xFF00B9F1),
             elevation: 4,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
@@ -494,10 +499,14 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.call, color: Colors.white, size: 24),
-                const SizedBox(height: 4),
+                const Icon(
+                  Icons.support_agent_rounded,
+                  color: Colors.white,
+                  size: 26,
+                ),
+                const SizedBox(height: 2),
                 Text(
-                  'Cyber\nCrime',
+                  'Cyber\nHelp',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.outfit(
                     color: Colors.white,

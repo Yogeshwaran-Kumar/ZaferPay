@@ -12,6 +12,7 @@ import 'mcc_helper.dart';
 import 'main.dart';
 import 'utils.dart';
 import 'language_selection_screen.dart';
+import 'cyber_chatbot_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -283,7 +284,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               icon: Icons.help_outline,
               title: 'Get help',
               onTap: () {
-                // Future: Open help center
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CyberChatbotScreen(),
+                  ),
+                );
               },
             ),
             _buildOptionItem(
@@ -732,11 +738,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     }
                                   } else if (value == 'get_help') {
                                     if (!context.mounted) return;
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Help section coming soon',
-                                        ),
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const CyberChatbotScreen(),
                                       ),
                                     );
                                   }

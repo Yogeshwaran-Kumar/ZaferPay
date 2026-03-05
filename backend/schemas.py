@@ -416,5 +416,17 @@ class ContactSyncResponse(BaseModel):
     message: str
 
 # ═══════════════════════════════════════════════════════════════════════════
+# CHATBOT SCHEMAS
+# ═══════════════════════════════════════════════════════════════════════════
+
+class ChattingMessageHistory(BaseModel):
+    role: str
+    content: str
+
+class ChatbotRequest(BaseModel):
+    message: str
+    history: List[dict] = []
+
+# ═══════════════════════════════════════════════════════════════════════════
 # END OF FILE
 # ═══════════════════════════════════════════════════════════════════════════

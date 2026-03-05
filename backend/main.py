@@ -13,6 +13,8 @@ import random
 import json
 import traceback
 from sqlalchemy.orm import joinedload
+import os
+import google.generativeai as genai
 
 # AI Auto-Learning Scheduler
 import daily_summary
@@ -22,6 +24,10 @@ try:
 except ImportError:
     AI_SCHEDULER_AVAILABLE = False
     print("⚠️ ai_scheduler not available")
+
+import dotenv
+dotenv.load_dotenv(override=True)
+
 # Trigger reload 2
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -3342,6 +3348,53 @@ def get_admin_panel():
     # We serve the page, and the JS should handle the token
     with open("admin.html", "r") as f:
         return f.read()
+
+@app.post("/chatbot")
+def chat_with_bot(
+    req: schemas.ChatbotRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    try:
+        import dotenv
+        dotenv.load_dotenv(override=True)
+        
+        api_key = os.getenv("GEMINI_API_KEY", "").strip()
+        if not api_key:
+            raise HTTPException(status_code=500, detail="Gemini API key not configured")
+        
+        genai.configure(api_key=api_key)
+        
+        system_instruction = (
+            "You are the Cyber Help Chatbot for ZaferPay. Your primary job is to assist users with "
+            "UPI-related fraud complaints, transaction issues, and cybercrime reporting. "
+            "You MUST gracefully and politely answer common greetings (like 'hi', 'hello', 'good morning', etc.). "
+            "However, you MUST strictly refuse to answer ANY questions that are not related to UPI, "
+            "banking, transactions, cyber fraud, or your own basic capabilities. If a user asks a non-related "
+            "question, apologize politely and state that you can only assist with UPI and fraud-related queries."
+        )
+        
+        model = genai.GenerativeModel("gemini-2.5-flash", system_instruction=system_instruction) # Attempting to use the flash model from models.txt
+        
+        formatted_history = []
+        for msg in req.history:
+            role = "model" if msg.get("role") == "assistant" else "user"
+            formatted_history.append({"role": role, "parts": [msg.get("content", "")]})
+            
+        chat = model.start_chat(history=formatted_history)
+        response = chat.send_message(req.message)
+        
+        return {"reply": response.text}
+    except Exception as e:
+        print(f"Chatbot error: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        error_msg = str(e)
+        if "429" in error_msg or "ResourceExhausted" in error_msg or "Quota exceeded" in error_msg:
+             return {"reply": "I'm receiving too many requests right now and have reached my limit. Please try again in about a minute!"}
+             
+        raise HTTPException(status_code=500, detail="Failed to process chatbot request")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # END OF FILE
