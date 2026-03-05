@@ -855,6 +855,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       ),
                                       const SizedBox(height: 24),
 
+                                      // Account Type Badge
+                                      Builder(
+                                        builder: (context) {
+                                          final isPersonal =
+                                              MccHelper.isPersonal(
+                                                _user!['mcc'],
+                                              );
+                                          return Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 8,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: isPersonal
+                                                  ? const Color(
+                                                      0xFF1A73E8,
+                                                    ) // Google Blue
+                                                  : Colors.orange,
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  isPersonal
+                                                      ? Icons.person
+                                                      : Icons
+                                                            .storefront_outlined,
+                                                  size: 18,
+                                                  color: Colors.white,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  isPersonal
+                                                      ? 'Personal Account'
+                                                      : 'Merchant Account',
+                                                  style: GoogleFonts.outfit(
+                                                    color: Colors.white,
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                      const SizedBox(height: 16),
+
                                       // QR Code
                                       Container(
                                         padding: const EdgeInsets.all(16),
