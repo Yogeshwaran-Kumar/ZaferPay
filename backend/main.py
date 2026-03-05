@@ -3129,6 +3129,31 @@ def submit_complaint(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
+@app.get("/complaints/check/{transaction_id}", response_model=schemas.ComplaintCheckResponse)
+def check_complaint(
+    transaction_id: str,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Check if the user has already reported this transaction"""
+    existing = db.query(models.UserFraudReport).filter(
+        models.UserFraudReport.user_id == current_user.id,
+        models.UserFraudReport.transaction_id == transaction_id
+    ).first()
+    
+    if existing:
+        return {
+            "exists": True,
+            "status": existing.status,
+            "message": "A complaint has already been filed for this transaction."
+        }
+    
+    return {
+        "exists": False,
+        "status": None,
+        "message": "No existing complaint found."
+    }
+
 def get_current_admin(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

@@ -245,15 +245,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 16),
             _buildOptionItem(
-              icon: Icons.account_balance,
+              icon: Icons.account_balance_outlined,
               title: 'Bank account',
               subtitle: '1 account',
               onTap: () {
                 // Future: Navigate to bank accounts
               },
             ),
-
-            const SizedBox(height: 32),
+            _buildOptionItem(
+              icon: Icons.supervised_user_circle_outlined,
+              title: 'UPI Circle',
+              subtitle: 'Share your account with others',
+              onTap: () {
+                // Future: Navigate to UPI Circle management
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('UPI Circle feature coming soon'),
+                  ),
+                );
+              },
+            ),
 
             // Menu Options List
             _buildOptionItem(

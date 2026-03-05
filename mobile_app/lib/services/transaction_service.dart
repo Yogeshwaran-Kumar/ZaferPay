@@ -469,6 +469,21 @@ class TransactionService {
     }
   }
 
+  Future<Map<String, dynamic>> checkComplaintExists(
+    String transactionId,
+  ) async {
+    try {
+      final response = await _apiClient.get('/complaints/check/$transactionId');
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+      return {'exists': false};
+    } catch (e) {
+      if (kDebugMode) print("Check Complaint Error: $e");
+      return {'exists': false};
+    }
+  }
+
   // --- Payment Requests ---
 
   /// Request money from another user

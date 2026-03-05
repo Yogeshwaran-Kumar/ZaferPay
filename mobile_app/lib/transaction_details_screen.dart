@@ -14,6 +14,7 @@ import 'services/api_client.dart';
 import 'services/auth_service.dart';
 import 'services/transaction_service.dart';
 import 'services/user_service.dart';
+import 'api_service.dart';
 import 'report_complaint_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'utils.dart';
@@ -51,6 +52,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
   // Request state tracking
   String? _requestStatus; // null, "pending", "paid", "cancelled"
   int? _existingRequestId;
+  bool _isCapturing = false;
 
   @override
   void initState() {
@@ -81,6 +83,13 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
 
   Future<void> _captureAndShare() async {
     try {
+      setState(() {
+        _isCapturing = true;
+      });
+
+      // Wait for UI to update (remove buttons)
+      await Future.delayed(const Duration(milliseconds: 50));
+
       RenderRepaintBoundary boundary =
           _globalKey.currentContext!.findRenderObject()
               as RenderRepaintBoundary;
@@ -110,6 +119,12 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     } catch (e) {
       debugPrint('Error sharing: $e');
       MyApp.isSharing = false;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCapturing = false;
+        });
+      }
     }
   }
 
@@ -213,6 +228,44 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
               size: 22,
             ),
             onPressed: _captureAndShare,
+          ),
+          Theme(
+            data: Theme.of(context).copyWith(
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+            ),
+            child: PopupMenuButton<String>(
+              icon: Icon(
+                Icons.more_vert_rounded,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+              offset: const Offset(0, 48),
+              color: isDark ? const Color(0xFF1F1F1F) : Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 8,
+              onSelected: (value) {
+                if (value == 'get_help') {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Help section coming soon')),
+                  );
+                }
+              },
+              itemBuilder: (BuildContext context) => [
+                PopupMenuItem<String>(
+                  value: 'get_help',
+                  child: Text(
+                    'Get help',
+                    style: GoogleFonts.outfit(
+                      color: isDark ? Colors.white : Colors.black87,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -492,8 +545,9 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                       const SizedBox(height: 28),
 
                       // ──── Action Buttons (GPay‑style outlined) ────
-                      if ((isDebit && !isMerchant && _showRequestButton) ||
-                          (status == 'SUCCESS' && _showReportButton))
+                      if (!_isCapturing &&
+                          ((isDebit && !isMerchant && _showRequestButton) ||
+                              (status == 'SUCCESS' && _showReportButton)))
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 20),
                           child: Row(
@@ -546,18 +600,11 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                                             alpha: 0.5,
                                           )
                                         : Colors.red.shade200,
-                                    onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              ReportComplaintScreen(
-                                                transaction: transaction,
-                                                currentUpiId: currentUpiId,
-                                              ),
-                                        ),
-                                      );
-                                    },
+                                    onTap: () => _handleReportTap(
+                                      context,
+                                      transaction,
+                                      currentUpiId,
+                                    ),
                                   ),
                                 ),
                             ],
@@ -567,51 +614,52 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                       const SizedBox(height: 16),
 
                       // Call Cyber Crime (1930) Button
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: InkWell(
-                          onTap: () {
-                            launchUrl(Uri.parse('tel:1930'));
-                          },
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF34A853),
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(
-                                    0xFF34A853,
-                                  ).withValues(alpha: 0.2),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(
-                                  Icons.call,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 10),
-                                Text(
-                                  'Call Cyber Crime (1930)',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
+                      if (!_isCapturing)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: InkWell(
+                            onTap: () {
+                              launchUrl(Uri.parse('tel:1930'));
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF34A853),
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(
+                                      0xFF34A853,
+                                    ).withValues(alpha: 0.2),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 4),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(
+                                    Icons.call,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    'Call Cyber Crime (1930)',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
-                      ),
 
                       const SizedBox(height: 28),
 
@@ -1213,5 +1261,96 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         );
       },
     );
+  }
+
+  Future<void> _handleReportTap(
+    BuildContext context,
+    Map<String, dynamic> transaction,
+    String currentUpiId,
+  ) async {
+    final txId = (transaction['transaction_id'] ?? transaction['id'])
+        .toString();
+
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final check = await ApiService().checkComplaintExists(txId);
+      if (context.mounted) Navigator.pop(context); // Remove loading
+
+      if (check['exists'] == true) {
+        // Show duplicate alert
+        if (context.mounted) {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: Text(
+                'Complaint Already Raised',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+              ),
+              content: Text(
+                'You have already raised a complaint for this transaction. For further official action, please use the Cyber Crime portal.',
+                style: GoogleFonts.outfit(),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text('Go Back', style: GoogleFonts.outfit()),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    launchUrl(
+                      Uri.parse(
+                        'https://cybercrime.gov.in/Webform/Crime_AuthoLogin.aspx?rnt=5',
+                      ),
+                      mode: LaunchMode.externalApplication,
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00B9F1),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: Text(
+                    'Continue to Cyber Crime Portal',
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+      } else {
+        // Navigate to report screen
+        if (context.mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ReportComplaintScreen(
+                transaction: transaction,
+                currentUpiId: currentUpiId,
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // Remove loading if error
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error checking complaint status')),
+        );
+      }
+    }
   }
 }

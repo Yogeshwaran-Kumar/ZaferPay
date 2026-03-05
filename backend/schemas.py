@@ -351,6 +351,11 @@ class TransactionAuditResponse(BaseModel):
     ip_address: Optional[str] = None
     decrypted_at: datetime
 
+class ComplaintCheckResponse(BaseModel):
+    exists: bool
+    status: Optional[str] = None
+    message: str
+
 class ComplaintCreate(BaseModel):
     transaction_id: str
     reported_user_upi: str

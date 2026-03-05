@@ -9,7 +9,7 @@ class ApiClient {
   // Default URLs
   static String get _defaultBaseUrl {
     if (kIsWeb) return 'http://127.0.0.1:8000';
-    return 'https://orders-evaluating-routers-mortgage.trycloudflare.com';
+    return 'https://indiana-instructor-strategy-perhaps.trycloudflare.com';
   }
 
   static const Duration _timeout = Duration(seconds: 30);

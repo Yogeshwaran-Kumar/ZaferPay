@@ -398,12 +398,43 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
           ),
         ),
         actions: [
-          IconButton(
-            icon: Icon(
-              Icons.more_vert,
-              color: isDark ? Colors.white : Colors.black87,
+          Theme(
+            data: Theme.of(context).copyWith(
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
             ),
-            onPressed: () {},
+            child: PopupMenuButton<String>(
+              icon: Icon(
+                Icons.more_vert_rounded,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+              offset: const Offset(0, 48),
+              color: isDark ? const Color(0xFF1F1F1F) : Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 8,
+              onSelected: (value) {
+                if (value == 'get_help') {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Help section coming soon')),
+                  );
+                }
+              },
+              itemBuilder: (BuildContext context) => [
+                PopupMenuItem<String>(
+                  value: 'get_help',
+                  child: Text(
+                    'Get help',
+                    style: GoogleFonts.outfit(
+                      color: isDark ? Colors.white : Colors.black87,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

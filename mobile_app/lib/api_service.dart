@@ -229,6 +229,9 @@ class ApiService {
     transactionAmount: transactionAmount,
   );
 
+  Future<Map<String, dynamic>> checkComplaintExists(String transactionId) =>
+      _tx.checkComplaintExists(transactionId);
+
   // --- Notifications ---
   Future<void> markRead(int senderId) async {
     try {
