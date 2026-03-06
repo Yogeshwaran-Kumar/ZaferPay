@@ -31,6 +31,11 @@ class _AmountScreenState extends State<AmountScreen> {
   String? _rawMcc;
   String? _paymentSource;
 
+  // UPI Circle State
+  List<dynamic> _joinedCircles = [];
+  dynamic
+  _selectedCircle; // Selected circle object, null means Personal Balance
+
   final ApiService _api = ApiService();
   final _apiClient = ApiClient();
   late final _authService = AuthService(_apiClient);
@@ -219,6 +224,9 @@ class _AmountScreenState extends State<AmountScreen> {
 
         // Calculate amount spent in this period using cached history
         _recalcSpentInPeriod(userData);
+
+        // Load UPI Circles (New)
+        _loadCircles();
       }
     }
 
@@ -311,6 +319,17 @@ class _AmountScreenState extends State<AmountScreen> {
     }
   }
 
+  Future<void> _loadCircles() async {
+    final data = await _api.getCircleStatus();
+    if (mounted) {
+      setState(() {
+        _joinedCircles = (data['joined_circles'] ?? [])
+            .where((c) => c['status'] == 'ACTIVE')
+            .toList();
+      });
+    }
+  }
+
   void _recalcSpentInPeriod(Map<String, dynamic> userData) {
     if (_spendingLimit == null || _spendingLimit! <= 0) return;
 
@@ -382,8 +401,8 @@ class _AmountScreenState extends State<AmountScreen> {
       return;
     }
 
-    // Balance Validation
-    if (_balance != null && amount > _balance!) {
+    // Balance Validation (skip for UPI Circle payments — parent's balance is used)
+    if (_selectedCircle == null && _balance != null && amount > _balance!) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("Insufficient balance"),
@@ -558,7 +577,9 @@ class _AmountScreenState extends State<AmountScreen> {
         'skipFraudCheck': _isRisk, // Already checked
         'acknowledgedRisk': _isRisk ? _riskScore : null,
         'paymentRequestId': _paymentRequestId,
-        'payment_source': _paymentSource,
+        'paymentSource': _paymentSource,
+        'isCirclePayment': _selectedCircle != null,
+        'circleId': _selectedCircle != null ? _selectedCircle['id'] : null,
       },
     );
 
@@ -1441,7 +1462,12 @@ class _AmountScreenState extends State<AmountScreen> {
                       height: (_isAnalyzingRisk || _hasAnalyzedRisk) ? 16 : 40,
                     ),
 
-                    // 3. Powered By Info (Visible typically when not analyzing)
+                    // 4. Payment Source Selector (New for UPI Circle)
+                    if (_joinedCircles.isNotEmpty &&
+                        !_isAnalyzingRisk &&
+                        !_hasAnalyzedRisk)
+                      _buildPaymentSourceSelector(isDark),
+
                     if (!_isAnalyzingRisk && !_hasAnalyzedRisk)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 24),
@@ -1692,6 +1718,107 @@ class _AmountScreenState extends State<AmountScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildPaymentSourceSelector(bool isDark) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark
+            ? const Color(0xFF1E2630)
+            : Colors.blue.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? Colors.grey[800]!
+              : Colors.blue.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "CHOOSE PAYMENT SOURCE",
+            style: GoogleFonts.outfit(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: Colors.blue,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<dynamic>(
+              value: _selectedCircle,
+              isExpanded: true,
+              dropdownColor: isDark ? const Color(0xFF1E2630) : Colors.white,
+              onChanged: (val) {
+                setState(() {
+                  _selectedCircle = val;
+                });
+              },
+              items: [
+                DropdownMenuItem<dynamic>(
+                  value: null,
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.account_balance_wallet,
+                        size: 20,
+                        color: Colors.blue,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        "Personal Balance (₹${_balance?.toStringAsFixed(2) ?? '0.00'})",
+                        style: GoogleFonts.outfit(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                ..._joinedCircles.map((circle) {
+                  final limit = circle['monthly_limit'];
+                  final spend = circle['current_monthly_spend'];
+                  final remaining = limit - spend;
+                  return DropdownMenuItem<dynamic>(
+                    value: circle,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.group, size: 20, color: Colors.orange),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              "${circle['primary_user_name']}'s Circle",
+                              style: GoogleFonts.outfit(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            Text(
+                              "Limit Left: ₹${remaining.toStringAsFixed(0)}",
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

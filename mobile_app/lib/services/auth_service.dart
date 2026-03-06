@@ -271,11 +271,14 @@ class AuthService {
     }
   }
 
-  Future<PinVerificationStatus> verifyUpiPin(String pin) async {
+  Future<PinVerificationStatus> verifyUpiPin(
+    String pin, {
+    bool isCirclePayment = false,
+  }) async {
     try {
       final response = await _apiClient.post(
         '/auth/verify-upi-pin',
-        body: {'pin': pin},
+        body: {'pin': pin, 'is_circle_payment': isCirclePayment},
       );
       if (response.statusCode == 200) {
         return PinVerificationStatus.success;

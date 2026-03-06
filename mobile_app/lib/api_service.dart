@@ -61,8 +61,10 @@ class ApiService {
   Future<bool> enableMpin(String newPin) => _auth.enableMpin(newPin);
   Future<bool> changeUpiPin(String currentPin, String newPin) =>
       _auth.changeUpiPin(currentPin, newPin);
-  Future<PinVerificationStatus> verifyUpiPin(String pin) =>
-      _auth.verifyUpiPin(pin);
+  Future<PinVerificationStatus> verifyUpiPin(
+    String pin, {
+    bool isCirclePayment = false,
+  }) => _auth.verifyUpiPin(pin, isCirclePayment: isCirclePayment);
   Future<List<dynamic>?> getLoginHistory() => _auth.getLoginHistory();
   Future<bool> updateSettings({
     bool? biometricEnabled,
@@ -113,6 +115,20 @@ class ApiService {
     return home?['user'];
   }
 
+  // --- UPI Circle Delegates ---
+  Future<Map<String, dynamic>> getCircleStatus() => _user.getCircleStatus();
+  Future<Map<String, dynamic>> inviteToCircle(
+    String upiId,
+    double limit,
+    String type,
+  ) => _user.inviteToCircle(upiId, limit, type);
+  Future<bool> respondToCircleInvite(int inviteId, String action) =>
+      _user.respondToCircleInvite(inviteId, action);
+  Future<bool> updateCircleLimit(int circleId, double newLimit) =>
+      _user.updateCircleLimit(circleId, newLimit);
+  Future<bool> removeCircleMember(int circleId) =>
+      _user.removeCircleMember(circleId);
+
   // --- Transaction Delegates ---
   Future<Map<String, dynamic>> createTransactionOptimistic(
     String r,
@@ -126,6 +142,8 @@ class ApiService {
     int? requestId,
     String? paymentSource,
     bool isScreenSharing = false,
+    bool isCirclePayment = false,
+    int? circleId,
   }) => _tx.createTransactionOptimistic(
     r,
     a,
@@ -138,6 +156,8 @@ class ApiService {
     requestId: requestId,
     paymentSource: paymentSource,
     isScreenSharing: isScreenSharing,
+    isCirclePayment: isCirclePayment,
+    circleId: circleId,
   );
 
   // Pre-PIN Risk Analysis

@@ -228,6 +228,10 @@ class Transaction(Base):
     ip_hash = Column(String, nullable=True)  # HMAC-SHA256 hash for lookup
     ip_encrypted = Column(String, nullable=True)  # AES-256 encrypted for audit
     
+    # UPI Circle: Who actually made the payment?
+    # If null, sender_id did it. If set, this user did it using sender_id's money.
+    initiated_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    
     # Indexes for faster queries
     __table_args__ = (
         Index('ix_transactions_sender_id', 'sender_id'),
@@ -239,6 +243,7 @@ class Transaction(Base):
     
     sender = relationship("User", foreign_keys=[sender_id])
     receiver = relationship("User", foreign_keys=[receiver_id])
+    initiated_by = relationship("User", foreign_keys=[initiated_by_id])
 
 
 class SenderProfile(Base):
@@ -535,6 +540,37 @@ class UserFraudReport(Base):
     __table_args__ = (
         Index('idx_user_tx', 'user_id', 'transaction_id', unique=True),
     )
+
+# ═══════════════════════════════════════════════════════════════════════════
+# UPI CIRCLE MODELS
+# ═══════════════════════════════════════════════════════════════════════════
+
+class UPICircle(Base):
+    """
+    UPI Circle Model
+    Links a Primary User (The Payer) to a Secondary User (The Spender).
+    """
+    __tablename__ = "upi_circles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    primary_user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    secondary_user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    
+    # Limits & Spending
+    monthly_limit = Column(Float, default=5000.0) # Standard limit
+    current_monthly_spend = Column(Float, default=0.0)
+    
+    # Settings
+    delegation_type = Column(String, default="FULL") # FULL (Auto) or PARTIAL (Approve)
+    status = Column(String, default="PENDING") # PENDING, ACTIVE, REVOKED
+    
+    created_at = Column(DateTime, default=datetime.datetime.now)
+    last_spent_at = Column(DateTime, nullable=True)
+    
+    # Relationships
+    primary_user = relationship("User", foreign_keys=[primary_user_id], backref="primary_circle")
+    secondary_user = relationship("User", foreign_keys=[secondary_user_id], backref="secondary_circle")
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # ADMIN MODELS

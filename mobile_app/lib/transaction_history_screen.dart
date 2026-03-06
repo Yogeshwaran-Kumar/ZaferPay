@@ -150,7 +150,9 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
     // 3. Payment Type (Sent/Received)
     if (_selectedPaymentType != null && _user != null) {
       temp = temp.where((tx) {
-        final isDebit = tx['sender_upi_id'] == _user!['upi_id'];
+        final isDebit =
+            tx['sender_upi_id'] == _user!['upi_id'] ||
+            tx['initiated_by_upi'] == _user!['upi_id'];
         if (_selectedPaymentType == 'Money sent') return isDebit;
         if (_selectedPaymentType == 'Money received') return !isDebit;
         return true;
@@ -248,7 +250,9 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
     if (_user == null) return 0;
 
     for (var tx in monthTxs) {
-      final isDebit = tx['sender_upi_id'] == _user!['upi_id'];
+      final isDebit =
+          tx['sender_upi_id'] == _user!['upi_id'] ||
+          tx['initiated_by_upi'] == _user!['upi_id'];
       final amount = (tx['amount'] as num).toDouble();
       if (tx['status'] == 'SUCCESS') {
         if (isDebit) {
@@ -1016,7 +1020,9 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
   Widget _buildTransactionItem(Map<String, dynamic> tx) {
     if (_user == null) return const SizedBox();
 
-    final isDebit = tx['sender_upi_id'] == _user!['upi_id'];
+    final isDebit =
+        tx['sender_upi_id'] == _user!['upi_id'] ||
+        tx['initiated_by_upi'] == _user!['upi_id'];
     final displayName = isDebit
         ? (tx['receiver_name'] as String? ?? tx['receiver_upi_id'] ?? 'Unknown')
               .toString()
@@ -1119,9 +1125,37 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    dateStr,
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                  Row(
+                    children: [
+                      Text(
+                        dateStr,
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 13,
+                        ),
+                      ),
+                      if (tx['initiated_by_name'] != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            "By ${tx['initiated_by_name']}",
+                            style: const TextStyle(
+                              color: Colors.blue,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),

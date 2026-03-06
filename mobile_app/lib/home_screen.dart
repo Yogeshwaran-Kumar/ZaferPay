@@ -42,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> _recentPeople = [];
   List<dynamic> _recentMerchants = [];
   List<dynamic> _pendingRequests = [];
+  List<dynamic> _pendingCircleInvites = [];
   Map<String, dynamic>? _dailySummary;
   bool _isLoading = true;
   bool _isPeopleExpanded = false;
@@ -80,6 +81,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _recentPeople = List.from(cached['people'] ?? []);
       _recentMerchants = List.from(cached['merchants'] ?? []);
       _pendingRequests = cached['pending_requests'] ?? [];
+      _pendingCircleInvites = cached['pending_circle_invites'] ?? [];
       _dailySummary = cached['daily_summary'];
 
       // Apply read overrides to cached data to prevent stale badges from showing
@@ -229,6 +231,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (pending != null) {
         _pendingRequests = pending;
       }
+      _pendingCircleInvites = data['pending_circle_invites'] ?? [];
       _dailySummary = data['daily_summary'];
 
       // Note: System badge clearing is now exclusively handled by NotificationService
@@ -366,6 +369,12 @@ class _HomeScreenState extends State<HomeScreen> {
               if (_pendingRequests.isNotEmpty) ...[
                 const SizedBox(height: 24),
                 _buildPendingRequestsSection(isDark, textColor),
+              ],
+
+              // Pending Circle Invites Banner
+              if (_pendingCircleInvites.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                _buildPendingCircleInvitesSection(isDark, textColor),
               ],
 
               const SizedBox(height: 32),
@@ -1318,6 +1327,225 @@ class _HomeScreenState extends State<HomeScreen> {
                   ), // Container
                 ), // GestureDetector
               ); // Padding
+            })),
+            const SizedBox(height: 4),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPendingCircleInvitesSection(bool isDark, Color textColor) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark
+              ? const Color(0xFF9C27B0).withValues(alpha: 0.1) // Purple tint
+              : const Color(0xFF9C27B0).withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isDark
+                ? const Color(0xFF9C27B0).withValues(alpha: 0.3)
+                : const Color(0xFF9C27B0).withValues(alpha: 0.2),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF9C27B0).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.supervised_user_circle_rounded,
+                      color: isDark
+                          ? const Color(0xFFE1BEE7)
+                          : const Color(0xFF7B1FA2),
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '${_pendingCircleInvites.length} Circle Invite${_pendingCircleInvites.length > 1 ? 's' : ''}',
+                      style: GoogleFonts.outfit(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        color: isDark
+                            ? const Color(0xFFCE93D8)
+                            : const Color(0xFF6A1B9A),
+                      ),
+                    ),
+                  ),
+                  if (_pendingCircleInvites.length > 2)
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.pushNamed(
+                          context,
+                          '/upi-circle',
+                        ).then((_) => _loadData(showLoading: false));
+                      },
+                      child: Text(
+                        "View all",
+                        style: GoogleFonts.outfit(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? const Color(0xFFCE93D8)
+                              : const Color(0xFF6A1B9A),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+            // Request items (show max 2)
+            ...(_pendingCircleInvites.take(2).map((invite) {
+              final name =
+                  invite['primary_user_name'] ??
+                  invite['primary_user_upi'] ??
+                  'Someone';
+              final limit = invite['monthly_limit'] ?? 0;
+              final inviteId = invite['id'];
+
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.black.withValues(alpha: 0.2)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.transparent
+                          : const Color(0xFF9C27B0).withValues(alpha: 0.1),
+                    ),
+                    boxShadow: [
+                      if (!isDark)
+                        BoxShadow(
+                          color: const Color(
+                            0xFF9C27B0,
+                          ).withValues(alpha: 0.05),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      // Info
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '$name',
+                              style: GoogleFonts.outfit(
+                                color: isDark ? Colors.white : Colors.black87,
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'invited you to their UPI Circle (₹${formatAmount(limit)}/mo)',
+                              style: GoogleFonts.outfit(
+                                color: isDark
+                                    ? Colors.white70
+                                    : Colors.grey.shade700,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Action buttons
+                      TextButton(
+                        onPressed: () async {
+                          // OPTIMISTIC UI: Remove immediately (<0.5s update)
+                          setState(() {
+                            _pendingCircleInvites.remove(invite);
+                          });
+                          final success = await _api.respondToCircleInvite(
+                            inviteId,
+                            'REJECT',
+                          );
+                          if (success && mounted) {
+                            _loadData(showLoading: false);
+                          } else if (!success && mounted) {
+                            // Revert on failure
+                            _loadData(showLoading: false);
+                          }
+                        },
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red.shade400,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          'Decline',
+                          style: GoogleFonts.outfit(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: () async {
+                          // OPTIMISTIC UI: Remove immediately (<0.5s update)
+                          setState(() {
+                            _pendingCircleInvites.remove(invite);
+                          });
+                          final success = await _api.respondToCircleInvite(
+                            inviteId,
+                            'ACCEPT',
+                          );
+                          if (success && mounted) {
+                            _loadData(showLoading: false);
+                          } else if (!success && mounted) {
+                            // Revert on failure
+                            _loadData(showLoading: false);
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF9C27B0),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 10,
+                          ),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: Text(
+                          'Accept',
+                          style: GoogleFonts.outfit(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
             })),
             const SizedBox(height: 4),
           ],

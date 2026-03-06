@@ -562,6 +562,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 acknowledgedRisk: args['acknowledgedRisk'],
                 requestId: args['paymentRequestId'], // Pass Request ID
                 paymentSource: args['payment_source'], // Pass Telemetry
+                isCirclePayment: args['isCirclePayment'] ?? false,
+                circleId: args['circleId'],
               );
             },
             '/conversation': (context) {

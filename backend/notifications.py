@@ -60,3 +60,29 @@ def send_fcm_notification(token: str, title: str, body: str, data: dict = None):
     except Exception as e:
         logger.error(f"❌ Error sending notification: {e}")
         return False
+
+import models
+
+def send_push_notification(db, user_id: int, title: str, message: str, notif_type: str = "info"):
+    """
+    Saves a notification to the database and attempts to send a FCM push if configured.
+    Uses db.flush() instead of db.commit() so the notification is committed
+    together with the caller's transaction.
+    """
+    try:
+        new_notif = models.Notification(
+            user_id=user_id,
+            title=title,
+            message=message,
+            type=notif_type
+        )
+        db.add(new_notif)
+        db.flush()  # Write to DB but let the caller commit
+        
+        logger.info(f"Notification saved for user {user_id}: {title} - {message}")
+        return True
+    except Exception as e:
+        logger.error(f"Error saving push notification: {e}")
+        # Do NOT rollback here — the caller controls the transaction
+        return False
+

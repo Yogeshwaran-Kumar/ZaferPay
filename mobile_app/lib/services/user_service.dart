@@ -251,6 +251,81 @@ class UserService {
     return _phoneRamCache[phone];
   }
 
+  // --- UPI Circle ---
+  Future<Map<String, dynamic>> getCircleStatus() async {
+    try {
+      final response = await _apiClient.get('/circle/status');
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+    } catch (e) {
+      if (kDebugMode) print("Circle Status Error: $e");
+    }
+    return {'my_circles': [], 'joined_circles': []};
+  }
+
+  Future<Map<String, dynamic>> inviteToCircle(
+    String upiId,
+    double limit,
+    String type,
+  ) async {
+    try {
+      final response = await _apiClient.post(
+        '/circle/invite',
+        body: {
+          'secondary_upi_id': upiId,
+          'monthly_limit': limit,
+          'delegation_type': type,
+        },
+      );
+
+      final data = json.decode(response.body);
+      if (response.statusCode == 200) {
+        return {'success': true, 'message': data['msg'] ?? 'Invitation sent'};
+      } else {
+        return {
+          'success': false,
+          'message': data['detail'] ?? 'Failed to send invitation',
+        };
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Network error. Please try again.'};
+    }
+  }
+
+  Future<bool> respondToCircleInvite(int inviteId, String action) async {
+    try {
+      final response = await _apiClient.post(
+        '/circle/respond',
+        body: {'invitation_id': inviteId, 'action': action},
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> updateCircleLimit(int circleId, double newLimit) async {
+    try {
+      final response = await _apiClient.put(
+        '/circle/update-limit',
+        body: {'circle_id': circleId, 'new_limit': newLimit},
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> removeCircleMember(int circleId) async {
+    try {
+      final response = await _apiClient.delete('/circle/remove/$circleId');
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> clearCaches() async {
     _homeRamCache = null;
     _phoneRamCache.clear();

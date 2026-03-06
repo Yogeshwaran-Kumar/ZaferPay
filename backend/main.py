@@ -598,10 +598,15 @@ def check_mobile(
                 "has_device_conflict": False
             }
         
-        # Check if PIN is set
-        # Check if PIN is set in BankAccount
-        bank_pin = user.bank_account.hashed_pin if user.bank_account else None
-        if not bank_pin or bank_pin == "NULL":
+        # Check if PIN is set (Either mPIN or Bank PIN)
+        # Child accounts only have mPIN, while normal accounts have both.
+        # If either is present, the user is "existing".
+        has_mpin = user.hashed_mpin is not None and user.hashed_mpin != "NULL"
+        has_bank_pin = False
+        if user.bank_account:
+             has_bank_pin = user.bank_account.hashed_pin is not None and user.bank_account.hashed_pin != "NULL"
+        
+        if not has_mpin and not has_bank_pin:
             return {
                 "exists": True, 
                 "status": "new", 
@@ -760,15 +765,7 @@ def set_pin(
     user.pin_updated_at = datetime.utcnow()
     if user.bank_account:
         user.bank_account.hashed_pin = hashed_req_pin
-    else:
-        # Create BankAccount if it doesn't exist (migration case)
-        bank_account = models.BankAccount(
-            user_id=user.id,
-            bank_name=models.detect_bank(user.upi_id),
-            upi_id=user.upi_id,
-            hashed_pin=hashed_req_pin
-        )
-        db.add(bank_account)
+    
     db.commit()
     return {"msg": "PIN set successfully"}
 
@@ -1310,10 +1307,14 @@ def verify_upi_pin(
     """
     Fast pre-verification of UPI PIN before high-risk actions.
     """
-    if not current_user.bank_account or not current_user.bank_account.hashed_pin:
-        raise HTTPException(status_code=400, detail="No UPI PIN set.")
+    # Determine which hash to verify against
+    # For Circle payments, use the App mPIN (as secondary users don't have bank accounts)
+    target_hash = current_user.hashed_mpin if (req.is_circle_payment or not current_user.bank_account) else current_user.bank_account.hashed_pin
+    
+    if not target_hash:
+        raise HTTPException(status_code=400, detail="No PIN set for this selection.")
         
-    if not auth.verify_password(req.pin, current_user.bank_account.hashed_pin):
+    if not auth.verify_password(req.pin, target_hash):
         current_user.last_active_at = datetime.now()
         db.commit()
         raise HTTPException(status_code=401, detail="Incorrect UPI PIN")
@@ -1384,6 +1385,19 @@ def analyze_transaction_risk(
             receiver_name=receiver_name,
             receiver_exists=True,
             detail={"message": "Cannot send money to yourself", "risk": "HIGH"}
+        )
+
+    # Restriction check in analysis phase
+    is_receiver_child = receiver.bank_account is None
+    if is_receiver_child:
+        return schemas.TransactionAnalyzeResponse(
+            risk_score="FRAUD_BLOCKED",
+            risk_reason="CHILD_ACCOUNT_RESTRICTION",
+            is_blocked=True,
+            receiver_name=receiver_name,
+            receiver_exists=True,
+            is_bypassable=False,
+            detail={"message": "Cannot send money directly to a child account. Please pay the parent instead.", "risk": "FRAUD_BLOCKED"}
         )
     
     # 2. Run Fraud Engine Analysis (without creating transaction)
@@ -1485,9 +1499,73 @@ def create_transaction(
                         )
                 raise HTTPException(status_code=409, detail="Transaction already processed")
     
-    # 0. Verify PIN from BankAccount (outside lock - fail fast)
-    bank_pin = current_user.bank_account.hashed_pin if current_user.bank_account else None
-    if not bank_pin or not auth.verify_password(tx.pin, bank_pin):
+    # Identifiers for the logic below
+    sender_id = current_user.id
+    is_circle = tx.is_circle_payment and tx.circle_id is not None
+    circle = None
+
+    if is_circle:
+        # UPI CIRCLE LOGIC
+        circle = db.query(models.UPICircle).filter(
+            models.UPICircle.id == tx.circle_id,
+            models.UPICircle.secondary_user_id == current_user.id,
+            models.UPICircle.status == "ACTIVE"
+        ).first()
+        
+        if not circle:
+            raise HTTPException(status_code=400, detail="Invalid or inactive UPI Circle")
+            
+        if circle.current_monthly_spend + tx.amount > circle.monthly_limit:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Circle monthly limit exceeded given by the parent account. Remaining: ₹{circle.monthly_limit - circle.current_monthly_spend}"
+            )
+            
+        # Check Delegation Type
+        if circle.delegation_type == "PARTIAL":
+            # STOP: Create a payment request for approval instead of moving money
+            new_request = models.PaymentRequest(
+                requester_id=current_user.id, # The Son
+                payer_id=circle.primary_user_id, # The Father
+                amount=tx.amount,
+                status="pending",
+                reason="Circle Approval Required",
+                description=f"Payment to {tx.receiver_upi_id} via Circle",
+                timestamp=datetime.now()
+            )
+            db.add(new_request)
+            db.commit()
+            
+            # Notify Primary User
+            notifications.send_push_notification(
+                db,
+                circle.primary_user_id,
+                "Circle Payment Approval",
+                f"{current_user.username} wants to pay ₹{tx.amount} to {tx.receiver_upi_id}. Tap to approve.",
+                "circle_approval"
+            )
+            db.commit()  # Commit the notification before raising
+            
+            raise HTTPException(
+                status_code=202, # Accepted for processing (but not complete)
+                detail={
+                    "message": "Approval request sent to primary account holder",
+                    "status": "PENDING_APPROVAL",
+                    "request_id": new_request.id
+                }
+            )
+        
+        # If FULL delegation, the ACTUAL sender is the Primary User
+        sender_id = circle.primary_user_id
+
+    # Verify PIN (Argon2id)
+    # NPCI Rule: Secondary users use App mPIN for Circle payments
+    target_hash = current_user.hashed_mpin if (tx.is_circle_payment or not current_user.bank_account) else current_user.bank_account.hashed_pin
+    
+    if not target_hash:
+        return {"status": "FAILED", "detail": "No PIN set"}
+
+    if not auth.verify_password(tx.pin, target_hash):
         raise HTTPException(status_code=401, detail="Incorrect PIN")
 
     # Custom Spending Limit Check
@@ -1497,7 +1575,7 @@ def create_transaction(
         
         start_time = datetime.now() - timedelta(days=limit_period_days)
         spent_sum = db.query(func.sum(models.Transaction.amount)).filter(
-            models.Transaction.sender_id == current_user.id,
+            (models.Transaction.sender_id == current_user.id) | (models.Transaction.initiated_by_id == current_user.id),
             models.Transaction.status == "SUCCESS",
             models.Transaction.timestamp >= start_time
         ).scalar() or 0.0
@@ -1508,6 +1586,11 @@ def create_transaction(
             if limit_period_days == 30: period_str = "Monthly"
             raise HTTPException(status_code=400, detail=f"{period_str} spending limit (₹{limit_amount}) reached.")
 
+    # Re-calculate sender object if it's a circle payment
+    effective_sender = current_user
+    if is_circle:
+        effective_sender = db.query(models.User).filter(models.User.id == sender_id).first()
+
     # 1. Validate Receiver (outside lock - fail fast)
     receiver = db.query(models.User).filter(models.User.upi_id == tx.receiver_upi_id).first()
     
@@ -1516,6 +1599,15 @@ def create_transaction(
             status_code=403, 
             detail="Transaction blocked. This account has been flagged for fraudulent activity."
         )
+
+    # Restriction: Cannot send money directly to a child account
+    if receiver:
+        is_receiver_child = receiver.bank_account is None
+        if is_receiver_child:
+            raise HTTPException(
+                status_code=403,
+                detail="Cannot send money directly to a child account. Please pay the parent instead."
+            )
 
     if not receiver:
         # AUTO-REGISTER EXTERNAL USER
@@ -1625,7 +1717,7 @@ def create_transaction(
     # Now we have the raw AI score from the features dictionary
     ai_score_value = fraud_features.get('ai_score', 0.0) if fraud_features else 0.0
     fraud_event = models.FraudEvent(
-        user_id=current_user.id,
+        user_id=effective_sender.id, # Use effective sender for fraud tracking
         transaction_id=None, # Will update after ID generation
         amount=tx.amount,
         ai_score=float(ai_score_value),
@@ -1645,8 +1737,9 @@ def create_transaction(
         
         failed_tx = models.Transaction(
             transaction_id=failed_tx_id,
-            sender_id=current_user.id,
+            sender_id=effective_sender.id,
             receiver_id=receiver.id,
+            initiated_by_id=current_user.id if is_circle else None,
             amount=tx.amount,
             status="FAILED",
             risk_score=risk_label,  # Should be String: 'SAFE', 'WARN', or 'HIGH'
@@ -1705,7 +1798,7 @@ def create_transaction(
         # We must lock both users to prevent race conditions.
         # DEADLOCK PREVENTION: Always lock users in ID order (smaller ID first)
         
-        first_id, second_id = sorted([current_user.id, receiver.id])
+        first_id, second_id = sorted([effective_sender.id, receiver.id])
         
         # Lock first user
         u1 = db.query(models.User).with_for_update().filter(models.User.id == first_id).first()
@@ -1716,7 +1809,7 @@ def create_transaction(
              raise HTTPException(status_code=404, detail="User not found during transaction lock")
              
         # Identify which is sender/receiver after locking
-        sender_user = u1 if u1.id == current_user.id else u2
+        sender_user = u1 if u1.id == effective_sender.id else u2
         receiver_user = u1 if u1.id == receiver.id else u2
         
         # Re-check balance (Critical!)
@@ -1738,6 +1831,7 @@ def create_transaction(
             transaction_id=transaction_id,
             sender_id=sender_user.id,
             receiver_id=receiver_user.id,
+            initiated_by_id=current_user.id if is_circle else None,
             amount=tx.amount,
             encrypted_amount=security.encrypt_value(tx.amount),
             status="SUCCESS",
@@ -1791,6 +1885,11 @@ def create_transaction(
             receiver_user.receiver_profile.total_received_amount += tx.amount
             receiver_user.receiver_profile.last_received_time = datetime.now()
 
+        # F. UPDATE CIRCLE LIMITS
+        if is_circle and circle:
+            circle.current_monthly_spend += tx.amount
+            circle.last_spent_at = datetime.now()
+
         # E. IDEMPOTENCY KEY
         if tx.idempotency_key:
             response_obj = {
@@ -1802,7 +1901,11 @@ def create_transaction(
                 "amount": tx.amount,
                 "status": "SUCCESS",
                 "risk_score": risk_label,
-                "timestamp": new_tx.timestamp.isoformat() 
+                "timestamp": new_tx.timestamp.isoformat(),
+                "sender_bank_name": sender_user.bank_name,
+                "receiver_bank_name": receiver_user.bank_name,
+                "initiated_by_name": current_user.username if is_circle else None,
+                "initiated_by_upi": current_user.upi_id if is_circle else None
             }
             new_idemp = models.IdempotencyKey(
                 key=tx.idempotency_key,
@@ -1931,6 +2034,13 @@ def create_transaction(
             # Don't fail the transaction if just the status update fails
             print(f"Failed to update PaymentRequest status: {e}") 
 
+    # Invalidate Cache for all parties to ensure immediate UI update
+    clear_home_cache(sender_user.id)
+    if receiver_user:
+        clear_home_cache(receiver_user.id)
+    if current_user.id != sender_user.id:
+        clear_home_cache(current_user.id)
+
     return schemas.TransactionResponse(
         transaction_id=new_tx.transaction_id,
         sender_upi_id=sender_user.upi_id,
@@ -1945,7 +2055,9 @@ def create_transaction(
         timestamp=new_tx.timestamp,
         note=new_tx.note,
         sender_bank_name=sender_user.bank_name,
-        receiver_bank_name=receiver_user.bank_name
+        receiver_bank_name=receiver_user.bank_name,
+        initiated_by_name=current_user.username if is_circle else None,
+        initiated_by_upi=current_user.upi_id if is_circle else None
     )
 
 
@@ -1953,6 +2065,11 @@ def create_transaction(
 # Key: user_id, Value: (timestamp, data)
 HOME_DATA_CACHE = {}
 CACHE_TTL = 5 # seconds
+
+def clear_home_cache(user_id: int):
+    """Force home data to re-fetch on next request by invalidating cache"""
+    if user_id in HOME_DATA_CACHE:
+        del HOME_DATA_CACHE[user_id]
 
 @app.get("/home-aggregate", response_model=schemas.HomeAggregateResponse)
 def get_home_aggregate(
@@ -1970,10 +2087,12 @@ def get_home_aggregate(
     # 1. Get History (Limit 10) - Eager Load
     history_txs = db.query(models.Transaction).options(
         joinedload(models.Transaction.sender), 
-        joinedload(models.Transaction.receiver)
+        joinedload(models.Transaction.receiver),
+        joinedload(models.Transaction.initiated_by)
     ).filter(
         (models.Transaction.sender_id == current_user.id) | 
-        (models.Transaction.receiver_id == current_user.id)
+        (models.Transaction.receiver_id == current_user.id) |
+        (models.Transaction.initiated_by_id == current_user.id)
     ).order_by(models.Transaction.timestamp.desc()).limit(10).all()
     
     # Calculate Unread Counts (Optimized: Single Pass or Group By)
@@ -2026,7 +2145,7 @@ def get_home_aggregate(
     ).scalar() or 0.0
     
     daily_sent = db.query(func.sum(models.Transaction.amount)).filter(
-        models.Transaction.sender_id == current_user.id,
+        (models.Transaction.sender_id == current_user.id) | (models.Transaction.initiated_by_id == current_user.id),
         models.Transaction.status == "SUCCESS",
         models.Transaction.timestamp >= start_time,
         models.Transaction.timestamp <= end_time
@@ -2040,7 +2159,7 @@ def get_home_aggregate(
     ).order_by(models.Transaction.timestamp.desc()).first()
     
     last_sent = db.query(models.Transaction.timestamp).filter(
-        models.Transaction.sender_id == current_user.id,
+        (models.Transaction.sender_id == current_user.id) | (models.Transaction.initiated_by_id == current_user.id),
         models.Transaction.status == "SUCCESS",
         models.Transaction.timestamp >= start_time,
         models.Transaction.timestamp <= end_time
@@ -2074,25 +2193,12 @@ def get_home_aggregate(
             receiver_mcc=t.receiver.mcc,
             note=t.note,
             sender_bank_name=t.sender.bank_name,
-            receiver_bank_name=t.receiver.bank_name
+            receiver_bank_name=t.receiver.bank_name,
+            initiated_by_name=t.initiated_by.username if t.initiated_by else None,
+            initiated_by_upi=t.initiated_by.upi_id if t.initiated_by else None
         ))
 
     # 2. Get Recent People (Limit 16)
-    people_query = text("""
-        SELECT u.id, u.username, u.mobile_encrypted, u.email_encrypted, u.upi_id, u.mcc, u.balance
-        FROM users u
-        JOIN (
-            SELECT 
-                CASE WHEN sender_id = :uid THEN receiver_id ELSE sender_id END as other_id,
-                MAX(timestamp) as last_tx
-            FROM transactions 
-            WHERE sender_id = :uid OR receiver_id = :uid
-            GROUP BY other_id
-        ) t ON u.id = t.other_id
-        WHERE (u.mcc IS NULL OR u.mcc = '' OR u.mcc = '0' OR u.mcc = '00' OR u.mcc = '000' OR u.mcc = '0000') AND u.id != :uid
-        ORDER BY t.last_tx DESC
-        LIMIT 16
-    """)
     # 2. Get Recent People (Limit 16)
     print(f"🔍 Fetching recent people for user {current_user.id}...")
     people_query = text("""
@@ -2100,10 +2206,14 @@ def get_home_aggregate(
         FROM users u
         JOIN (
             SELECT 
-                CASE WHEN sender_id = :uid THEN receiver_id ELSE sender_id END as other_id,
+                CASE 
+                    WHEN sender_id = :uid THEN receiver_id 
+                    WHEN initiated_by_id = :uid THEN receiver_id
+                    ELSE sender_id 
+                END as other_id,
                 MAX(timestamp) as last_tx
             FROM transactions 
-            WHERE sender_id = :uid OR receiver_id = :uid
+            WHERE sender_id = :uid OR receiver_id = :uid OR initiated_by_id = :uid
             GROUP BY other_id
         ) t ON u.id = t.other_id
         WHERE (u.mcc IS NULL OR u.mcc = '' OR u.mcc = '0' OR u.mcc = '00' OR u.mcc = '000' OR u.mcc = '0000') AND u.id != :uid
@@ -2136,10 +2246,14 @@ def get_home_aggregate(
         FROM users u
         JOIN (
             SELECT 
-                CASE WHEN sender_id = :uid THEN receiver_id ELSE sender_id END as other_id,
+                CASE 
+                    WHEN sender_id = :uid THEN receiver_id 
+                    WHEN initiated_by_id = :uid THEN receiver_id
+                    ELSE sender_id 
+                END as other_id,
                 MAX(timestamp) as last_tx
             FROM transactions 
-            WHERE sender_id = :uid OR receiver_id = :uid
+            WHERE sender_id = :uid OR receiver_id = :uid OR initiated_by_id = :uid
             GROUP BY other_id
         ) t ON u.id = t.other_id
         WHERE u.mcc IS NOT NULL AND u.mcc != '' AND u.mcc != '0' AND u.mcc != '00' AND u.mcc != '000' AND u.mcc != '0000' AND u.id != :uid
@@ -2172,12 +2286,36 @@ def get_home_aggregate(
     
     pending_list = [_build_payment_request_response(r) for r in pending_reqs]
 
+    # --- Pending UPI Circle Invites ---
+    pending_circles_query = db.query(models.UPICircle).filter(
+        models.UPICircle.secondary_user_id == current_user.id,
+        models.UPICircle.status == "PENDING"
+    ).all()
+    
+    pending_circle_list = []
+    for c in pending_circles_query:
+        primary = c.primary_user
+        secondary = c.secondary_user
+        pending_circle_list.append(schemas.UPICircleMemberResponse(
+            id=c.id,
+            primary_user_upi=primary.upi_id if primary else "",
+            primary_user_name=primary.username if primary else "",
+            secondary_user_upi=secondary.upi_id if secondary else "",
+            secondary_user_name=secondary.username if secondary else "",
+            monthly_limit=c.monthly_limit,
+            current_monthly_spend=0.0,
+            delegation_type=c.delegation_type,
+            status=c.status,
+            created_at=c.created_at
+        ))
+
     response_data = schemas.HomeAggregateResponse(
         user=current_user,
         history=history_list,
         people=people_list,
         merchants=merchants_list,
         pending_requests=pending_list,
+        pending_circle_invites=pending_circle_list,
         total_unread=total_unread_global,
         daily_summary=summary_schema
     )
@@ -2278,9 +2416,11 @@ def read_history(current_user: models.User = Depends(get_current_user), db: Sess
     # OPTIMIZATION: Eager load sender and receiver to prevent N+1 queries
     txs = db.query(models.Transaction).options(
         joinedload(models.Transaction.sender), 
-        joinedload(models.Transaction.receiver)
+        joinedload(models.Transaction.receiver),
+        joinedload(models.Transaction.initiated_by)
     ).filter(
         (models.Transaction.sender_id == current_user.id) | 
+        (models.Transaction.initiated_by_id == current_user.id) |
         (
             (models.Transaction.receiver_id == current_user.id) & 
             (models.Transaction.status != "FAILED")
@@ -2308,7 +2448,9 @@ def read_history(current_user: models.User = Depends(get_current_user), db: Sess
             receiver_mcc=t.receiver.mcc,
             note=t.note,
             sender_bank_name=t.sender.bank_name,
-            receiver_bank_name=t.receiver.bank_name
+            receiver_bank_name=t.receiver.bank_name,
+            initiated_by_name=t.initiated_by.username if t.initiated_by else None,
+            initiated_by_upi=t.initiated_by.upi_id if t.initiated_by else None
         ))
         
     # Update Cache
@@ -2467,15 +2609,16 @@ def get_conversation(
     # 1. Fetch Transactions (Optimized)
     txs = db.query(models.Transaction).options(
         joinedload(models.Transaction.sender), 
-        joinedload(models.Transaction.receiver)
+        joinedload(models.Transaction.receiver),
+        joinedload(models.Transaction.initiated_by)
     ).filter(
         (
-            (models.Transaction.sender_id == current_user.id) & 
-            (models.Transaction.receiver_id == target_user.id)
+            ((models.Transaction.sender_id == current_user.id) | (models.Transaction.initiated_by_id == current_user.id)) & 
+            ((models.Transaction.receiver_id == target_user.id) | (models.Transaction.initiated_by_id == target_user.id))
         ) | 
         (
-            (models.Transaction.sender_id == target_user.id) & 
-            (models.Transaction.receiver_id == current_user.id)
+            ((models.Transaction.sender_id == target_user.id) | (models.Transaction.initiated_by_id == target_user.id)) & 
+            ((models.Transaction.receiver_id == current_user.id) | (models.Transaction.initiated_by_id == current_user.id))
         )
     ).order_by(models.Transaction.timestamp.desc()).limit(50).all()
     
@@ -2497,12 +2640,12 @@ def get_conversation(
     combined = []
     
     # Process Transactions
-    # Filter visibility logic: Only show if SUCCESS or (FAILED and I am SENDER)
+    # Filter visibility logic: Only show if SUCCESS or (FAILED and I am SENDER or INITIATOR)
     for t in txs:
         should_show = False
         if t.status == "SUCCESS":
             should_show = True
-        elif t.sender_id == current_user.id:
+        elif t.sender_id == current_user.id or t.initiated_by_id == current_user.id:
             should_show = True
             
         if should_show:
@@ -2517,7 +2660,9 @@ def get_conversation(
                 "timestamp": t.timestamp,
                 "sender_mcc": t.sender.mcc,
                 "receiver_mcc": t.receiver.mcc,
-                "note": t.note
+                "note": t.note,
+                "initiated_by_name": t.initiated_by.username if t.initiated_by else None,
+                "initiated_by_upi": t.initiated_by.upi_id if t.initiated_by else None
             })
             
     # Process Messages
@@ -3395,6 +3540,246 @@ def chat_with_bot(
              return {"reply": "I'm receiving too many requests right now and have reached my limit. Please try again in about a minute!"}
              
         raise HTTPException(status_code=500, detail="Failed to process chatbot request")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# UPI CIRCLE ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.post("/circle/invite", tags=["UPI Circle"])
+def invite_to_circle(
+    req: schemas.UPICircleInviteRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Primary User invites a Secondary User to join their circle"""
+    # Find secondary user
+    secondary_user = db.query(models.User).filter(models.User.upi_id == req.secondary_upi_id).first()
+    if not secondary_user:
+        raise HTTPException(status_code=404, detail="Secondary user not found")
+        
+    # NPCI Rule: Child accounts (no bank account) cannot invite others
+    is_child = current_user.bank_account is None
+    if is_child:
+        raise HTTPException(status_code=403, detail="Child accounts cannot invite others to a UPI Circle.")
+
+    if secondary_user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot invite yourself to a circle")
+
+    # RESTRICTION: Only users WITHOUT a bank account (child accounts) can be invited
+    if secondary_user.bank_account is not None:
+        raise HTTPException(
+            status_code=400, 
+            detail="User already has a bank account. UPI Circle is only for users without a bank account (Child Accounts)."
+        )
+
+    # NPCI Rule: Max 5 members per Primary User
+    active_members_count = db.query(models.UPICircle).filter(
+        models.UPICircle.primary_user_id == current_user.id,
+        models.UPICircle.status.in_(["ACTIVE", "PENDING"])
+    ).count()
+    if active_members_count >= 5:
+        raise HTTPException(status_code=400, detail="You can have a maximum of 5 members in your UPI Circle")
+
+    # NPCI Rule: Secondary User can only join one circle at a time
+    joined_already = db.query(models.UPICircle).filter(
+        models.UPICircle.secondary_user_id == secondary_user.id,
+        models.UPICircle.status == "ACTIVE"
+    ).first()
+    if joined_already:
+        raise HTTPException(status_code=400, detail="This user is already a member of another UPI Circle")
+
+    # Check if already exists
+    existing = db.query(models.UPICircle).filter(
+        models.UPICircle.primary_user_id == current_user.id,
+        models.UPICircle.secondary_user_id == secondary_user.id
+    ).first()
+    
+    if existing:
+        if existing.status == "ACTIVE":
+            raise HTTPException(status_code=400, detail="User is already an active member of your circle")
+        # Reuse existing pending/revoked record
+        existing.status = "PENDING"
+        existing.monthly_limit = req.monthly_limit
+        existing.delegation_type = req.delegation_type
+        # Notify secondary user about re-invite
+        notifications.send_push_notification(
+            db,
+            secondary_user.id,
+            "UPI Circle Invitation",
+            f"{current_user.username} has invited you to join their UPI Circle. Accept to spend from their account.",
+            "circle_invite"
+        )
+        db.commit()
+        
+        # Invalidate Cache
+        clear_home_cache(current_user.id)
+        clear_home_cache(secondary_user.id)
+        
+        return {"msg": "Invitation sent successfully"}
+
+    # Create new circle invitation
+    new_invite = models.UPICircle(
+        primary_user_id=current_user.id,
+        secondary_user_id=secondary_user.id,
+        monthly_limit=req.monthly_limit,
+        delegation_type=req.delegation_type,
+        status="PENDING"
+    )
+    db.add(new_invite)
+    db.commit()
+    
+    # Notify secondary user
+    notifications.send_push_notification(
+        db, 
+        secondary_user.id,
+        "UPI Circle Invitation",
+        f"{current_user.username} has invited you to join their UPI Circle. Accept to spend from their account.",
+        "circle_invite"
+    )
+    db.commit()  # Commit the notification
+    
+    # Invalidate Cache
+    clear_home_cache(current_user.id)
+    clear_home_cache(secondary_user.id)
+    
+    return {"msg": "Invitation sent successfully"}
+
+@app.post("/circle/respond", tags=["UPI Circle"])
+def respond_to_circle_invite(
+    req: schemas.UPICircleResponseRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Secondary User accepts or rejects the invitation"""
+    invite = db.query(models.UPICircle).filter(
+        models.UPICircle.id == req.invitation_id,
+        models.UPICircle.secondary_user_id == current_user.id
+    ).first()
+    
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+        
+    if req.action == "ACCEPT":
+        # NPCI Rule Check again: Secondary User can only join one circle at a time
+        already_active = db.query(models.UPICircle).filter(
+            models.UPICircle.secondary_user_id == current_user.id,
+            models.UPICircle.status == "ACTIVE"
+        ).first()
+        if already_active:
+             raise HTTPException(status_code=400, detail="You are already a member of another UPI Circle. Leave that circle to join this one.")
+
+        invite.status = "ACTIVE"
+        msg = "Invitation accepted"
+        # Notify primary user
+        notifications.send_push_notification(
+            db,
+            invite.primary_user_id,
+            "Invitation Accepted",
+            f"{current_user.username} is now a member of your UPI Circle.",
+            "circle_active"
+        )
+    else:
+        invite.status = "REVOKED"
+        msg = "Invitation rejected"
+        # Notify primary user
+        notifications.send_push_notification(
+            db,
+            invite.primary_user_id,
+            "Invitation Declined",
+            f"{current_user.username} declined your UPI Circle invitation.",
+            "circle_rejected"
+        )
+
+    db.commit()
+    
+    # Invalidate Cache
+    clear_home_cache(current_user.id)
+    clear_home_cache(invite.primary_user_id)
+    
+    return {"msg": msg}
+
+@app.get("/circle/status", response_model=schemas.UPICircleStatusResponse, tags=["UPI Circle"])
+def get_circle_status(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Fetch all circles where user is either Primary or Secondary"""
+    my_circles = db.query(models.UPICircle).filter(models.UPICircle.primary_user_id == current_user.id).all()
+    joined_circles = db.query(models.UPICircle).filter(
+        models.UPICircle.secondary_user_id == current_user.id,
+        models.UPICircle.status == "ACTIVE"
+    ).all()
+    
+    def format_circle(c):
+        return schemas.UPICircleMemberResponse(
+            id=c.id,
+            primary_user_upi=c.primary_user.upi_id,
+            primary_user_name=c.primary_user.username,
+            secondary_user_upi=c.secondary_user.upi_id,
+            secondary_user_name=c.secondary_user.username,
+            monthly_limit=c.monthly_limit,
+            current_monthly_spend=c.current_monthly_spend,
+            delegation_type=c.delegation_type,
+            status=c.status,
+            created_at=c.created_at,
+            last_spent_at=c.last_spent_at
+        )
+
+    return {
+        "my_circles": [format_circle(c) for c in my_circles],
+        "joined_circles": [format_circle(c) for c in joined_circles]
+    }
+
+@app.put("/circle/update-limit")
+def update_circle_limit(
+    req: schemas.UPICircleLimitUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Update the monthly limit for a circle member"""
+    circle = db.query(models.UPICircle).filter(
+        models.UPICircle.id == req.circle_id,
+        models.UPICircle.primary_user_id == current_user.id
+    ).first()
+    
+    if not circle:
+        raise HTTPException(status_code=404, detail="Circle member not found")
+        
+    circle.monthly_limit = req.new_limit
+    db.commit()
+    return {"msg": "Limit updated successfully", "new_limit": circle.monthly_limit}
+
+@app.delete("/circle/remove/{circle_id}", tags=["UPI Circle"])
+def remove_circle_member(
+    circle_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Primary User removes/revokes a secondary user from their circle"""
+    circle = db.query(models.UPICircle).filter(
+        models.UPICircle.id == circle_id,
+        models.UPICircle.primary_user_id == current_user.id
+    ).first()
+    
+    if not circle:
+        raise HTTPException(status_code=404, detail="Circle member not found")
+        
+    if circle.status == "REVOKED":
+        raise HTTPException(status_code=400, detail="Member is already removed")
+
+    circle.status = "REVOKED"
+    db.commit()
+    
+    # Notify secondary user
+    notifications.send_push_notification(
+        db,
+        circle.secondary_user_id,
+        "UPI Circle Access Revoked",
+        f"Your access to {current_user.username}'s UPI Circle has been revoked.",
+        "circle_revoked"
+    )
+    
+    return {"msg": "Member removed successfully"}
 
 # ═══════════════════════════════════════════════════════════════════════════
 # END OF FILE

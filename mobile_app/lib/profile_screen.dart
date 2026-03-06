@@ -13,6 +13,7 @@ import 'main.dart';
 import 'utils.dart';
 import 'language_selection_screen.dart';
 import 'cyber_chatbot_screen.dart';
+import 'upi_circle_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -254,14 +255,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               },
             ),
             _buildOptionItem(
-              icon: Icons.supervised_user_circle_outlined,
+              icon: Icons.group_outlined,
               title: 'UPI Circle',
-              subtitle: 'Share your account with others',
               onTap: () {
-                // Future: Navigate to UPI Circle management
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('UPI Circle feature coming soon'),
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const UPICircleScreen(),
                   ),
                 );
               },

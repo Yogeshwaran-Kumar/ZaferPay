@@ -35,6 +35,9 @@ class _SpendAnalysisScreenState extends State<SpendAnalysisScreen> {
   List<Map<String, dynamic>> _categories = [];
   double _totalSpend = 0.0;
 
+  // UPI Circle Filters
+  String _selectedSource = 'All'; // 'All', 'Personal', 'Circle'
+
   @override
   void initState() {
     super.initState();
@@ -76,7 +79,9 @@ class _SpendAnalysisScreenState extends State<SpendAnalysisScreen> {
     for (var tx in widget.history) {
       if (tx['status'] != 'SUCCESS') continue;
 
-      final isDebit = tx['sender_upi_id'] == widget.user['upi_id'];
+      final isDebit =
+          tx['sender_upi_id'] == widget.user['upi_id'] ||
+          tx['initiated_by_upi'] == widget.user['upi_id'];
       final amount = (tx['amount'] ?? 0).toDouble();
 
       try {
@@ -84,6 +89,17 @@ class _SpendAnalysisScreenState extends State<SpendAnalysisScreen> {
         final txMonthStr = DateFormat('yyyy-MM').format(txDate);
 
         if (txMonthStr == selectedMonthStr) {
+          // Source Filter Logic
+          final isCircle = tx['initiated_by_upi'] != null;
+          final initiatorName = tx['initiated_by_name'];
+
+          if (_selectedSource == 'Personal' && isCircle) continue;
+          if (_selectedSource == 'Circle' && !isCircle) continue;
+          if (!['All', 'Personal', 'Circle'].contains(_selectedSource) &&
+              initiatorName != _selectedSource) {
+            continue;
+          }
+
           if (isDebit) {
             outgoing += amount;
 
@@ -385,6 +401,11 @@ class _SpendAnalysisScreenState extends State<SpendAnalysisScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: 16),
+
+              // Source Filter Chips
+              if (_hasCircleTransactions()) _buildSourceFilter(isDark),
+
               const SizedBox(height: 24),
 
               // Incoming / Outgoing Cards
@@ -1815,6 +1836,51 @@ class _SpendAnalysisScreenState extends State<SpendAnalysisScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  bool _hasCircleTransactions() {
+    return widget.history.any((tx) => tx['initiated_by_upi'] != null);
+  }
+
+  Widget _buildSourceFilter(bool isDark) {
+    final circleUsers = widget.history
+        .where((tx) => tx['initiated_by_name'] != null)
+        .map((tx) => tx['initiated_by_name'] as String)
+        .toSet()
+        .toList();
+    final sources = ['All', 'Personal', 'Circle', ...circleUsers];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: sources.map((source) {
+          final isSelected = _selectedSource == source;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: ChoiceChip(
+              label: Text(source),
+              selected: isSelected,
+              onSelected: (selected) {
+                if (selected) {
+                  setState(() {
+                    _selectedSource = source;
+                    _calculateDataForMonth();
+                  });
+                }
+              },
+              backgroundColor: isDark ? const Color(0xFF1E2630) : Colors.white,
+              selectedColor: isDark ? Colors.white : Colors.black,
+              labelStyle: TextStyle(
+                color: isSelected
+                    ? (isDark ? Colors.black : Colors.white)
+                    : (isDark ? Colors.white70 : Colors.black87),
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 }

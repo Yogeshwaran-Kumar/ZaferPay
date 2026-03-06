@@ -61,7 +61,7 @@ def send_daily_summaries():
             
             # 3. Calculate Send Total
             sent_sum = db.query(func.sum(models.Transaction.amount)).filter(
-                models.Transaction.sender_id == user.id,
+                (models.Transaction.sender_id == user.id) | (models.Transaction.initiated_by_id == user.id),
                 models.Transaction.status == "SUCCESS",
                 models.Transaction.timestamp >= start_time,
                 models.Transaction.timestamp <= end_time

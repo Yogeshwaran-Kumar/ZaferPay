@@ -18,6 +18,8 @@ class PaymentPinScreen extends StatefulWidget {
   final String? acknowledgedRisk;
   final int? requestId;
   final String? paymentSource;
+  final bool isCirclePayment;
+  final int? circleId;
 
   const PaymentPinScreen({
     super.key,
@@ -31,6 +33,8 @@ class PaymentPinScreen extends StatefulWidget {
     this.acknowledgedRisk,
     this.requestId,
     this.paymentSource,
+    this.isCirclePayment = false,
+    this.circleId,
   });
 
   @override
@@ -105,7 +109,10 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
     }
 
     // 1. FAST Local Check (Avoids navigation if PIN is definitely wrong)
-    final pinStatus = await _api.verifyUpiPin(_enteredPin);
+    final pinStatus = await _api.verifyUpiPin(
+      _enteredPin,
+      isCirclePayment: widget.isCirclePayment,
+    );
 
     if (pinStatus == PinVerificationStatus.lockedOut) {
       _handleLockedOut();
@@ -160,6 +167,8 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
           acknowledgedRisk: widget.acknowledgedRisk,
           requestId: widget.requestId,
           paymentSource: widget.paymentSource,
+          isCirclePayment: widget.isCirclePayment,
+          circleId: widget.circleId,
         ),
       ),
     );
@@ -453,7 +462,7 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
 
             // PIN Entry Section
             Text(
-              'Enter your PIN',
+              widget.isCirclePayment ? 'Enter App mPIN' : 'Enter your PIN',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,

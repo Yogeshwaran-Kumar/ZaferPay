@@ -536,7 +536,9 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
     double spent = 0.0;
     for (var tx in widget.history) {
       if (tx['status'] != 'SUCCESS') continue;
-      if (tx['sender_upi_id'] != widget.user['upi_id']) continue;
+      if (tx['sender_upi_id'] != widget.user['upi_id'] &&
+          tx['initiated_by_upi'] != widget.user['upi_id'])
+        continue;
       try {
         final txDate = DateTime.parse(tx['timestamp']).toLocal();
         if (txDate.isAfter(limitStart)) {
@@ -870,7 +872,9 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
     Map<String, double> categorySpends = {};
     for (var tx in widget.history) {
       if (tx['status'] != 'SUCCESS') continue;
-      if (tx['sender_upi_id'] != widget.user['upi_id']) continue;
+      if (tx['sender_upi_id'] != widget.user['upi_id'] &&
+          tx['initiated_by_upi'] != widget.user['upi_id'])
+        continue;
       try {
         final txDate = DateTime.parse(tx['timestamp']).toLocal();
         if (txDate.isAfter(limitStart)) {

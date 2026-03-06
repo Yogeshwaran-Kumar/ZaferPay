@@ -30,6 +30,7 @@ class _PayScreenState extends State<PayScreen> {
 
   // For database lookup result
   Map<String, dynamic>? _databaseUser;
+  List<dynamic> _globalUsers = []; // New list for global name search
   bool _isLookingUp = false;
 
   // Contact Verification State
@@ -80,6 +81,7 @@ class _PayScreenState extends State<PayScreen> {
       setState(() {
         _filteredContacts = [];
         _databaseUser = null;
+        _globalUsers = [];
         _isLookingUp = false;
       });
       return;
@@ -135,9 +137,25 @@ class _PayScreenState extends State<PayScreen> {
       _lookupUserFromDatabase(query);
     } else if (query.contains('@')) {
       _lookupUserByUpi(query);
-    } else {
-      // Name Search: Now restricted to local contacts only
-      // No more global search for names as per user request
+    } else if (query.length >= 3) {
+      // Global Search for Names
+      _lookupUsersGlobal(query);
+    }
+  }
+
+  Future<void> _lookupUsersGlobal(String query) async {
+    setState(() => _isLookingUp = true);
+
+    try {
+      final results = await _api.searchUsers(query);
+      if (mounted) {
+        setState(() {
+          _globalUsers = results;
+          _isLookingUp = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLookingUp = false);
     }
   }
 
@@ -631,9 +649,8 @@ class _PayScreenState extends State<PayScreen> {
 
                 // Search Results
                 if (_isSearching) ...[
-                  // Global Results (Database search by phone, UPI or name)
-                  // Global Results (Database search by phone or UPI)
-                  if (_databaseUser != null) ...[
+                  // Global Results (Database search)
+                  if (_databaseUser != null || _globalUsers.isNotEmpty) ...[
                     const Text(
                       "Global Search Results",
                       style: TextStyle(
@@ -643,7 +660,9 @@ class _PayScreenState extends State<PayScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    _buildUserSearchResult(_databaseUser!),
+                    if (_databaseUser != null)
+                      _buildUserSearchResult(_databaseUser!),
+                    ..._globalUsers.map((user) => _buildUserSearchResult(user)),
                     const SizedBox(height: 16),
                   ],
 
@@ -698,6 +717,7 @@ class _PayScreenState extends State<PayScreen> {
 
                   if (_filteredContacts.isEmpty &&
                       _databaseUser == null &&
+                      _globalUsers.isEmpty &&
                       !_isLookingUp)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 20),

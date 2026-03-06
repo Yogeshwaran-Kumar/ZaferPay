@@ -540,7 +540,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   // ──── MESSAGE ITEM (COMPLETED PAYMENTS) ────
   Widget _buildMessageItem(Map<String, dynamic> tx, bool isDark) {
-    final bool isSender = tx['sender_upi_id'] == _myUpi;
+    final bool isSender =
+        tx['sender_upi_id'] == _myUpi || tx['initiated_by_upi'] == _myUpi;
     final bool isSuccess = tx['status'] == 'SUCCESS';
     final amount = tx['amount'];
     final bool isHighlighted =

@@ -9,7 +9,7 @@ class ApiClient {
   // Default URLs
   static String get _defaultBaseUrl {
     if (kIsWeb) return 'http://127.0.0.1:8000';
-    return 'https://taxi-internet-boundary-barrel.trycloudflare.com';
+    return 'https://scientists-davis-anna-fisheries.trycloudflare.com';
   }
 
   static const Duration _timeout = Duration(seconds: 30);
@@ -171,6 +171,24 @@ class ApiClient {
             headers: combinedHeaders,
             body: body != null ? json.encode(body) : null,
           )
+          .timeout(_timeout);
+    });
+  }
+
+  Future<http.Response> delete(
+    String endpoint, {
+    Map<String, String>? headers,
+  }) async {
+    return _retryRequest(() async {
+      final url = await baseUrl;
+      final token = await _storage.read(key: 'token');
+      final combinedHeaders = {
+        if (token != null) 'Authorization': 'Bearer $token',
+        ...?headers,
+      };
+
+      return _client!
+          .delete(Uri.parse('$url$endpoint'), headers: combinedHeaders)
           .timeout(_timeout);
     });
   }

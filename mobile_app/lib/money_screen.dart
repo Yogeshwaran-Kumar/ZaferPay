@@ -343,7 +343,9 @@ class MoneyScreenState extends State<MoneyScreen> with RouteAware {
                   itemCount: _history.length > 10 ? 10 : _history.length,
                   itemBuilder: (context, index) {
                     final tx = _history[index];
-                    final isDebit = tx['sender_upi_id'] == _user!['upi_id'];
+                    final isDebit =
+                        tx['sender_upi_id'] == _user!['upi_id'] ||
+                        tx['initiated_by_upi'] == _user!['upi_id'];
                     Color color;
 
                     if (tx['status'] == 'BLOCKED') {

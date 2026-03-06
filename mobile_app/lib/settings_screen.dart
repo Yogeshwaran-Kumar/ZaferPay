@@ -548,49 +548,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ValueListenableBuilder<ThemeMode>(
                       valueListenable: themeNotifier,
                       builder: (context, mode, _) {
-                        return Column(
-                          children: [
-                            RadioListTile<ThemeMode>(
-                              title: Text(
-                                'Light Mode',
-                                style: TextStyle(
-                                  color: Theme.of(
-                                    context,
-                                  ).textTheme.bodyLarge?.color,
+                        return RadioGroup<ThemeMode>(
+                          groupValue: mode,
+                          onChanged: (val) {
+                            if (val != null) {
+                              themeNotifier.value = val;
+                            }
+                          },
+                          child: Column(
+                            children: [
+                              RadioListTile<ThemeMode>(
+                                title: Text(
+                                  'Light Mode',
+                                  style: TextStyle(
+                                    color: Theme.of(
+                                      context,
+                                    ).textTheme.bodyLarge?.color,
+                                  ),
                                 ),
+                                value: ThemeMode.light,
+                                activeColor: const Color(0xFF00B9F1),
                               ),
-                              value: ThemeMode.light,
-                              // ignore: deprecated_member_use
-                              groupValue: mode,
-                              // ignore: deprecated_member_use
-                              onChanged: (val) {
-                                if (val != null) {
-                                  themeNotifier.value = val;
-                                }
-                              },
-                              activeColor: const Color(0xFF00B9F1),
-                            ),
-                            RadioListTile<ThemeMode>(
-                              title: Text(
-                                'Dark Mode',
-                                style: TextStyle(
-                                  color: Theme.of(
-                                    context,
-                                  ).textTheme.bodyLarge?.color,
+                              RadioListTile<ThemeMode>(
+                                title: Text(
+                                  'Dark Mode',
+                                  style: TextStyle(
+                                    color: Theme.of(
+                                      context,
+                                    ).textTheme.bodyLarge?.color,
+                                  ),
                                 ),
+                                value: ThemeMode.dark,
+                                activeColor: const Color(0xFF00B9F1),
                               ),
-                              value: ThemeMode.dark,
-                              // ignore: deprecated_member_use
-                              groupValue: mode,
-                              // ignore: deprecated_member_use
-                              onChanged: (val) {
-                                if (val != null) {
-                                  themeNotifier.value = val;
-                                }
-                              },
-                              activeColor: const Color(0xFF00B9F1),
-                            ),
-                          ],
+                            ],
+                          ),
                         );
                       },
                     ),

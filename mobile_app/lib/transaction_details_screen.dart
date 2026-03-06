@@ -158,7 +158,9 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
 
     final transaction = widget.transaction;
     final currentUpiId = widget.currentUpiId;
-    final isDebit = transaction['sender_upi_id'] == currentUpiId;
+    final isDebit =
+        transaction['sender_upi_id'] == currentUpiId ||
+        transaction['initiated_by_upi'] == currentUpiId;
 
     if (isDebit) {
       // User is Sender: Always allow reporting
@@ -180,7 +182,9 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     final transaction = widget.transaction;
     final currentUpiId = widget.currentUpiId;
 
-    final isDebit = transaction['sender_upi_id'] == currentUpiId;
+    final isDebit =
+        transaction['sender_upi_id'] == currentUpiId ||
+        transaction['initiated_by_upi'] == currentUpiId;
     final amount = transaction['amount'];
     final status = transaction['status'];
     final timestamp = transaction['timestamp'];
@@ -505,6 +509,23 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // Circle Initiator (if any)
+                            if (transaction['initiated_by_name'] != null) ...[
+                              Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: _buildDetailRow(
+                                  context,
+                                  label: 'Spending by',
+                                  value: transaction['initiated_by_name'],
+                                ),
+                              ),
+                              Divider(
+                                height: 1,
+                                color: isDark
+                                    ? Colors.grey.shade800
+                                    : Colors.grey.shade300,
+                              ),
+                            ],
                             // Transaction ID
                             Padding(
                               padding: const EdgeInsets.all(16),

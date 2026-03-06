@@ -30,7 +30,12 @@ class ProcessingShieldScreen extends StatefulWidget {
     this.acknowledgedRisk,
     this.requestId,
     this.paymentSource,
+    this.isCirclePayment = false,
+    this.circleId,
   });
+
+  final bool isCirclePayment;
+  final int? circleId;
 
   @override
   State<ProcessingShieldScreen> createState() => _ProcessingShieldScreenState();
@@ -129,6 +134,8 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
       acknowledgedRisk: widget.acknowledgedRisk,
       requestId: widget.requestId,
       paymentSource: widget.paymentSource,
+      isCirclePayment: widget.isCirclePayment,
+      circleId: widget.circleId,
     );
 
     // 3. Show "Processing" state while waiting for network

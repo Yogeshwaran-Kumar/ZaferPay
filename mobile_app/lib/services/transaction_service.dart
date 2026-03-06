@@ -84,6 +84,8 @@ class TransactionService {
     String? acknowledgedRisk,
     String? paymentSource, // v5.0 scam telemetry
     bool isScreenSharing = false, // v5.0 scam telemetry
+    bool isCirclePayment = false,
+    int? circleId,
   }) async {
     final txnId = 'TXN${DateTime.now().millisecondsSinceEpoch}';
 
@@ -100,7 +102,7 @@ class TransactionService {
     final homeData = _userService.getCachedHomeDataSync();
     if (homeData != null && homeData['user'] != null) {
       final double currentBalance = homeData['user']['balance'] ?? 0.0;
-      if (currentBalance < amount) {
+      if (!isCirclePayment && currentBalance < amount) {
         return {'status': 'FAILED', 'detail': 'Insufficient funds'};
       }
 
@@ -144,6 +146,8 @@ class TransactionService {
       acknowledgedRisk: acknowledgedRisk,
       paymentSource: paymentSource,
       isScreenSharing: isScreenSharing,
+      isCirclePayment: isCirclePayment,
+      circleId: circleId,
     );
 
     // 4. Handle result
@@ -178,6 +182,8 @@ class TransactionService {
     String? acknowledgedRisk,
     String? paymentSource, // v5.0 scam telemetry
     bool isScreenSharing = false, // v5.0 scam telemetry
+    bool isCirclePayment = false,
+    int? circleId,
   }) async {
     try {
       if (!_isTimeSynced) await _syncTime();
@@ -201,6 +207,8 @@ class TransactionService {
         if (acknowledgedRisk != null) 'acknowledged_risk': acknowledgedRisk,
         if (paymentSource != null) 'payment_source': paymentSource,
         'is_screen_sharing': isScreenSharing,
+        'is_circle_payment': isCirclePayment,
+        'circle_id': circleId,
       };
 
       final signature = _generateHmac(json.encode(body), timestampStr);

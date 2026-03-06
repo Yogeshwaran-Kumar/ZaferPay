@@ -59,6 +59,7 @@ class ChangePinRequest(BaseModel):
 
 class VerifyPinRequest(BaseModel):
     pin: str
+    is_circle_payment: bool = False
 class UserResponse(UserBase):
     id: int
     upi_id: str
@@ -168,6 +169,10 @@ class TransactionCreate(BaseModel):
     # v5.0: Scam telemetry fields (sent by mobile app)
     payment_source: Optional[str] = None  # 'qr_scan', 'qr_upload', 'qr_share', 'deep_link', 'manual_entry', 'contact_list'
     is_screen_sharing: bool = False  # True if remote-access app (AnyDesk/TeamViewer) detected
+    
+    # UPI Circle Support
+    is_circle_payment: bool = False
+    circle_id: Optional[int] = None
 
 class TransactionResponse(BaseModel):
     transaction_id: str
@@ -186,6 +191,10 @@ class TransactionResponse(BaseModel):
     note: Optional[str] = None
     sender_bank_name: Optional[str] = None
     receiver_bank_name: Optional[str] = None
+    
+    # UPI Circle Fields
+    initiated_by_name: Optional[str] = None
+    initiated_by_upi: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -309,12 +318,33 @@ class DailySummarySchema(BaseModel):
     last_sent_at: Optional[datetime] = None
 
 
+class UPICircleMemberResponse(BaseModel):
+    id: int
+    primary_user_upi: str
+    primary_user_name: Optional[str] = None
+    secondary_user_upi: str
+    secondary_user_name: Optional[str] = None
+    monthly_limit: float
+    current_monthly_spend: float
+    delegation_type: str
+    status: str
+    created_at: datetime
+    last_spent_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class UPICircleStatusResponse(BaseModel):
+    my_circles: List[UPICircleMemberResponse] # People I added
+    joined_circles: List[UPICircleMemberResponse] # Circles I am a member of
+
 class HomeAggregateResponse(BaseModel):
     user: UserResponse
     history: List[TransactionResponse]
     people: List[UserLookupResponse]
     merchants: List[UserLookupResponse]
     pending_requests: List[PaymentRequestResponse] = []
+    pending_circle_invites: List[UPICircleMemberResponse] = []
     total_unread: int = 0
     daily_summary: Optional[DailySummarySchema] = None
 
@@ -426,6 +456,30 @@ class ChattingMessageHistory(BaseModel):
 class ChatbotRequest(BaseModel):
     message: str
     history: List[dict] = []
+
+# ═══════════════════════════════════════════════════════════════════════════
+# UPI CIRCLE SCHEMAS
+# ═══════════════════════════════════════════════════════════════════════════
+
+class UPICircleResponse(BaseModel):
+    id: int
+    status: str
+    msg: str
+
+class UPICircleLimitUpdate(BaseModel):
+    circle_id: int
+    new_limit: float
+
+class UPICircleInviteRequest(BaseModel):
+    secondary_upi_id: str
+    monthly_limit: float = 5000.0
+    delegation_type: str = "FULL" # FULL or PARTIAL
+
+class UPICircleResponseRequest(BaseModel):
+    invitation_id: int
+    action: str # ACCEPT or REJECT
+
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # END OF FILE
