@@ -116,6 +116,7 @@ class ApiService {
   }
 
   // --- UPI Circle Delegates ---
+  Future<List<dynamic>> getMyAllAccounts() => _user.getMyAllAccounts();
   Future<Map<String, dynamic>> getCircleStatus() => _user.getCircleStatus();
   Future<Map<String, dynamic>> inviteToCircle(
     String upiId,
@@ -124,10 +125,21 @@ class ApiService {
   ) => _user.inviteToCircle(upiId, limit, type);
   Future<bool> respondToCircleInvite(int inviteId, String action) =>
       _user.respondToCircleInvite(inviteId, action);
-  Future<bool> updateCircleLimit(int circleId, double newLimit) =>
-      _user.updateCircleLimit(circleId, newLimit);
+  Future<bool> updateCircleMember({
+    required int circleId,
+    double? newLimit,
+    String? delegationType,
+    int? primaryUserId,
+  }) => _user.updateCircleMember(
+    circleId: circleId,
+    newLimit: newLimit,
+    delegationType: delegationType,
+    primaryUserId: primaryUserId,
+  );
   Future<bool> removeCircleMember(int circleId) =>
       _user.removeCircleMember(circleId);
+  Future<Map<String, dynamic>?> getPaymentRequest(int requestId) =>
+      _user.getPaymentRequest(requestId);
   Future<bool> cancelPaymentRequest(int requestId) =>
       _user.cancelPaymentRequest(requestId);
 

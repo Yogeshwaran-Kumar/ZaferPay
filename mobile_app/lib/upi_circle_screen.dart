@@ -233,6 +233,8 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
             ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
+          : _isChild
+          ? _buildChildView()
           : RefreshIndicator(
               onRefresh: _loadCircleData,
               child: ListView(
@@ -262,6 +264,260 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildChildView() {
+    if (_joinedCircles.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _loadCircleData,
+        child: ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            const SizedBox(height: 80),
+            Icon(Icons.group_off, size: 64, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            const Text(
+              "You are not part of any UPI Circle yet.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey, fontSize: 16),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Filter to get active/pending circles (skip revoked ones)
+    final activeCircles = _joinedCircles
+        .where((c) => c['status'] == 'ACTIVE' || c['status'] == 'PENDING')
+        .toList();
+
+    if (activeCircles.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _loadCircleData,
+        child: ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            const SizedBox(height: 80),
+            Icon(Icons.group_off, size: 64, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            const Text(
+              "You are not part of any active UPI Circle.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey, fontSize: 16),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final circle = activeCircles.first;
+    final parentName = circle['primary_user_name'] as String;
+    final parentUpi = circle['primary_user_upi'] as String;
+    final limit = (circle['monthly_limit'] ?? 0.0).toDouble();
+    final spend = (circle['current_monthly_spend'] ?? 0.0).toDouble();
+    final remaining = limit - spend;
+    final progress = limit > 0 ? (spend / limit).clamp(0.0, 1.0) : 0.0;
+    final status = circle['status'] as String;
+    final delegationType = circle['delegation_type'] as String? ?? 'FULL';
+
+    return RefreshIndicator(
+      onRefresh: _loadCircleData,
+      child: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          // Parent Info Card
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.blue.shade600, Colors.blue.shade400],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: Colors.white.withValues(alpha: 0.2),
+                      radius: 24,
+                      child: Text(
+                        parentName.isNotEmpty
+                            ? parentName[0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            "My UPI Circle",
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          Text(
+                            parentName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 20,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            parentUpi,
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // White-themed badge for visibility on blue
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      child: Text(
+                        status,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Spending Progress Card
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Column(
+              children: [
+                // Circular progress
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      width: 140,
+                      height: 140,
+                      child: CircularProgressIndicator(
+                        value: progress,
+                        strokeWidth: 10,
+                        backgroundColor: Colors.grey[100],
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          progress > 0.9 ? Colors.red : Colors.blue,
+                        ),
+                      ),
+                    ),
+                    Column(
+                      children: [
+                        Text(
+                          "₹${spend.toStringAsFixed(0)}",
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const Text(
+                          "Spent",
+                          style: TextStyle(color: Colors.grey, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 24),
+                const Divider(height: 1),
+                const SizedBox(height: 16),
+
+                // Details rows
+                _buildChildDetailRow(
+                  "Monthly Limit",
+                  "₹${limit.toStringAsFixed(0)}",
+                  Colors.black,
+                ),
+                const SizedBox(height: 14),
+                _buildChildDetailRow(
+                  "Remaining",
+                  "₹${remaining.toStringAsFixed(0)}",
+                  remaining > 0 ? Colors.green : Colors.red,
+                ),
+                const SizedBox(height: 14),
+                _buildChildDetailRow(
+                  "Payment Mode",
+                  delegationType == 'FULL' ? "Auto-pay" : "Requires Approval",
+                  delegationType == 'FULL' ? Colors.green : Colors.orange,
+                ),
+              ],
+            ),
+          ),
+
+          // Pending invites (if any other circles are pending)
+          if (_joinedCircles.length > 1) ...[
+            const SizedBox(height: 24),
+            ...(_joinedCircles
+                .skip(1)
+                .where((c) => c['status'] == 'PENDING')
+                .map((c) => _buildCircleItem(c, isPrimary: false))),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChildDetailRow(String label, String value, Color valueColor) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(fontSize: 15, color: Colors.grey.shade600),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: valueColor,
+          ),
+        ),
+      ],
     );
   }
 
@@ -514,15 +770,25 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                           ],
                         ),
                         const SizedBox(height: 32),
-                        _buildSummaryRowWithAction(
-                          "Monthly Limit",
-                          "₹${limit.toStringAsFixed(0)}",
-                          Colors.black,
-                          onEdit: () {
-                            Navigator.pop(context);
-                            _showEditLimitDialog(circle);
-                          },
-                        ),
+                        if (isPrimary)
+                          _buildSummaryRowWithAction(
+                            "Monthly Limit",
+                            "₹${limit.toStringAsFixed(0)}",
+                            Colors.black,
+                            onEdit: () {
+                              Navigator.pop(context);
+                              _showEditMemberDialog(
+                                circle,
+                                isPrimary: isPrimary,
+                              );
+                            },
+                          )
+                        else
+                          _buildSummaryRow(
+                            "Monthly Limit",
+                            "₹${limit.toStringAsFixed(0)}",
+                            Colors.black,
+                          ),
                         const Divider(height: 24),
                         _buildSummaryRow(
                           "Remaining",
@@ -598,89 +864,261 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
     );
   }
 
-  void _showEditLimitDialog(dynamic circle) {
+  void _showEditMemberDialog(dynamic circle, {bool isPrimary = true}) {
     final controller = TextEditingController(
-      text: circle['monthly_limit'].toString(),
+      text: circle['monthly_limit']?.toString() ?? "5000",
     );
+    String delegationType = circle['delegation_type'] ?? "FULL";
+    int? selectedPrimaryId = circle['primary_user_id'];
+    List<dynamic> myAccounts = [];
+    bool isLoadingAccounts = true;
+
+    // Only fetch accounts for parent (funding account selection)
+    if (isPrimary) {
+      _apiService.getMyAllAccounts().then((accounts) {
+        if (mounted) {
+          myAccounts = accounts;
+          isLoadingAccounts = false;
+        }
+      });
+    } else {
+      isLoadingAccounts = false;
+    }
+
+    final dialogTitle = isPrimary
+        ? "Edit Circle for ${circle['secondary_user_name']}"
+        : "Edit My Circle Settings";
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text("Change Limit for ${circle['secondary_user_name']}"),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: "New Monthly Limit (₹)",
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final newLimit = double.tryParse(controller.text);
-              if (newLimit == null || newLimit <= 0) return;
-
-              // Navigate to PIN setup screen for update
-              if (!context.mounted) return;
-
-              final pinResult =
-                  await Navigator.pushNamed(
-                        context,
-                        '/upi-circle-setup-pin',
-                        arguments: {
-                          'secondaryUpi': circle['secondary_user_upi'],
-                          'secondaryName': circle['secondary_user_name'],
-                          'limit': newLimit,
-                          'isUpdate': true,
-                          'circleId': circle['id'],
-                        },
-                      )
-                      as Map<String, dynamic>?;
-
-              if (pinResult == null || !context.mounted) return;
-
-              final bool success = pinResult['success'] ?? false;
-              final String message = pinResult['message'] ?? "";
-
-              Navigator.pop(context); // Close the edit dialog
-
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  content: Row(
-                    children: [
-                      Icon(
-                        success ? Icons.check_circle : Icons.error,
-                        color: Colors.white,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        message.isNotEmpty
-                            ? message
-                            : (success
-                                  ? "Limit Updated!"
-                                  : "Failed to update limit"),
-                      ),
-                    ],
-                  ),
-                  backgroundColor: success ? Colors.green : Colors.red,
-                ),
-              );
-
-              if (success) {
-                _loadCircleData();
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          // If accounts were fetched, trigger a rebuild of the dialog content
+          if (isPrimary && isLoadingAccounts && myAccounts.isEmpty) {
+            _apiService.getMyAllAccounts().then((accounts) {
+              if (mounted) {
+                setDialogState(() {
+                  myAccounts = accounts;
+                  isLoadingAccounts = false;
+                });
               }
-            },
-            child: const Text("Update"),
-          ),
-        ],
+            });
+          }
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: Text(dialogTitle),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: controller,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: "Monthly Limit (₹)",
+                      prefixText: "₹ ",
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      "Delegation Mode",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: RadioGroup<String>(
+                      groupValue: delegationType,
+                      onChanged: (v) =>
+                          setDialogState(() => delegationType = v!),
+                      child: Column(
+                        children: [
+                          RadioListTile<String>.adaptive(
+                            title: const Text(
+                              "Full (Auto-pay)",
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: const Text(
+                              "Member spends directly within limits",
+                            ),
+                            value: "FULL",
+                          ),
+                          const Divider(height: 1),
+                          RadioListTile<String>.adaptive(
+                            title: const Text(
+                              "Partial (Approve)",
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: const Text("You approve every payment"),
+                            value: "PARTIAL",
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Only show Funding Account for parent
+                  if (isPrimary) ...[
+                    const SizedBox(height: 24),
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        "Funding Account",
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (isLoadingAccounts)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(8.0),
+                          child: CircularProgressIndicator.adaptive(),
+                        ),
+                      )
+                    else if (myAccounts.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade400),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<int>(
+                            isExpanded: true,
+                            value: selectedPrimaryId,
+                            items: myAccounts.map((account) {
+                              return DropdownMenuItem<int>(
+                                value: account['id'],
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      account['upi_id'],
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    Text(
+                                      account['bank_name'] ?? "Unknown Bank",
+                                      style: TextStyle(
+                                        color: Colors.grey.shade600,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (v) {
+                              setDialogState(() => selectedPrimaryId = v);
+                            },
+                          ),
+                        ),
+                      )
+                    else
+                      const Text(
+                        "Using current account",
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Cancel"),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  final newLimit = double.tryParse(controller.text);
+                  if (newLimit == null || newLimit <= 0) return;
+
+                  // Navigate to PIN setup screen for update
+                  if (!context.mounted) return;
+
+                  final pinResult =
+                      await Navigator.pushNamed(
+                            context,
+                            '/upi-circle-setup-pin',
+                            arguments: {
+                              'secondaryUpi': isPrimary
+                                  ? circle['secondary_user_upi']
+                                  : circle['primary_user_upi'],
+                              'secondaryName': isPrimary
+                                  ? circle['secondary_user_name']
+                                  : circle['primary_user_name'],
+                              'limit': newLimit,
+                              'delegationType': delegationType,
+                              'primaryUserId': isPrimary
+                                  ? selectedPrimaryId
+                                  : null,
+                              'isUpdate': true,
+                              'circleId': circle['id'],
+                            },
+                          )
+                          as Map<String, dynamic>?;
+
+                  if (pinResult == null || !context.mounted) return;
+
+                  final bool success = pinResult['success'] ?? false;
+                  final String message = pinResult['message'] ?? "";
+
+                  Navigator.pop(context); // Close the edit dialog
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      content: Row(
+                        children: [
+                          Icon(
+                            success ? Icons.check_circle : Icons.error,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            message.isNotEmpty
+                                ? message
+                                : (success
+                                      ? "Circle Updated!"
+                                      : "Failed to update circle"),
+                          ),
+                        ],
+                      ),
+                      backgroundColor: success ? Colors.green : Colors.red,
+                    ),
+                  );
+
+                  if (success) {
+                    _loadCircleData();
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text("Update"),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

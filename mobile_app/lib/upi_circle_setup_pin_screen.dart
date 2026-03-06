@@ -12,6 +12,7 @@ class UPICircleSetupPinScreen extends StatefulWidget {
   final bool isUpdate;
   final bool isRemove;
   final int? circleId;
+  final int? primaryUserId;
 
   const UPICircleSetupPinScreen({
     super.key,
@@ -22,6 +23,7 @@ class UPICircleSetupPinScreen extends StatefulWidget {
     this.isUpdate = false,
     this.isRemove = false,
     this.circleId,
+    this.primaryUserId,
   });
 
   @override
@@ -92,9 +94,11 @@ class _UPICircleSetupPinScreenState extends State<UPICircleSetupPinScreen> {
           'message': success ? "Member Removed!" : "Failed to remove member",
         });
       } else if (widget.isUpdate) {
-        final bool success = await _api.updateCircleLimit(
-          widget.circleId!,
-          widget.limit,
+        final bool success = await _api.updateCircleMember(
+          circleId: widget.circleId!,
+          newLimit: widget.limit,
+          delegationType: widget.delegationType,
+          primaryUserId: widget.primaryUserId,
         );
         if (!mounted) return;
         Navigator.pop(context, {

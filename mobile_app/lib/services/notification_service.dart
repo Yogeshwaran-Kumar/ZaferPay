@@ -97,9 +97,7 @@ class NotificationService {
 
     // 2. Initialize Local Notifications
     const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings(
-          '@mipmap/launcher_icon',
-        ); // Changed to launcher_icon (safer)
+        AndroidInitializationSettings('ic_launcher');
     const DarwinInitializationSettings initializationSettingsIOS =
         DarwinInitializationSettings(
           requestAlertPermission: true,
@@ -155,7 +153,6 @@ class NotificationService {
       }
 
       RemoteNotification? notification = message.notification;
-      AndroidNotification? android = message.notification?.android;
 
       // Increment Badge Count (Foreground)
       try {
@@ -178,9 +175,9 @@ class NotificationService {
       }
 
       // Show Local Notification
-      if (notification != null && android != null) {
+      if (notification != null) {
         _localNotifications.show(
-          notification.hashCode,
+          DateTime.now().millisecondsSinceEpoch.remainder(100000),
           notification.title,
           notification.body,
           NotificationDetails(
@@ -188,7 +185,7 @@ class NotificationService {
               _channel.id,
               _channel.name,
               channelDescription: _channel.description,
-              icon: '@mipmap/launcher_icon',
+              icon: 'ic_launcher',
               importance: Importance.max,
               priority: Priority.max,
               playSound: true,

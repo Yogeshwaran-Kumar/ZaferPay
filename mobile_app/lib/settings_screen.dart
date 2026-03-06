@@ -110,12 +110,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
 
     if (shouldLogout == true) {
-      // Clear ALL data IMMEDIATELY on UI thread to prevent flashes
-      await _api.wipeAllCaches();
-
-      // Call backend logout...
+      // Call backend logout FIRST (while tokens are still valid)
       await _api.logout();
-      // Clear all local storage
+
+      // Then clear local caches and storage
+      await _api.wipeAllCaches();
       await _storage.deleteAll();
       if (mounted) {
         // Navigate to login screen and remove all previous routes

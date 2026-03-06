@@ -40,14 +40,24 @@ def send_daily_summaries():
         end_time = datetime.now()
         sent_count = 0
 
-        for user in users:
+        for user_item in users:
+            # 1.1 Use pessimistic locking to ensure only one worker processes this user
+            # We must re-fetch the user within a transaction to apply the lock correctly
+            user = db.query(models.User).with_for_update().filter(models.User.id == user_item.id).first()
+            if not user:
+                continue
+
             # Check summary frequency logic
             frequency_days = user.summary_frequency or 1
             last_sent = user.last_summary_sent_at
             
-            # If never sent, or if enough time has passed based on frequency
-            if last_sent and (end_time - last_sent).days < frequency_days:
-                continue
+            # Use total seconds for more precise frequency check (within a 1-hour window tolerance)
+            # This prevents duplicate triggers if multiple workers start within a few minutes of each other.
+            if last_sent:
+                diff_seconds = (end_time - last_sent).total_seconds()
+                # If we've already sent a summary within the frequency window (minus 1 hour buffer)
+                if diff_seconds < (frequency_days * 86400 - 3600):
+                    continue
                 
             start_time = end_time - timedelta(days=frequency_days)
         
@@ -76,6 +86,7 @@ def send_daily_summaries():
                 models.Transaction.timestamp <= end_time
             ).scalar()
 
+            # ... Calculate other sums ...
             circle_sent_sum = db.query(func.sum(models.Transaction.amount)).filter(
                 (
                     (models.Transaction.sender_id == user.id) & (models.Transaction.initiated_by_id != None) & (models.Transaction.initiated_by_id != user.id)
@@ -97,7 +108,7 @@ def send_daily_summaries():
                 if frequency_days == 7: period_str = "Weekly"
                 if frequency_days == 30: period_str = "Monthly"
                 
-                title = f"📊 Your {period_str} Summary"
+                title = f"Your {period_str} Summary"
                 body = f"Activity: You received ₹{received:.2f} and spent ₹{sent:.2f}."
                 if circle_sent > 0:
                     if user.bank_name: # Parent
@@ -115,7 +126,11 @@ def send_daily_summaries():
                 if success:
                     sent_count += 1
                     user.last_summary_sent_at = end_time
-                    db.commit()
+                    db.commit() # Commit immediately to release the lock for this user
+            else:
+                # Still update the timestamp even if no activity, so we don't keep re-checking
+                user.last_summary_sent_at = end_time
+                db.commit()
                     
         logger.info(f"Daily summaries sent successfully to {sent_count} users.")
 

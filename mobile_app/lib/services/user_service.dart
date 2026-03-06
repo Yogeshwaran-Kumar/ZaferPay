@@ -154,6 +154,19 @@ class UserService {
   }
 
   // --- User Lookups ---
+  Future<List<dynamic>> getMyAllAccounts() async {
+    try {
+      final response = await _apiClient.get('/users/me/all-accounts');
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        return List<dynamic>.from(data['accounts']);
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
   Future<Map<String, dynamic>?> lookupUser(String upiId) async {
     try {
       final response = await _apiClient.get(
@@ -305,11 +318,21 @@ class UserService {
     }
   }
 
-  Future<bool> updateCircleLimit(int circleId, double newLimit) async {
+  Future<bool> updateCircleMember({
+    required int circleId,
+    double? newLimit,
+    String? delegationType,
+    int? primaryUserId,
+  }) async {
     try {
       final response = await _apiClient.put(
-        '/circle/update-limit',
-        body: {'circle_id': circleId, 'new_limit': newLimit},
+        '/circle/update',
+        body: {
+          'circle_id': circleId,
+          if (newLimit != null) 'new_limit': newLimit,
+          if (delegationType != null) 'delegation_type': delegationType,
+          if (primaryUserId != null) 'primary_user_id': primaryUserId,
+        },
       );
       return response.statusCode == 200;
     } catch (_) {
@@ -324,6 +347,16 @@ class UserService {
     } catch (_) {
       return false;
     }
+  }
+
+  Future<Map<String, dynamic>?> getPaymentRequest(int requestId) async {
+    try {
+      final response = await _apiClient.get('/requests/$requestId');
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+    } catch (_) {}
+    return null;
   }
 
   Future<bool> cancelPaymentRequest(int requestId) async {

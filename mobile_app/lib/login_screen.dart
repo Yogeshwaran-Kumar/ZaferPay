@@ -311,28 +311,15 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
     } else if (result['exists'] == true && result['status'] == 'existing') {
-      // Existing user - Check for device conflict
-      final hasConflict = result['has_device_conflict'] == true;
-
-      if (hasConflict) {
-        // Show device conflict dialog BEFORE PIN entry
-        setState(() {
-          _upiId = result['upi_id'] ?? '';
-        });
-        if (mounted) {
-          _showForceLoginDialogEarly();
-        }
-      } else {
-        // No conflict - proceed to PIN entry
-        _secureScreen();
-        setState(() {
-          _currentStep = 3; // Enter PIN
-          _enteredPin = '';
-          _upiId = result['upi_id'] ?? '';
-        });
-        // Save mobile immediately so if app restarts, we return to PIN screen (Unlock Mode)
-        await _api.saveMobile(mobile);
-      }
+      // Existing user - proceed to PIN entry
+      _secureScreen();
+      setState(() {
+        _currentStep = 3; // Enter PIN
+        _enteredPin = '';
+        _upiId = result['upi_id'] ?? '';
+      });
+      // Save mobile immediately so if app restarts, we return to PIN screen (Unlock Mode)
+      await _api.saveMobile(mobile);
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -546,6 +533,10 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
       setState(() => _enteredPin = '');
+    } else if (error == 'LOGGED_IN_ELSEWHERE') {
+      if (mounted) {
+        _showDeviceConflictDialogAfterPin(pin);
+      }
     } else {
       // Any other error
       if (mounted) {
@@ -561,8 +552,8 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // Dialog shown BEFORE PIN entry (after mobile number check) when device conflict detected
-  void _showForceLoginDialogEarly() {
+  // Dialog shown AFTER correct PIN entry when device conflict detected
+  void _showDeviceConflictDialogAfterPin(String pin) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -583,56 +574,8 @@ class _LoginScreenState extends State<LoginScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'You are currently logged in on another device.',
+              'This account is login in another device. For login in this device click logout button.',
               style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'What would you like to do?',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                const Icon(
-                  Icons.check_circle_outline,
-                  size: 20,
-                  color: Colors.greenAccent,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Logout from other device and login here',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.greenAccent.shade100,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(
-                  Icons.cancel_outlined,
-                  size: 20,
-                  color: Colors.orangeAccent,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Stay logged in on other device',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.orangeAccent.shade100,
-                    ),
-                  ),
-                ),
-              ],
             ),
           ],
         ),
@@ -640,8 +583,10 @@ class _LoginScreenState extends State<LoginScreen> {
           OutlinedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              // User chooses to keep other device - stay on mobile entry screen
+              // User chooses to keep other device - cancel login and go back to mobile entry
               setState(() {
+                _currentStep = 0;
+                _enteredPin = '';
                 _forceLogoutApproved = false;
               });
             },
@@ -650,17 +595,13 @@ class _LoginScreenState extends State<LoginScreen> {
               side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
-            child: const Text('No, Keep Other Device'),
+            child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              // User approves force logout - proceed to PIN entry
-              setState(() {
-                _forceLogoutApproved = true;
-                _currentStep = 3; // Move to PIN entry
-                _enteredPin = '';
-              });
+              // User approves force logout - retry login with force: true
+              _login(force: true, pinToUse: pin);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF00B9F1),
@@ -668,7 +609,7 @@ class _LoginScreenState extends State<LoginScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               elevation: 4,
             ),
-            child: const Text('Yes, Login Here'),
+            child: const Text('Logout'),
           ),
         ],
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),

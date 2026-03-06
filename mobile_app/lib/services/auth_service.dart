@@ -90,6 +90,16 @@ class AuthService {
 
   Future<void> logout() async {
     try {
+      // CRITICAL: Call backend /logout FIRST (while token is still valid)
+      // This clears device_id_hash so the user can login on other devices
+      final deviceId = await _getDeviceId();
+      await _apiClient.post('/logout', headers: {'X-Device-ID': deviceId});
+    } catch (e) {
+      if (kDebugMode) print("Backend logout error (non-blocking): $e");
+    }
+
+    try {
+      // Now clear local tokens and state
       await _storage.delete(key: 'token');
       await _storage.delete(key: 'refresh_token');
       // Explicit manual logout clears the "Identity" (saved mobile)

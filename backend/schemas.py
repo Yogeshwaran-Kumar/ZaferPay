@@ -110,6 +110,9 @@ class SettingsUpdateRequest(BaseModel):
 class UserLookupResponse(UserResponse):
     unread_count: int = 0
 
+class UserAccountsResponse(BaseModel):
+    accounts: List[UserResponse]
+
 class PublicUserResponse(BaseModel):
     username: str
     upi_id: str
@@ -472,9 +475,11 @@ class UPICircleResponse(BaseModel):
     status: str
     msg: str
 
-class UPICircleLimitUpdate(BaseModel):
+class UPICircleUpdate(BaseModel):
     circle_id: int
-    new_limit: float
+    new_limit: Optional[float] = None
+    delegation_type: Optional[str] = None
+    primary_user_id: Optional[int] = None
 
 class UPICircleInviteRequest(BaseModel):
     secondary_upi_id: str

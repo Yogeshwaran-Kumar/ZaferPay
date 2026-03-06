@@ -183,6 +183,9 @@ class _AmountScreenState extends State<AmountScreen> {
             : prefill.toString();
       }
       _isCirclePaymentApproval = args['isCirclePayment'] == true;
+      if (args['note'] != null) {
+        _noteController.text = args['note'];
+      }
     }
 
     // Locked QR Amount prefill
@@ -1451,6 +1454,14 @@ class _AmountScreenState extends State<AmountScreen> {
                                 child: TextField(
                                   controller: _noteController,
                                   textAlign: TextAlign.center,
+                                  readOnly:
+                                      _isCirclePaymentApproval ||
+                                      _isAnalyzingRisk ||
+                                      _hasAnalyzedRisk,
+                                  enabled:
+                                      !_isCirclePaymentApproval &&
+                                      !_isAnalyzingRisk &&
+                                      !_hasAnalyzedRisk,
                                   style: GoogleFonts.outfit(
                                     color: textColor,
                                     fontSize: 14,

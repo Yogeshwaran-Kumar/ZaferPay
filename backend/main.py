@@ -361,23 +361,22 @@ def login_for_access_token(
         x_device_hash = security.hash_value(x_device_id)
         
         # Check against stored hash
-        # Check against stored hash
-        # if user.device_id_hash and user.device_id_hash != x_device_hash:
-        #     if not force_logout:
-        #         # User is already logged in on another device
-        #         raise HTTPException(
-        #             status_code=status.HTTP_409_CONFLICT,
-        #             detail={
-        #                 "message": "already_logged_in",
-        #                 "info": "You are currently logged in on another device. To continue on this device, you must logout from the other device."
-        #             },
-        #         )
+        if user.device_id_hash and user.device_id_hash != x_device_hash:
+            if not force_logout:
+                # User is already logged in on another device
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "message": "already_logged_in",
+                        "info": "You are currently logged in on another device. To continue on this device, you must logout from the other device."
+                    },
+                )
             # Force logout from other device - update device_id automatically below
+            print(f"Force logout approved for user {user.username}. Updating device to {x_device_id}")
         
-        # Update device_id (either first login or force logout)
-        # Update device_id (either first login or force logout)
-        # user.device_id_hash = x_device_hash
-        # user.device_id_encrypted = security.encrypt_value(x_device_id)  # AES-256 encrypted
+        # Update device_id binding
+        user.device_id_hash = x_device_hash
+        user.device_id_encrypted = security.encrypt_value(x_device_id)  # AES-256 encrypted
         user.last_active_at = datetime.now()  # Mark as active now
         db.commit()
 
@@ -616,11 +615,8 @@ def check_mobile(
         
         # Existing user with PIN - Check for device conflict
         has_device_conflict = False
-        if x_device_id:
-            x_device_hash = security.hash_value(x_device_id)
-            # if user.device_id_hash and user.device_id_hash != x_device_hash:
-            #     has_device_conflict = True
-            #     print(f"Device conflict: {user.username} logged in on another device")
+        # Note: Conflict check removed from here to follow the "post-PIN" logic.
+        # This prevents revealing device state to unauthorized users.
         
         return {
             "exists": True, 
@@ -802,9 +798,26 @@ def logout(
                 )
                 db.add(logout_record)
             else:
-                print(f"Logout called but no active session found for device {x_device_id}")
+                print(f"Logout called but no active LOGIN session found for device {x_device_id}")
+
+            # ALWAYS clear device binding if the logging out device is the currently bound one
+            if current_user.device_id_hash == device_hash:
+                print(f"Clearing device binding for user {current_user.username}")
+                current_user.device_id_hash = None
+                current_user.device_id_encrypted = None
+        else:
+            # No device ID provided - clear device binding unconditionally
+            print(f"Logout without device ID - clearing all device binding for {current_user.username}")
+            current_user.device_id_hash = None
+            current_user.device_id_encrypted = None
     except Exception as e:
         print(f"Error recording logout event: {e}")
+        # Still clear device binding on error to prevent lock-out
+        try:
+            current_user.device_id_hash = None
+            current_user.device_id_encrypted = None
+        except:
+            pass
 
     current_user.last_active_at = None
     db.commit()
@@ -824,9 +837,11 @@ def update_fcm_token(
     """
     Update the FCM Token for the current user to receive push notifications.
     """
-    logger.info(f"📲 Updating FCM token for user {current_user.username}")
-    current_user.fcm_token = fcm_token_update.fcm_token
+    token = fcm_token_update.fcm_token
+    logger.info(f"Updating FCM token for user {current_user.username} (id={current_user.id}) | token_prefix='{token[:20] if token else 'None'}...'")
+    current_user.fcm_token = token
     db.commit()
+    logger.info(f"FCM token saved successfully for user {current_user.username}")
     return {"msg": "FCM token updated successfully"}
 
 @app.get("/users/me/bank", response_model=schemas.BankAccountResponse)
@@ -1156,6 +1171,16 @@ def lookup_user_by_phone(phone_number: str, db: Session = Depends(get_db), curre
     if not user:
         raise HTTPException(status_code=404, detail="Phone number not found")
     return user
+
+@app.get("/users/me/all-accounts", response_model=schemas.UserAccountsResponse)
+def get_my_all_accounts(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Fetch all UPI IDs associated with the current user's mobile number"""
+    # Simply use the mobile_hash of the current logged in user
+    users = db.query(models.User).filter(models.User.mobile_hash == current_user.mobile_hash).all()
+    return {"accounts": users}
 
 @app.get("/users/search", response_model=List[schemas.PublicUserResponse])
 def search_users(
@@ -1539,7 +1564,7 @@ def create_transaction(
             )
             
         # Check Delegation Type
-        if circle.delegation_type == "PARTIAL":
+        if circle.delegation_type == "PARTIAL" and not tx.request_id:
             # STOP: Create a payment request for approval instead of moving money
             new_request = models.PaymentRequest(
                 requester_id=current_user.id, # The Son
@@ -1954,7 +1979,7 @@ def create_transaction(
                 background_tasks.add_task(
                     notifications.send_fcm_notification,
                     token=receiver_user.fcm_token,
-                    title=f"Money Received from {sender_user.username}! 💰",
+                    title=f"Money Received from {sender_user.username}!",
                     body=f"You received ₹{tx.amount}",
                     data={
                         "type": "transaction_received",
@@ -2037,23 +2062,29 @@ def create_transaction(
         try:
             payment_request = db.query(models.PaymentRequest).filter(models.PaymentRequest.id == tx.request_id).first()
             if payment_request:
-                # Verify parties match (robustness)
-                if (payment_request.payer_id == sender_user.id and 
-                    payment_request.requester_id == receiver_user.id):
-                    
+                # For circle approvals: the requester is the CHILD (not the merchant receiver)
+                # The payer is the PARENT (sender).
+                # For normal refund requests: requester is the one wanting money back,
+                # payer is the one who owes.
+                is_circle_approval = payment_request.circle_id is not None
+                
+                if is_circle_approval:
+                    # Circle approval: payer matches sender (parent), 
+                    # and the target_upi matches the receiver
+                    parties_match = (
+                        payment_request.payer_id == sender_user.id and
+                        payment_request.target_upi == receiver_user.upi_id
+                    )
+                else:
+                    # Normal request: payer is sender, requester is receiver
+                    parties_match = (
+                        payment_request.payer_id == sender_user.id and
+                        payment_request.requester_id == receiver_user.id
+                    )
+                
+                if parties_match:
                     payment_request.status = "paid"
-                    # No transaction_id field on PaymentRequest based on models check, 
-                    # but if there was, we'd set it here.
-                    # Per schema, there isn't one explicitly linked in the model usually, 
-                    # but let's check if we added it. The user prompt implied linking.
-                    # If models.PaymentRequest has transaction_id, set it.
-                    # Safe check:
-                    if hasattr(payment_request, 'transaction_id'):
-                         # It seems PaymentRequest might not have transaction_id col in original design
-                         # But likely we want to know WHICH tx paid it.
-                         # If not present, we just update status.
-                         pass
-                         
+                    payment_request.updated_at = datetime.now()
                     db.commit()
                     print(f"Marked PaymentRequest {tx.request_id} as PAID by {new_tx.transaction_id}")
                 else:
@@ -2068,6 +2099,23 @@ def create_transaction(
         clear_home_cache(receiver_user.id)
     if current_user.id != sender_user.id:
         clear_home_cache(current_user.id)
+    # Also invalidate child's cache and notify for circle payments
+    if is_circle and circle:
+        child_user_id = circle.secondary_user_id
+        clear_home_cache(child_user_id)
+        # Notify the child that their circle payment was approved and completed
+        try:
+            notifications.send_push_notification(
+                db,
+                child_user_id,
+                "Payment Approved",
+                f"Your payment of ₹{tx.amount} to {receiver_user.username} was approved and completed.",
+                "circle_payment_approved",
+                background_tasks=background_tasks
+            )
+            db.commit()
+        except Exception as e:
+            print(f"Failed to send circle approval notification to child: {e}")
 
     return schemas.TransactionResponse(
         transaction_id=new_tx.transaction_id,
@@ -2156,14 +2204,10 @@ def get_home_aggregate(
         
     total_unread_global = sum(unread_tx_counts.values()) + sum(unread_msg_counts.values()) + sum(unread_req_counts.values())
 
-    # D. Daily Summary (Fixed Snapshot - Last 10 PM cycle)
+    # D. Daily Summary (Rolling 24-hour window ending NOW for real-time display)
     now = datetime.now()
-    # Find the most recent 10 PM boundary
-    end_time = now.replace(hour=22, minute=0, second=0, microsecond=0)
-    if now < end_time:
-        end_time -= timedelta(days=1)
-        
-    start_time = end_time - timedelta(days=1)
+    end_time = now
+    start_time = now - timedelta(days=1)
     
     daily_received = db.query(func.sum(models.Transaction.amount)).filter(
         models.Transaction.receiver_id == current_user.id,
@@ -2952,46 +2996,31 @@ def create_payment_request(
     db.commit()
     db.refresh(new_request)
     
-    # Notify Payer
-    notification = models.Notification(
-        user_id=payer.id,
-        title="Payment Request Received",
-        message=f"{current_user.username} requested ₹{request_data.amount}",
-        type="info"
-    )
-    db.add(notification)
-    db.commit()
-
     # Push Notification (Background Task)
-    try:
-        if payer.fcm_token:
-            notif_title = "Payment Request 💸"
-            notif_body = f"{current_user.username} requested ₹{request_data.amount}"
+    notif_title = "Payment Request"
+    notif_body = f"{current_user.username} requested ₹{request_data.amount}"
 
-            if request_data.original_transaction_id:
-                notif_title = "Refund Request ↩️"
-                notif_body = f"{current_user.username} is requesting reverse amount of ₹{request_data.amount}"
+    if request_data.original_transaction_id:
+        notif_title = "Refund Request"
+        notif_body = f"{current_user.username} is requesting reverse amount of ₹{request_data.amount}"
 
-            background_tasks.add_task(
-                notifications.send_fcm_notification,
-                token=payer.fcm_token,
-                title=notif_title,
-                body=notif_body,
-                data={
-                    "type": "payment_request",
-                    "request_id": str(new_request.id),
-                    "amount": str(request_data.amount),
-                    "requester_name": current_user.username
-                }
-            )
-    except Exception as e:
-        print(f"Failed to queue push notification: {e}")
+    notifications.send_push_notification(
+        db,
+        user_id=payer.id,
+        title=notif_title,
+        message=notif_body,
+        notif_type="payment_request",
+        background_tasks=background_tasks
+    )
+
+    db.commit() # Commit the notification
 
     return _build_payment_request_response(new_request)
 
 @app.post("/requests/{request_id}/cancel", response_model=schemas.PaymentRequestResponse)
 def cancel_payment_request(
     request_id: int,
+    background_tasks: BackgroundTasks,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -3014,8 +3043,14 @@ def cancel_payment_request(
     # Who cancelled?
     if current_user.id == req.requester_id:
         req.cancelled_by = "requester"  # "Withdrawn"
+        notify_user_id = req.payer_id
+        notif_title = "Request Cancelled"
+        notif_msg = f"{current_user.username} cancelled their payment request for ₹{req.amount}."
     else:
         req.cancelled_by = "payer"  # "Declined"
+        notify_user_id = req.requester_id
+        notif_title = "Request Declined"
+        notif_msg = f"{current_user.username} declined your payment request for ₹{req.amount}."
 
         # Special logic for Circle rejections: Create a failed transaction record for history
         if req.circle_id:
@@ -3035,17 +3070,22 @@ def cancel_payment_request(
                 )
                 db.add(new_failed_tx)
                 
-                # Notify child
-                notifications.send_push_notification(
-                    db,
-                    req.requester_id,
-                    "Payment Declined",
-                    f"Your payment request of ₹{req.amount} was declined by the parent.",
-                    "circle_declined"
-                )
+                # Override notification for circle rejection
+                notif_msg = f"Your payment request of ₹{req.amount} was declined by the parent."
+
             except Exception as e:
                 print(f"Failed to create circle rejection record: {e}")
         
+    # Notify the other party
+    notifications.send_push_notification(
+        db,
+        notify_user_id,
+        notif_title,
+        notif_msg,
+        "payment_cancelled",
+        background_tasks=background_tasks
+    )
+
     db.commit()
     
     return _build_payment_request_response(req)
@@ -3053,6 +3093,7 @@ def cancel_payment_request(
 @app.post("/requests/{request_id}/mark-paid", response_model=schemas.PaymentRequestResponse)
 def mark_request_paid(
     request_id: int,
+    background_tasks: BackgroundTasks,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -3070,6 +3111,17 @@ def mark_request_paid(
     
     req.status = "paid"
     req.updated_at = datetime.now()
+
+    # Notify the requester
+    notifications.send_push_notification(
+        db,
+        req.requester_id,
+        "Request Paid",
+        f"{current_user.username} paid your request of ₹{req.amount}.",
+        "payment_paid",
+        background_tasks=background_tasks
+    )
+
     db.commit()
     
     return _build_payment_request_response(req)
@@ -3098,6 +3150,24 @@ def get_sent_requests(
     ).order_by(models.PaymentRequest.timestamp.desc()).all()
     
     return [_build_payment_request_response(r) for r in requests]
+
+@app.get("/requests/{request_id}", response_model=schemas.PaymentRequestResponse)
+def get_payment_request(
+    request_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get a single payment request by ID (for polling status)"""
+    req = db.query(models.PaymentRequest).filter(
+        models.PaymentRequest.id == request_id,
+        (models.PaymentRequest.requester_id == current_user.id) |
+        (models.PaymentRequest.payer_id == current_user.id)
+    ).first()
+    
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+    
+    return _build_payment_request_response(req)
 
 @app.get("/requests/for-transaction/{transaction_id}")
 def get_request_for_transaction(
@@ -3813,24 +3883,67 @@ def get_circle_status(
         "joined_circles": [format_circle(c) for c in joined_circles]
     }
 
-@app.put("/circle/update-limit")
-def update_circle_limit(
-    req: schemas.UPICircleLimitUpdate,
+@app.put("/circle/update")
+def update_circle(
+    req: schemas.UPICircleUpdate,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    """Update the monthly limit for a circle member"""
+    """Update circle member configuration (limit, delegation mode, or parent account)"""
+    # Only the parent (primary user) can update circle settings
     circle = db.query(models.UPICircle).filter(
         models.UPICircle.id == req.circle_id,
         models.UPICircle.primary_user_id == current_user.id
     ).first()
     
     if not circle:
-        raise HTTPException(status_code=404, detail="Circle member not found")
+        raise HTTPException(status_code=404, detail="Circle member not found or access denied")
         
-    circle.monthly_limit = req.new_limit
+    if req.new_limit is not None:
+        circle.monthly_limit = req.new_limit
+        
+    if req.delegation_type is not None:
+        circle.delegation_type = req.delegation_type
+        
+    if req.primary_user_id is not None:
+        # Validate that the new primary_user_id belongs to the same person (mobile)
+        new_primary = db.query(models.User).filter(models.User.id == req.primary_user_id).first()
+        if not new_primary or new_primary.mobile_hash != current_user.mobile_hash:
+            raise HTTPException(status_code=403, detail="New parent account must belong to you")
+        circle.primary_user_id = req.primary_user_id
+
     db.commit()
-    return {"msg": "Limit updated successfully", "new_limit": circle.monthly_limit}
+
+    # Invalidate child's cache so they see updated settings immediately
+    clear_home_cache(circle.secondary_user_id)
+
+    # Send notification to the secondary user (child)
+    try:
+        change_desc = []
+        if req.new_limit is not None:
+            change_desc.append(f"limit changed to ₹{req.new_limit}")
+        if req.delegation_type is not None:
+            change_desc.append(f"access mode changed to {req.delegation_type}")
+        
+        if change_desc:
+            desc_text = " and ".join(change_desc)
+            notifications.send_push_notification(
+                db,
+                user_id=circle.secondary_user_id,
+                title="UPI Circle Updated",
+                message=f"Your UPI Circle {desc_text} by {current_user.full_name or current_user.username}",
+                notif_type="circle_update"
+            )
+            db.commit() # Commit the notification
+    except Exception as e:
+        logger.error(f"Failed to send circle update notification: {e}")
+
+    return {
+        "msg": "Circle configuration updated successfully", 
+        "monthly_limit": circle.monthly_limit,
+        "delegation_type": circle.delegation_type,
+        "primary_user_id": circle.primary_user_id
+    }
 
 @app.delete("/circle/remove/{circle_id}", tags=["UPI Circle"])
 def remove_circle_member(

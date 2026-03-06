@@ -1314,9 +1314,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             final isCircleRequest = req['circle_id'] != null;
                             final targetUpi =
                                 req['target_upi'] ?? req['requester_upi_id'];
-                            final targetName = isCircleRequest
-                                ? "Merchant"
-                                : name;
+                            // For circle requests, we want AmountScreen to resolve the actual name from UPI
+                            final targetName = isCircleRequest ? null : name;
 
                             // OPTIMISTIC UI: Remove immediately (<0.5s update)
                             setState(() {
@@ -1337,6 +1336,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                 'prefillAmount': amount,
                                 'requestReason': reason,
                                 'isCirclePayment': isCircleRequest,
+                                'note':
+                                    req['description'], // Pass the child's note
                               },
                             ).then((_) {
                               // Re-fetching will confirm it's gone from server

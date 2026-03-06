@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_jailbreak_detection/flutter_jailbreak_detection.dart';
 import 'api_service.dart';
@@ -59,6 +60,7 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
   IconData _shieldIcon = Icons.perm_device_information;
 
   Map<String, dynamic>? _result;
+  Timer? _pollTimer;
 
   @override
   void initState() {
@@ -79,6 +81,7 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
 
   @override
   void dispose() {
+    _stopPolling();
     _pulseController.dispose();
 
     // If we leave the screen while processing a circle payment,
@@ -90,6 +93,45 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
     }
 
     super.dispose();
+  }
+
+  void _startPolling(int requestId) {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+      try {
+        final req = await _api.getPaymentRequest(requestId);
+        if (req != null && req['status'] == 'paid') {
+          _stopPolling();
+          if (mounted) {
+            _result = {
+              'status': 'SUCCESS',
+              'tx_id': req['id']?.toString() ?? 'SUCCESS',
+              'detail': 'Parent approved your payment.',
+            };
+            _handleResult();
+          }
+        } else if (req != null &&
+            (req['status'] == 'rejected' || req['status'] == 'cancelled')) {
+          _stopPolling();
+          if (mounted) {
+            _result = {
+              'status': 'FAILED',
+              'detail': req['status'] == 'rejected'
+                  ? 'Parent declined the request.'
+                  : 'Request was cancelled.',
+            };
+            _handleResult();
+          }
+        }
+      } catch (e) {
+        if (kDebugMode) print("Polling error: $e");
+      }
+    });
+  }
+
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
   }
 
   Future<void> _startSecurityFlow() async {
@@ -177,10 +219,18 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
 
     setState(() {
       if (!isPending) {
+        _stopPolling();
         _pulseController.stop(); // Stop pulsing for final result
         _stage = 4;
       } else {
         _stage = 3; // Keep animation stage for pending
+        // Start polling for child only if not already polling
+        if (_result?['request_id'] != null) {
+          _startPolling(_result!['request_id']);
+        } else if (widget.requestId != null) {
+          // Fallback if we already have it
+          _startPolling(widget.requestId!);
+        }
       }
     });
 
@@ -205,7 +255,11 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
       });
     } else if (status == 'PENDING_APPROVAL' || status == 'ACCEPTED') {
       setState(() {
-        _statusText = "Waiting for Parent Approval...";
+        // If parent is currently approving, show "Processing Approval..."
+        // If child is waiting, show "Waiting for Parent Approval..."
+        _statusText = widget.requestId != null
+            ? "Processing Approval..."
+            : "Waiting for Parent Approval...";
         _shieldColor = Colors.orange;
         _shieldIcon = Icons.hourglass_top_rounded;
       });
