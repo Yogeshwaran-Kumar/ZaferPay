@@ -223,6 +223,21 @@ class TransactionService {
         return json.decode(response.body);
       }
 
+      if (response.statusCode == 202) {
+        final body = json.decode(response.body);
+        if (body['detail'] is Map) {
+          return {
+            'status': body['detail']['status'] ?? 'PENDING_APPROVAL',
+            'detail': body['detail']['message'] ?? 'Approval Request Sent',
+            'request_id': body['detail']['request_id'],
+          };
+        }
+        return {
+          'status': 'PENDING_APPROVAL',
+          'detail': body['detail'] ?? 'Approval Request Sent',
+        };
+      }
+
       if (response.statusCode == 401) {
         await _authService.recordFailedAttempt();
         if (_authService.failedAttempts >= 3) {
@@ -434,6 +449,7 @@ class TransactionService {
     String? transactionDate,
     String? transactionTime,
     String? transactionAmount,
+    String? paymentThrough,
   }) async {
     try {
       final body = {
@@ -451,6 +467,7 @@ class TransactionService {
         if (transactionDate != null) 'transaction_date': transactionDate,
         if (transactionTime != null) 'transaction_time': transactionTime,
         if (transactionAmount != null) 'transaction_amount': transactionAmount,
+        if (paymentThrough != null) 'payment_through': paymentThrough,
       };
 
       final response = await _apiClient.post('/complaints', body: body);

@@ -534,17 +534,42 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
     }
 
     double spent = 0.0;
+    double selfSpent = 0.0;
+    double circleSpent = 0.0;
+    Map<String, double> childSpendMap = {};
+
     for (var tx in widget.history) {
       if (tx['status'] != 'SUCCESS') continue;
-      if (tx['sender_upi_id'] != widget.user['upi_id'] &&
-          tx['initiated_by_upi'] != widget.user['upi_id'])
-        continue;
-      try {
-        final txDate = DateTime.parse(tx['timestamp']).toLocal();
-        if (txDate.isAfter(limitStart)) {
-          spent += (tx['amount'] ?? 0).toDouble();
-        }
-      } catch (_) {}
+
+      // We only care about money GOING OUT (Sender is the User)
+      // OR transactions initiated by the user (if it's a child account, they are initiated_by)
+      if (tx['sender_upi_id'] == widget.user['upi_id']) {
+        try {
+          final txDate = DateTime.parse(tx['timestamp']).toLocal();
+          if (txDate.isAfter(limitStart)) {
+            final amt = (tx['amount'] ?? 0).toDouble();
+            spent += amt;
+
+            if (tx['initiated_by_upi'] != null &&
+                tx['initiated_by_upi'] != widget.user['upi_id']) {
+              circleSpent += amt;
+              String childName = tx['initiated_by_name'] ?? 'Assistant';
+              childSpendMap[childName] = (childSpendMap[childName] ?? 0) + amt;
+            } else {
+              selfSpent += amt;
+            }
+          }
+        } catch (_) {}
+      } else if (tx['initiated_by_upi'] == widget.user['upi_id']) {
+        try {
+          final txDate = DateTime.parse(tx['timestamp']).toLocal();
+          if (txDate.isAfter(limitStart)) {
+            final amt = (tx['amount'] ?? 0).toDouble();
+            spent += amt;
+            selfSpent += amt;
+          }
+        } catch (_) {}
+      }
     }
 
     final remaining = (limit - spent).clamp(0.0, double.infinity);
@@ -821,6 +846,117 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
                 ],
               ),
             ),
+          ],
+
+          // ── UPI Circle Breakdown ──
+          if (circleSpent > 0) ...[
+            const SizedBox(height: 24),
+            Divider(
+              color: isDark ? Colors.white10 : Colors.grey.shade100,
+              height: 1,
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Icon(
+                  Icons.analytics_outlined,
+                  size: 16,
+                  color: isDark ? Colors.grey.shade500 : Colors.grey.shade600,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Spending Breakdown',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white70 : Colors.black54,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _buildBreakdownRow(
+              'Your Direct Spending',
+              selfSpent,
+              const Color(0xFF00B9F1),
+              isDark,
+            ),
+            const SizedBox(height: 10),
+            _buildBreakdownRow(
+              'UPI Circle Spending',
+              circleSpent,
+              Colors.deepPurple,
+              isDark,
+            ),
+            if (childSpendMap.isNotEmpty &&
+                widget.user['bank_name'] != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.03)
+                      : const Color(0xFFF8F9FA),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.05)
+                        : Colors.grey.shade200,
+                  ),
+                ),
+                child: Column(
+                  children: childSpendMap.entries.map((e) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 5),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  color: Colors.deepPurple.withValues(
+                                    alpha: 0.1,
+                                  ),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.person_rounded,
+                                  size: 12,
+                                  color: Colors.deepPurple,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                e.key,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: isDark
+                                      ? Colors.grey.shade400
+                                      : Colors.grey.shade700,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Text(
+                            '₹${formatAmount(e.value)}',
+                            style: GoogleFonts.outfit(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.white70 : Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
           ],
         ],
       ),
@@ -1144,6 +1280,48 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
               fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
               color: color,
             ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBreakdownRow(
+    String label,
+    double amount,
+    Color color,
+    bool isDark,
+  ) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                color: isDark ? Colors.grey.shade300 : Colors.black87,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+        Text(
+          '₹${formatAmount(amount)}',
+          style: GoogleFonts.outfit(
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+            color: isDark ? Colors.white : Colors.black,
           ),
         ),
       ],

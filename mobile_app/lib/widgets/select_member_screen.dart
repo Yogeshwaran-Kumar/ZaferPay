@@ -30,19 +30,41 @@ class _SelectMemberScreenState extends State<SelectMemberScreen> {
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+    ContactService.instance.addListener(_onContactServiceChanged);
     _initContacts();
   }
 
   @override
   void dispose() {
+    ContactService.instance.removeListener(_onContactServiceChanged);
     _debounceTimer?.cancel();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
   }
 
+  void _onContactServiceChanged() {
+    if (mounted) {
+      setState(() {
+        _contacts = ContactService.instance.contacts;
+        // Update filtered list based on current search or all contacts
+        if (_searchQuery.isEmpty) {
+          _filteredContacts = _contacts;
+        } else {
+          _filteredContacts = _contacts.where((c) {
+            return c.displayName.toLowerCase().contains(
+                  _searchQuery.toLowerCase(),
+                ) ||
+                c.phones.any((p) => p.number.contains(_searchQuery));
+          }).toList();
+        }
+      });
+    }
+  }
+
   void _initContacts() async {
     setState(() => _isLoading = true);
+    // This now returns as soon as phone book is read, without waiting for verification
     await ContactService.instance.ensureContactsLoaded();
     if (mounted) {
       setState(() {
@@ -303,7 +325,14 @@ class _SelectMemberScreenState extends State<SelectMemberScreen> {
       ),
       title: Row(
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+          ),
           if (isVerified) ...[
             const SizedBox(width: 4),
             const Icon(Icons.verified, size: 16, color: Colors.blue),

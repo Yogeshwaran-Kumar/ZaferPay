@@ -62,6 +62,7 @@ class _AmountScreenState extends State<AmountScreen> {
   bool _isRequestPayment = false;
   int? _paymentRequestId;
   String? _requestReason;
+  bool _isCirclePaymentApproval = false;
 
   // Fixed QR Amount state
   bool _isLockedAmount = false;
@@ -177,6 +178,7 @@ class _AmountScreenState extends State<AmountScreen> {
               )
             : prefill.toString();
       }
+      _isCirclePaymentApproval = args['isCirclePayment'] == true;
     }
 
     // Locked QR Amount prefill
@@ -957,7 +959,11 @@ class _AmountScreenState extends State<AmountScreen> {
                       ? "Exceeds ₹2,000 Limit"
                       : _isSpendingLimitExceeded
                       ? "Spending Limit Exceeded"
-                      : "Proceed",
+                      : (_isCirclePaymentApproval
+                            ? "Approve"
+                            : (_selectedCircle != null
+                                  ? "Send for Approval"
+                                  : "Proceed")),
                   style: GoogleFonts.outfit(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -1669,7 +1675,13 @@ class _AmountScreenState extends State<AmountScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                   child: Text(
-                    _isRisk ? "Proceed with Caution" : "Proceed",
+                    _isRisk
+                        ? "Proceed with Caution"
+                        : (_isCirclePaymentApproval
+                              ? "Approve"
+                              : (_selectedCircle != null
+                                    ? "Send for Approval"
+                                    : "Proceed")),
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,

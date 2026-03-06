@@ -57,11 +57,10 @@ class ContactService extends ChangeNotifier {
   Future<void> _fetchAndVerify() async {
     if (_isFetching) return;
     _isFetching = true;
-    notifyListeners(); // Notify loading start
+    notifyListeners();
 
     try {
       // A. Load Contacts from Phone
-      // Check if we already have contacts loaded to avoid re-reading phone book (slow)
       if (_contacts.isEmpty) {
         final contacts = await FlutterContacts.getContacts(
           withProperties: true,
@@ -74,21 +73,23 @@ class ContactService extends ChangeNotifier {
           ),
         );
         _contacts = contacts;
-        notifyListeners(); // Contacts loaded, but verification pending
+        // B. Return early so UI can show the list immediately
+        _isFetching = false;
+        notifyListeners();
       }
 
-      // B. Batch Identity Check
-      // Only verify contacts we haven't checked yet
-      await _batchVerifyContacts(_contacts);
+      // C. Run Verification in Background (No await)
+      _isFetching = true; // Mark as fetching again for the verification stage
+      _batchVerifyContacts(_contacts).then((_) {
+        _isLoaded = true;
+        _isFetching = false;
+        notifyListeners();
+      });
 
-      // C. Trigger Backend Sync (New)
-      // Send all normalized numbers to backend to update Trust Graph
+      // D. Silent Sync in Background
       _syncContactsWithBackend(_contacts);
-
-      _isLoaded = true;
     } catch (e) {
-      if (kDebugMode) print("Contact Pre-fetch Error: $e");
-    } finally {
+      if (kDebugMode) print("Contact Fetch Error: $e");
       _isFetching = false;
       notifyListeners();
     }

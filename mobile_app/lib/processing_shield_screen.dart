@@ -80,6 +80,15 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
   @override
   void dispose() {
     _pulseController.dispose();
+
+    // If we leave the screen while processing a circle payment,
+    // and it hasn't been finished yet, we should cancel the request
+    // so it doesn't stay on the parent's screen.
+    if (_result?['status'] == 'PENDING_APPROVAL' &&
+        _result?['request_id'] != null) {
+      _api.cancelPaymentRequest(_result!['request_id']);
+    }
+
     super.dispose();
   }
 
@@ -190,6 +199,12 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
         _shieldColor = const Color(0xFFC62828); // Red
         _shieldIcon = Icons.gpp_bad_rounded; // Shield Block
       });
+    } else if (status == 'PENDING_APPROVAL' || status == 'ACCEPTED') {
+      setState(() {
+        _statusText = "Approval Request Sent";
+        _shieldColor = Colors.blue;
+        _shieldIcon = Icons.send_rounded;
+      });
     } else {
       setState(() {
         _statusText = "Payment Failed";
@@ -251,10 +266,21 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
 
   Widget _buildResultCard(BuildContext context, bool isDark) {
     bool isSuccess = _result?['status'] == 'SUCCESS';
+    bool isPending = _result?['status'] == 'PENDING_APPROVAL';
+
     String txId =
         _result?['tx_id'] ?? 'TXN${DateTime.now().millisecondsSinceEpoch}';
     String riskScore = _result?['risk_score'] ?? 'SAFE';
-    String detail = _result?['detail'] ?? '';
+
+    String detail = '';
+    if (_result?['detail'] != null) {
+      if (_result!['detail'] is String) {
+        detail = _result!['detail'];
+      } else if (_result!['detail'] is Map &&
+          _result!['detail']['message'] != null) {
+        detail = _result!['detail']['message'];
+      }
+    }
 
     // Determine Security Label
     String securityLabel = "Safe & Secure";
@@ -289,7 +315,7 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 1. Success Icon
+          // 1. Icon
           if (isSuccess)
             Container(
               padding: const EdgeInsets.all(16),
@@ -298,6 +324,19 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
                 color: Colors.green.withValues(alpha: 0.1),
               ),
               child: const Icon(Icons.check, color: Colors.green, size: 40),
+            )
+          else if (isPending)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.blue.withValues(alpha: 0.1),
+              ),
+              child: const Icon(
+                Icons.info_outline,
+                color: Colors.blue,
+                size: 40,
+              ),
             )
           else
             Container(
@@ -313,11 +352,15 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
 
           // 2. Title & Amount
           Text(
-            isSuccess ? "Payment Successful" : "Payment Failed",
+            isSuccess
+                ? "Payment Successful"
+                : (isPending ? "Approval Required" : "Payment Failed"),
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: isSuccess ? Colors.green : Colors.red,
+              color: isSuccess
+                  ? Colors.green
+                  : (isPending ? Colors.blue : Colors.red),
             ),
           ),
           if (!isSuccess && detail.isNotEmpty) ...[
@@ -325,7 +368,10 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
             Text(
               detail,
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.red.shade300, fontSize: 13),
+              style: TextStyle(
+                color: isPending ? Colors.blue.shade300 : Colors.red.shade300,
+                fontSize: 13,
+              ),
             ),
           ],
           const SizedBox(height: 8),
@@ -427,7 +473,7 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
                 ),
               ),
               child: Text(
-                isSuccess ? "Done" : "Close / Retry",
+                isSuccess ? "Done" : (isPending ? "OK" : "Close / Retry"),
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),

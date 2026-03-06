@@ -1504,17 +1504,34 @@ def create_transaction(
     is_circle = tx.is_circle_payment and tx.circle_id is not None
     circle = None
 
+    # Handle Payment Request Approval (Circle Flow)
+    if tx.request_id:
+        req = db.query(models.PaymentRequest).filter(models.PaymentRequest.id == tx.request_id).first()
+        if req and req.circle_id and req.payer_id == current_user.id:
+            # This is a circle approval! 
+            # We override the transaction to be a circle payment initiated by the child
+            is_circle = True
+            tx.is_circle_payment = True
+            tx.circle_id = req.circle_id
+            
+            # Verify recipient matches child's request
+            if tx.receiver_upi_id != req.target_upi:
+                raise HTTPException(status_code=400, detail="Recipient mismatch for circle approval.")
+
     if is_circle:
         # UPI CIRCLE LOGIC
+        # Find circle where current user is either Secondary (Spender) or Primary (Approving an approval request)
         circle = db.query(models.UPICircle).filter(
-            models.UPICircle.id == tx.circle_id,
-            models.UPICircle.secondary_user_id == current_user.id,
-            models.UPICircle.status == "ACTIVE"
+            models.UPICircle.id == tx.circle_id
         ).first()
         
-        if not circle:
-            raise HTTPException(status_code=400, detail="Invalid or inactive UPI Circle")
-            
+        if not circle or (circle.secondary_user_id != current_user.id and circle.primary_user_id != current_user.id):
+            raise HTTPException(status_code=400, detail="Invalid or unauthorized UPI Circle")
+        
+        if circle.status != "ACTIVE":
+            raise HTTPException(status_code=400, detail="UPI Circle is not active")
+
+        # If Parent is paying for an approval request, we need to respect the child's limit
         if circle.current_monthly_spend + tx.amount > circle.monthly_limit:
             raise HTTPException(
                 status_code=400, 
@@ -1531,6 +1548,8 @@ def create_transaction(
                 status="pending",
                 reason="Circle Approval Required",
                 description=f"Payment to {tx.receiver_upi_id} via Circle",
+                target_upi=tx.receiver_upi_id,
+                circle_id=circle.id,
                 timestamp=datetime.now()
             )
             db.add(new_request)
@@ -1831,7 +1850,7 @@ def create_transaction(
             transaction_id=transaction_id,
             sender_id=sender_user.id,
             receiver_id=receiver_user.id,
-            initiated_by_id=current_user.id if is_circle else None,
+            initiated_by_id=circle.secondary_user_id if is_circle else None,
             amount=tx.amount,
             encrypted_amount=security.encrypt_value(tx.amount),
             status="SUCCESS",
@@ -2056,8 +2075,8 @@ def create_transaction(
         note=new_tx.note,
         sender_bank_name=sender_user.bank_name,
         receiver_bank_name=receiver_user.bank_name,
-        initiated_by_name=current_user.username if is_circle else None,
-        initiated_by_upi=current_user.upi_id if is_circle else None
+        initiated_by_name=circle.secondary_user.username if is_circle else None,
+        initiated_by_upi=circle.secondary_user.upi_id if is_circle else None
     )
 
 
@@ -2151,6 +2170,27 @@ def get_home_aggregate(
         models.Transaction.timestamp <= end_time
     ).scalar() or 0.0
 
+    # Self Sent: User's own money, initiated by them
+    self_sent = db.query(func.sum(models.Transaction.amount)).filter(
+        models.Transaction.sender_id == current_user.id,
+        (models.Transaction.initiated_by_id == None) | (models.Transaction.initiated_by_id == current_user.id),
+        models.Transaction.status == "SUCCESS",
+        models.Transaction.timestamp >= start_time,
+        models.Transaction.timestamp <= end_time
+    ).scalar() or 0.0
+
+    # Circle Sent: Funded by parent but initiated by child, OR vice-versa
+    circle_sent = db.query(func.sum(models.Transaction.amount)).filter(
+        (
+            (models.Transaction.sender_id == current_user.id) & (models.Transaction.initiated_by_id != None) & (models.Transaction.initiated_by_id != current_user.id)
+        ) | (
+            (models.Transaction.initiated_by_id == current_user.id) & (models.Transaction.sender_id != current_user.id)
+        ),
+        models.Transaction.status == "SUCCESS",
+        models.Transaction.timestamp >= start_time,
+        models.Transaction.timestamp <= end_time
+    ).scalar() or 0.0
+
     last_received = db.query(models.Transaction.timestamp).filter(
         models.Transaction.receiver_id == current_user.id,
         models.Transaction.status == "SUCCESS",
@@ -2168,6 +2208,8 @@ def get_home_aggregate(
     summary_schema = schemas.DailySummarySchema(
         received_amount=daily_received,
         sent_amount=daily_sent,
+        self_sent_amount=self_sent,
+        circle_sent_amount=circle_sent,
         start_time=start_time,
         end_time=end_time,
         last_received_at=last_received[0] if last_received else None,
@@ -2849,6 +2891,8 @@ def _build_payment_request_response(req: models.PaymentRequest) -> schemas.Payme
         reason=req.reason,
         description=req.description,
         original_transaction_id=req.original_transaction_id,
+        target_upi=req.target_upi,
+        circle_id=req.circle_id,
         timestamp=req.timestamp,
         cancelled_by=req.cancelled_by
     )
@@ -2963,6 +3007,35 @@ def cancel_payment_request(
         req.cancelled_by = "requester"  # "Withdrawn"
     else:
         req.cancelled_by = "payer"  # "Declined"
+
+        # Special logic for Circle rejections: Create a failed transaction record for history
+        if req.circle_id:
+            try:
+                failed_tx_id = f"TXN_FAIL_{int(datetime.now().timestamp()*1000)}"
+                new_failed_tx = models.Transaction(
+                    transaction_id=failed_tx_id,
+                    sender_id=req.payer_id,
+                    receiver_id=db.query(models.User).filter(models.User.upi_id == req.target_upi).first().id if req.target_upi else None,
+                    initiated_by_id=req.requester_id,
+                    amount=req.amount,
+                    status="FAILED",
+                    risk_score="SAFE", # It wasn't fraud, just parent's choice
+                    note=f"Rejected: {req.reason}",
+                    timestamp=datetime.now(),
+                    ip_hash="CIRCLE_REJECTION" # Mark for audit
+                )
+                db.add(new_failed_tx)
+                
+                # Notify child
+                notifications.send_push_notification(
+                    db,
+                    req.requester_id,
+                    "Payment Declined",
+                    f"Your payment request of ₹{req.amount} was declined by the parent.",
+                    "circle_declined"
+                )
+            except Exception as e:
+                print(f"Failed to create circle rejection record: {e}")
         
     db.commit()
     
@@ -3257,6 +3330,7 @@ def submit_complaint(
             transaction_date=complaint.transaction_date,
             transaction_time=complaint.transaction_time,
             transaction_amount=complaint.transaction_amount,
+            payment_through=complaint.payment_through,
             reason=complaint.reason,
             description=complaint.description,
             status="pending"

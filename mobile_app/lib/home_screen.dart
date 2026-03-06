@@ -49,6 +49,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Track which person IDs have been opened (to prevent polling from restoring stale badges)
   final Set<dynamic> _readPersonIds = {};
+  // Track which pending requests have been handled (to prevent polling from restoring them)
+  final Set<int> _removedRequestIds = {};
+  // Track which circle invites have been handled
+  final Set<int> _removedInviteIds = {};
   bool _isResetting = false; // Suppress all badges briefly after global reset
 
   // RISK STATE
@@ -229,9 +233,17 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
       if (pending != null) {
-        _pendingRequests = pending;
+        // Filter out any requests we just removed optimistically
+        _pendingRequests = pending
+            .where((r) => !_removedRequestIds.contains(r['id']))
+            .toList();
       }
-      _pendingCircleInvites = data['pending_circle_invites'] ?? [];
+      final circleInvites = data['pending_circle_invites'];
+      if (circleInvites != null) {
+        _pendingCircleInvites = circleInvites
+            .where((i) => !_removedInviteIds.contains(i['id']))
+            .toList();
+      }
       _dailySummary = data['daily_summary'];
 
       // Note: System badge clearing is now exclusively handled by NotificationService
@@ -1264,9 +1276,21 @@ class _HomeScreenState extends State<HomeScreen> {
                         // Action buttons
                         TextButton(
                           onPressed: () async {
+                            // OPTIMISTIC UI: Remove immediately (<0.5s update)
+                            setState(() {
+                              _removedRequestIds.add(requestId);
+                              _pendingRequests.removeWhere(
+                                (r) => r['id'] == requestId,
+                              );
+                            });
+
                             final success = await _transactionService
                                 .cancelPaymentRequest(requestId);
-                            if (success && mounted) {
+                            if (!success && mounted) {
+                              // If failed, remove from skip set and refresh
+                              setState(
+                                () => _removedRequestIds.remove(requestId),
+                              );
                               _loadData(showLoading: false);
                             }
                           },
@@ -1287,18 +1311,37 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(width: 8),
                         ElevatedButton(
                           onPressed: () {
+                            final isCircleRequest = req['circle_id'] != null;
+                            final targetUpi =
+                                req['target_upi'] ?? req['requester_upi_id'];
+                            final targetName = isCircleRequest
+                                ? "Merchant"
+                                : name;
+
+                            // OPTIMISTIC UI: Remove immediately (<0.5s update)
+                            setState(() {
+                              _removedRequestIds.add(requestId);
+                              _pendingRequests.removeWhere(
+                                (r) => r['id'] == requestId,
+                              );
+                            });
+
                             Navigator.pushNamed(
                               context,
                               '/amount',
                               arguments: {
-                                'upi': req['requester_upi_id'],
-                                'name': name,
+                                'upi': targetUpi,
+                                'name': targetName,
                                 'isRequestPayment': true,
                                 'paymentRequestId': requestId,
                                 'prefillAmount': amount,
                                 'requestReason': reason,
+                                'isCirclePayment': isCircleRequest,
                               },
-                            ).then((_) => _loadData(showLoading: false));
+                            ).then((_) {
+                              // Re-fetching will confirm it's gone from server
+                              _loadData(showLoading: false);
+                            });
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF00B9F1),
@@ -1315,7 +1358,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             elevation: 0,
                           ),
                           child: Text(
-                            'Pay',
+                            req['circle_id'] != null ? 'Approve' : 'Pay',
                             style: GoogleFonts.outfit(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
@@ -1323,7 +1366,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                       ],
-                    ), // Column
+                    ), // Row
                   ), // Container
                 ), // GestureDetector
               ); // Padding
@@ -1475,16 +1518,16 @@ class _HomeScreenState extends State<HomeScreen> {
                         onPressed: () async {
                           // OPTIMISTIC UI: Remove immediately (<0.5s update)
                           setState(() {
+                            _removedInviteIds.add(inviteId);
                             _pendingCircleInvites.remove(invite);
                           });
                           final success = await _api.respondToCircleInvite(
                             inviteId,
                             'REJECT',
                           );
-                          if (success && mounted) {
-                            _loadData(showLoading: false);
-                          } else if (!success && mounted) {
+                          if (!success && mounted) {
                             // Revert on failure
+                            setState(() => _removedInviteIds.remove(inviteId));
                             _loadData(showLoading: false);
                           }
                         },
@@ -1507,16 +1550,16 @@ class _HomeScreenState extends State<HomeScreen> {
                         onPressed: () async {
                           // OPTIMISTIC UI: Remove immediately (<0.5s update)
                           setState(() {
+                            _removedInviteIds.add(inviteId);
                             _pendingCircleInvites.remove(invite);
                           });
                           final success = await _api.respondToCircleInvite(
                             inviteId,
                             'ACCEPT',
                           );
-                          if (success && mounted) {
-                            _loadData(showLoading: false);
-                          } else if (!success && mounted) {
+                          if (!success && mounted) {
                             // Revert on failure
+                            setState(() => _removedInviteIds.remove(inviteId));
                             _loadData(showLoading: false);
                           }
                         },
@@ -1695,12 +1738,30 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: isDark ? Colors.white10 : Colors.grey.shade200,
                   ),
                   Expanded(
-                    child: _buildSummaryItem(
-                      label: "Sent",
-                      amount: sent,
-                      color: Colors.orange,
-                      isDark: isDark,
-                      lastAt: _dailySummary!['last_sent_at'],
+                    child: Column(
+                      children: [
+                        _buildSummaryItem(
+                          label: "Sent",
+                          amount: sent,
+                          color: Colors.orange,
+                          isDark: isDark,
+                          lastAt: _dailySummary!['last_sent_at'],
+                        ),
+                        if ((_dailySummary!['circle_sent_amount'] ?? 0.0) > 0)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              _user != null && _user!['bank_name'] == null
+                                  ? "₹${formatAmount((_dailySummary!['circle_sent_amount'] ?? 0.0).toDouble())} via Circle"
+                                  : "₹${formatAmount((_dailySummary!['circle_sent_amount'] ?? 0.0).toDouble())} by Members",
+                              style: GoogleFonts.outfit(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.orange.withValues(alpha: 0.8),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ],

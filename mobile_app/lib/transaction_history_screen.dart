@@ -1146,7 +1146,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
-                            "By ${tx['initiated_by_name']}",
+                            "UPI Circle by ${tx['initiated_by_name']}",
                             style: const TextStyle(
                               color: Colors.blue,
                               fontSize: 10,

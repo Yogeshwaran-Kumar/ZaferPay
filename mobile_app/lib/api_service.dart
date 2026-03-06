@@ -128,6 +128,8 @@ class ApiService {
       _user.updateCircleLimit(circleId, newLimit);
   Future<bool> removeCircleMember(int circleId) =>
       _user.removeCircleMember(circleId);
+  Future<bool> cancelPaymentRequest(int requestId) =>
+      _user.cancelPaymentRequest(requestId);
 
   // --- Transaction Delegates ---
   Future<Map<String, dynamic>> createTransactionOptimistic(
@@ -233,6 +235,7 @@ class ApiService {
     String? transactionDate,
     String? transactionTime,
     String? transactionAmount,
+    String? paymentThrough,
   }) => _tx.submitComplaint(
     transactionId: transactionId,
     reportedUserUpi: reportedUserUpi,
@@ -247,6 +250,7 @@ class ApiService {
     transactionDate: transactionDate,
     transactionTime: transactionTime,
     transactionAmount: transactionAmount,
+    paymentThrough: paymentThrough,
   );
 
   Future<Map<String, dynamic>> checkComplaintExists(String transactionId) =>

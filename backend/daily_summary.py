@@ -67,8 +67,29 @@ def send_daily_summaries():
                 models.Transaction.timestamp <= end_time
             ).scalar()
 
+            # 4. Calculate Breakdown for Message
+            self_sent_sum = db.query(func.sum(models.Transaction.amount)).filter(
+                models.Transaction.sender_id == user.id,
+                (models.Transaction.initiated_by_id == None) | (models.Transaction.initiated_by_id == user.id),
+                models.Transaction.status == "SUCCESS",
+                models.Transaction.timestamp >= start_time,
+                models.Transaction.timestamp <= end_time
+            ).scalar()
+
+            circle_sent_sum = db.query(func.sum(models.Transaction.amount)).filter(
+                (
+                    (models.Transaction.sender_id == user.id) & (models.Transaction.initiated_by_id != None) & (models.Transaction.initiated_by_id != user.id)
+                ) | (
+                    (models.Transaction.initiated_by_id == user.id) & (models.Transaction.sender_id != user.id)
+                ),
+                models.Transaction.status == "SUCCESS",
+                models.Transaction.timestamp >= start_time,
+                models.Transaction.timestamp <= end_time
+            ).scalar()
+
             received = received_sum or 0.0
             sent = sent_sum or 0.0
+            circle_sent = circle_sent_sum or 0.0
 
             # Only send if there was some activity
             if received > 0 or sent > 0:
@@ -78,6 +99,11 @@ def send_daily_summaries():
                 
                 title = f"📊 Your {period_str} Summary"
                 body = f"Activity: You received ₹{received:.2f} and spent ₹{sent:.2f}."
+                if circle_sent > 0:
+                    if user.bank_name: # Parent
+                        body += f" (Inc. ₹{circle_sent:.2f} via UPI Circle by members)"
+                    else: # Child/Member
+                        body += f" (Inc. ₹{circle_sent:.2f} via UPI Circle by you)"
                 
                 # Send the notification
                 success = notifications.send_fcm_notification(

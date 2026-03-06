@@ -302,6 +302,8 @@ class PaymentRequestResponse(BaseModel):
     reason: str
     description: Optional[str] = None
     original_transaction_id: Optional[str] = None
+    target_upi: Optional[str] = None
+    circle_id: Optional[int] = None
     timestamp: datetime
     cancelled_by: Optional[str] = None
 
@@ -312,6 +314,8 @@ class PaymentRequestResponse(BaseModel):
 class DailySummarySchema(BaseModel):
     received_amount: float
     sent_amount: float
+    self_sent_amount: float = 0.0
+    circle_sent_amount: float = 0.0
     start_time: datetime
     end_time: datetime
     last_received_at: Optional[datetime] = None
@@ -400,6 +404,7 @@ class ComplaintCreate(BaseModel):
     transaction_date: Optional[str] = None
     transaction_time: Optional[str] = None
     transaction_amount: Optional[str] = None
+    payment_through: Optional[str] = None
 
 class ComplaintResponse(BaseModel):
     id: int
@@ -422,6 +427,7 @@ class ComplaintResponse(BaseModel):
     transaction_date: Optional[str] = None
     transaction_time: Optional[str] = None
     transaction_amount: Optional[str] = None
+    payment_through: Optional[str] = None
 
     class Config:
         from_attributes = True

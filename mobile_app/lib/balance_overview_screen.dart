@@ -2,7 +2,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'mcc_helper.dart';
 import 'utils.dart';
 import 'spend_analysis_screen.dart';
 
@@ -44,13 +43,16 @@ class _BalanceOverviewScreenState extends State<BalanceOverviewScreen> {
   void _calculateTopCategories() {
     final now = DateTime.now();
     final currentMonthStr = DateFormat('yyyy-MM').format(now);
+    final myUpi = widget.user['upi_id'];
+    final isChild = widget.user['bank_name'] == null;
 
     Map<String, double> categorySpends = {};
 
     for (var tx in widget.history) {
       if (tx['status'] != 'SUCCESS') continue;
 
-      final isDebit = tx['sender_upi_id'] == widget.user['upi_id'];
+      final isDebit =
+          tx['sender_upi_id'] == myUpi || tx['initiated_by_upi'] == myUpi;
       if (!isDebit) continue; // Only count outward spends
 
       try {
@@ -58,14 +60,16 @@ class _BalanceOverviewScreenState extends State<BalanceOverviewScreen> {
         final txMonthStr = DateFormat('yyyy-MM').format(txDate);
 
         if (txMonthStr == currentMonthStr) {
-          final mcc = tx['receiver_mcc'];
-          String category = 'Others';
+          final initiatorName = tx['initiated_by_name'];
+          final initiatorUpi = tx['initiated_by_upi'];
 
-          if (mcc != null && MccHelper.isMerchant(mcc)) {
-            final domain = MccHelper.getDomain(mcc.toString());
-            category = MccHelper.getGroupedCategory(domain);
-          } else if (MccHelper.isPersonal(mcc)) {
-            category = 'People';
+          String category = 'Personal';
+          if (initiatorUpi != null) {
+            if (isChild) {
+              category = 'UPI Circle';
+            } else {
+              category = initiatorName ?? 'UPI Circle';
+            }
           }
 
           final amount = (tx['amount'] ?? 0).toDouble();
@@ -79,30 +83,17 @@ class _BalanceOverviewScreenState extends State<BalanceOverviewScreen> {
     var sortedCategories = categorySpends.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value)); // Descending order
 
-    _topCategories = sortedCategories.take(2).map((e) {
+    _topCategories = sortedCategories.map((e) {
       return {'name': e.key, 'amount': e.value};
     }).toList();
   }
 
   Color _getCategoryColor(String category) {
-    switch (category) {
-      case 'Food & Drinks':
-        return Colors.orange;
-      case 'Shopping':
-        return Colors.pink;
-      case 'Transport':
-        return Colors.blue;
-      case 'Bills & Utilities':
-        return Colors.purple;
-      case 'Entertainment':
-        return Colors.red;
-      case 'Health':
-        return Colors.teal;
-      case 'People':
-        return Colors.indigo;
-      default:
-        return Colors.grey.shade500;
+    if (category == 'Personal') {
+      return const Color(0xFF00B9F1); // Signature Blue
     }
+    // Deterministic color for child names/Circle
+    return getAvatarColor(category);
   }
 
   @override

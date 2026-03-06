@@ -326,6 +326,17 @@ class UserService {
     }
   }
 
+  Future<bool> cancelPaymentRequest(int requestId) async {
+    try {
+      final response = await _apiClient.post(
+        '/transactions/requests/$requestId/cancel',
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> clearCaches() async {
     _homeRamCache = null;
     _phoneRamCache.clear();

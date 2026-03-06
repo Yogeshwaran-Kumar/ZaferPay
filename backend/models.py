@@ -492,6 +492,10 @@ class PaymentRequest(Base):
     description = Column(String, nullable=True)
     original_transaction_id = Column(String, nullable=True) # Linked to a past tx if applicable
     
+    # UPI Circle Partial Access Support
+    target_upi = Column(String, nullable=True) # The merchant UPI the child tried to pay
+    circle_id = Column(Integer, ForeignKey("upi_circles.id"), nullable=True)
+    
     timestamp = Column(DateTime, default=datetime.datetime.now)
     updated_at = Column(DateTime, nullable=True)
     read_at = Column(DateTime, nullable=True)
@@ -523,6 +527,7 @@ class UserFraudReport(Base):
     transaction_date = Column(String, nullable=True)
     transaction_time = Column(String, nullable=True)
     transaction_amount = Column(String, nullable=True)
+    payment_through = Column(String, nullable=True)  # "Self" or "UPI Circle – ChildName"
     
     reason = Column(String)  # "fraud", "service_not_received", etc.
     description = Column(String, nullable=True)

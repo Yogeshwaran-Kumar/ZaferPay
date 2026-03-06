@@ -47,6 +47,7 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
     required String transactionDate,
     required String transactionTime,
     required String transactionAmount,
+    String? paymentThrough,
   }) async {
     if (_selectedReason == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -114,6 +115,7 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
         transactionDate: transactionDate,
         transactionTime: transactionTime,
         transactionAmount: transactionAmount,
+        paymentThrough: paymentThrough,
       );
 
       if (!mounted) return;
@@ -469,6 +471,22 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
                     _buildDetailRow('Sender Bank name', senderBank, isDark),
                     _buildDetailRow('Receiver Bank name', receiverBank, isDark),
 
+                    // Pay Through (UPI Circle or Self)
+                    Builder(
+                      builder: (context) {
+                        final initiatedByName =
+                            transaction['initiated_by_name'];
+                        final payThrough = initiatedByName != null
+                            ? 'UPI Circle by $initiatedByName'
+                            : 'Self';
+                        return _buildDetailRow(
+                          'Pay Through',
+                          payThrough,
+                          isDark,
+                        );
+                      },
+                    ),
+
                     const SizedBox(height: 24),
 
                     _buildFormRow(
@@ -677,6 +695,10 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
                             transactionTime: transactionTime,
                             transactionAmount: (transaction['amount'] ?? 0)
                                 .toString(),
+                            paymentThrough:
+                                transaction['initiated_by_name'] != null
+                                ? 'UPI Circle by ${transaction['initiated_by_name']}'
+                                : 'Self',
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red.shade600,

@@ -79,9 +79,12 @@ class _SpendAnalysisScreenState extends State<SpendAnalysisScreen> {
     for (var tx in widget.history) {
       if (tx['status'] != 'SUCCESS') continue;
 
+      final myUpi = widget.user['upi_id'];
       final isDebit =
-          tx['sender_upi_id'] == widget.user['upi_id'] ||
-          tx['initiated_by_upi'] == widget.user['upi_id'];
+          tx['sender_upi_id'] == myUpi || tx['initiated_by_upi'] == myUpi;
+      final isCredit = tx['receiver_upi_id'] == myUpi;
+      final isChild = widget.user['bank_name'] == null;
+
       final amount = (tx['amount'] ?? 0).toDouble();
 
       try {
@@ -92,10 +95,17 @@ class _SpendAnalysisScreenState extends State<SpendAnalysisScreen> {
           // Source Filter Logic
           final isCircle = tx['initiated_by_upi'] != null;
           final initiatorName = tx['initiated_by_name'];
+          final initiatorUpi = tx['initiated_by_upi'];
 
           if (_selectedSource == 'Personal' && isCircle) continue;
-          if (_selectedSource == 'Circle' && !isCircle) continue;
-          if (!['All', 'Personal', 'Circle'].contains(_selectedSource) &&
+
+          if (_selectedSource == 'UPI Circle') {
+            if (!isCircle) continue;
+            // For child accounts, only show their own circle payments
+            if (isChild && initiatorUpi != myUpi) continue;
+          }
+
+          if (!['All', 'Personal', 'UPI Circle'].contains(_selectedSource) &&
               initiatorName != _selectedSource) {
             continue;
           }
@@ -117,7 +127,7 @@ class _SpendAnalysisScreenState extends State<SpendAnalysisScreen> {
               }
             }
             categorySpends[category] = (categorySpends[category] ?? 0) + amount;
-          } else {
+          } else if (isCredit) {
             incoming += amount;
           }
         } else if (txMonthStr == prevMonthStr) {
@@ -1849,13 +1859,30 @@ class _SpendAnalysisScreenState extends State<SpendAnalysisScreen> {
         .map((tx) => tx['initiated_by_name'] as String)
         .toSet()
         .toList();
-    final sources = ['All', 'Personal', 'Circle', ...circleUsers];
+
+    final isChild = widget.user['bank_name'] == null;
+
+    // Show individual child chips only if 'UPI Circle' is selected OR if a specific child is already selected
+    // AND the current user is NOT a child account themselves.
+    final showChildChips =
+        !isChild &&
+        (_selectedSource == 'UPI Circle' ||
+            circleUsers.contains(_selectedSource));
+
+    final sources = [
+      'All',
+      'Personal',
+      'UPI Circle',
+      if (showChildChips) ...circleUsers,
+    ];
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
       child: Row(
         children: sources.map((source) {
           final isSelected = _selectedSource == source;
+
           return Padding(
             padding: const EdgeInsets.only(right: 8.0),
             child: ChoiceChip(
@@ -1867,15 +1894,35 @@ class _SpendAnalysisScreenState extends State<SpendAnalysisScreen> {
                     _selectedSource = source;
                     _calculateDataForMonth();
                   });
+                } else if (source != 'All') {
+                  // If deselecting a specific source, go back to All
+                  setState(() {
+                    _selectedSource = 'All';
+                    _calculateDataForMonth();
+                  });
                 }
               },
               backgroundColor: isDark ? const Color(0xFF1E2630) : Colors.white,
-              selectedColor: isDark ? Colors.white : Colors.black,
+              selectedColor: isDark
+                  ? Colors.deepPurple.shade400
+                  : Colors.deepPurple,
+              checkmarkColor: Colors.white,
+              elevation: isSelected ? 2 : 0,
+              pressElevation: 4,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: BorderSide(
+                  color: isSelected
+                      ? Colors.transparent
+                      : (isDark ? Colors.white10 : Colors.grey.shade300),
+                ),
+              ),
               labelStyle: TextStyle(
                 color: isSelected
-                    ? (isDark ? Colors.black : Colors.white)
+                    ? Colors.white
                     : (isDark ? Colors.white70 : Colors.black87),
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                fontSize: 13,
               ),
             ),
           );

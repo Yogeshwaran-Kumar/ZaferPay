@@ -702,6 +702,54 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   ),
                 ),
               ],
+
+              // 5. UPI Circle Attribution
+              if (tx['initiated_by_name'] != null) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.deepPurple.withValues(alpha: 0.15)
+                        : Colors.deepPurple.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.deepPurple.withValues(alpha: 0.3)
+                          : Colors.deepPurple.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.group_rounded,
+                        size: 13,
+                        color: isDark
+                            ? Colors.deepPurple.shade200
+                            : Colors.deepPurple,
+                      ),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text(
+                          'UPI Circle by ${tx['initiated_by_name']}',
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: isDark
+                                ? Colors.deepPurple.shade200
+                                : Colors.deepPurple,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),

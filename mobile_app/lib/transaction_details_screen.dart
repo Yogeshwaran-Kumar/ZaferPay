@@ -362,6 +362,21 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                       ),
                       const SizedBox(height: 8),
 
+                      if (status == 'FAILED' &&
+                          transaction['ip_hash'] == 'CIRCLE_REJECTION')
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 40),
+                          child: Text(
+                            "Payment failed due to the parent account cancelling the request",
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.outfit(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.red.shade400,
+                            ),
+                          ),
+                        ),
+
                       // ──── Date ────
                       Text(
                         formattedDate,
@@ -509,23 +524,26 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Circle Initiator (if any)
-                            if (transaction['initiated_by_name'] != null) ...[
-                              Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: _buildDetailRow(
-                                  context,
-                                  label: 'Spending by',
-                                  value: transaction['initiated_by_name'],
-                                ),
+                            // Pay Through
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: _buildDetailRow(
+                                context,
+                                label: 'Spending by',
+                                value:
+                                    transaction['initiated_by_upi'] != null &&
+                                        transaction['initiated_by_upi'] !=
+                                            transaction['sender_upi_id']
+                                    ? 'UPI Circle by ${transaction['initiated_by_name']}'
+                                    : 'Self',
                               ),
-                              Divider(
-                                height: 1,
-                                color: isDark
-                                    ? Colors.grey.shade800
-                                    : Colors.grey.shade300,
-                              ),
-                            ],
+                            ),
+                            Divider(
+                              height: 1,
+                              color: isDark
+                                  ? Colors.grey.shade800
+                                  : Colors.grey.shade300,
+                            ),
                             // Transaction ID
                             Padding(
                               padding: const EdgeInsets.all(16),
