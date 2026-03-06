@@ -173,11 +173,15 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
     if (_result == null) return;
 
     final status = _result!['status'];
-    // final detail = _result!['detail'] ?? ''; (Unused)
+    bool isPending = status == 'PENDING_APPROVAL' || status == 'ACCEPTED';
 
     setState(() {
-      _pulseController.stop(); // Stop pulsing
-      _stage = 4;
+      if (!isPending) {
+        _pulseController.stop(); // Stop pulsing for final result
+        _stage = 4;
+      } else {
+        _stage = 3; // Keep animation stage for pending
+      }
     });
 
     if (status == 'SUCCESS') {
@@ -201,9 +205,9 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
       });
     } else if (status == 'PENDING_APPROVAL' || status == 'ACCEPTED') {
       setState(() {
-        _statusText = "Approval Request Sent";
-        _shieldColor = Colors.blue;
-        _shieldIcon = Icons.send_rounded;
+        _statusText = "Waiting for Parent Approval...";
+        _shieldColor = Colors.orange;
+        _shieldIcon = Icons.hourglass_top_rounded;
       });
     } else {
       setState(() {
@@ -249,17 +253,53 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
             child: Icon(_shieldIcon, size: 60, color: _shieldColor),
           ),
         ),
-        const SizedBox(height: 40),
         // STATUS TEXT
         Text(
           _statusText,
+          textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: 24,
+            fontSize: 22,
             fontWeight: FontWeight.bold,
-            // Text color depends on theme now (not always white)
             color: isDark ? Colors.white : Colors.black87,
           ),
         ),
+
+        if (_result?['status'] == 'PENDING_APPROVAL' ||
+            _result?['status'] == 'ACCEPTED') ...[
+          const SizedBox(height: 12),
+          Text(
+            "Transaction will be processed once approved",
+            style: TextStyle(
+              fontSize: 14,
+              color: isDark ? Colors.grey[400] : Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 60),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 48),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () =>
+                    Navigator.pop(context, {'status': 'CANCELLED'}),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  "Cancel Request",
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

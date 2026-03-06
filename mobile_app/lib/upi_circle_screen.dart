@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'api_service.dart';
 import 'widgets/select_member_screen.dart';
-import 'package:flutter/services.dart'; // For HapticFeedback
 
 class UPICircleScreen extends StatefulWidget {
   const UPICircleScreen({super.key});
@@ -151,47 +150,49 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
               onPressed: () async {
                 final limit = double.tryParse(limitController.text) ?? 5000.0;
 
-                // Show loading on button
-                HapticFeedback.mediumImpact();
+                // Navigate to PIN setup screen
+                if (!context.mounted) return;
 
-                final result = await _apiService.inviteToCircle(
-                  selectedUpi,
-                  limit,
-                  delegationType,
-                );
+                final pinResult =
+                    await Navigator.pushNamed(
+                          context,
+                          '/upi-circle-setup-pin',
+                          arguments: {
+                            'secondaryUpi': selectedUpi,
+                            'secondaryName': selectedName,
+                            'limit': limit,
+                            'delegationType': delegationType,
+                          },
+                        )
+                        as Map<String, dynamic>?;
 
-                final bool success = result['success'] ?? false;
-                final String message =
-                    result['message'] ??
-                    (success
-                        ? "Invitation Sent!"
-                        : "Failed to send invitation");
+                if (pinResult == null || !context.mounted) return;
 
-                if (context.mounted) {
-                  Navigator.pop(context); // Close invite dialog
+                final bool success = pinResult['success'] ?? false;
+                final String message = pinResult['message'] ?? "";
 
-                  if (!success) {
-                    // Show premium "alate" (alert) as requested
-                    _showPremiumAlert(context, "Action Restricted", message);
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        content: Row(
-                          children: [
-                            const Icon(Icons.check_circle, color: Colors.white),
-                            const SizedBox(width: 12),
-                            Text("Invitation Sent to $selectedName!"),
-                          ],
-                        ),
-                        backgroundColor: Colors.green,
+                Navigator.pop(context); // Close invite settings dialog
+
+                if (!success && message.isNotEmpty) {
+                  _showPremiumAlert(context, "Action Restricted", message);
+                } else if (success) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                    );
-                    _loadCircleData();
-                  }
+                      content: Row(
+                        children: [
+                          const Icon(Icons.check_circle, color: Colors.white),
+                          const SizedBox(width: 12),
+                          Text("Invitation Sent to $selectedName!"),
+                        ],
+                      ),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                  _loadCircleData();
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -623,19 +624,57 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
               final newLimit = double.tryParse(controller.text);
               if (newLimit == null || newLimit <= 0) return;
 
-              final success = await _apiService.updateCircleLimit(
-                circle['id'],
-                newLimit,
-              );
-              if (context.mounted) {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      success ? "Limit Updated!" : "Failed to update limit",
-                    ),
+              // Navigate to PIN setup screen for update
+              if (!context.mounted) return;
+
+              final pinResult =
+                  await Navigator.pushNamed(
+                        context,
+                        '/upi-circle-setup-pin',
+                        arguments: {
+                          'secondaryUpi': circle['secondary_user_upi'],
+                          'secondaryName': circle['secondary_user_name'],
+                          'limit': newLimit,
+                          'isUpdate': true,
+                          'circleId': circle['id'],
+                        },
+                      )
+                      as Map<String, dynamic>?;
+
+              if (pinResult == null || !context.mounted) return;
+
+              final bool success = pinResult['success'] ?? false;
+              final String message = pinResult['message'] ?? "";
+
+              Navigator.pop(context); // Close the edit dialog
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                );
+                  content: Row(
+                    children: [
+                      Icon(
+                        success ? Icons.check_circle : Icons.error,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        message.isNotEmpty
+                            ? message
+                            : (success
+                                  ? "Limit Updated!"
+                                  : "Failed to update limit"),
+                      ),
+                    ],
+                  ),
+                  backgroundColor: success ? Colors.green : Colors.red,
+                ),
+              );
+
+              if (success) {
                 _loadCircleData();
               }
             },
@@ -661,24 +700,58 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              final success = await _apiService.removeCircleMember(
-                circle['id'],
-              );
-              if (context.mounted) {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      success
-                          ? "Member removed successfully!"
-                          : "Failed to remove member.",
-                    ),
-                    backgroundColor: success ? Colors.green : Colors.red,
+              // Navigate to PIN setup screen for removal
+              if (!context.mounted) return;
+
+              final pinResult =
+                  await Navigator.pushNamed(
+                        context,
+                        '/upi-circle-setup-pin',
+                        arguments: {
+                          'secondaryUpi': circle['secondary_user_upi'],
+                          'secondaryName': circle['secondary_user_name'],
+                          'limit': (circle['monthly_limit'] ?? 0.0).toDouble(),
+                          'isRemove': true,
+                          'circleId': circle['id'],
+                        },
+                      )
+                      as Map<String, dynamic>?;
+
+              if (pinResult == null || !context.mounted) return;
+
+              final bool success = pinResult['success'] ?? false;
+              final String message = pinResult['message'] ?? "";
+
+              Navigator.pop(context); // Close the confirmation dialog
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                );
-                if (success) {
-                  _loadCircleData();
-                }
+                  content: Row(
+                    children: [
+                      Icon(
+                        success ? Icons.check_circle : Icons.error,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        message.isNotEmpty
+                            ? message
+                            : (success
+                                  ? "Member Removed!"
+                                  : "Failed to remove member"),
+                      ),
+                    ],
+                  ),
+                  backgroundColor: success ? Colors.green : Colors.red,
+                ),
+              );
+
+              if (success) {
+                _loadCircleData();
               }
             },
             style: ElevatedButton.styleFrom(

@@ -1588,13 +1588,22 @@ def create_transaction(
         raise HTTPException(status_code=401, detail="Incorrect PIN")
 
     # Custom Spending Limit Check
-    if current_user.spending_limit and current_user.spending_limit_period:
+    # NPCI Rule: Bypass spending limit ONLY for parent approving a child's circle request
+    is_circle_approval = tx.request_id is not None and is_circle
+    
+    if not is_circle_approval and current_user.spending_limit and current_user.spending_limit_period:
         limit_period_days = current_user.spending_limit_period
         limit_amount = current_user.spending_limit
         
         start_time = datetime.now() - timedelta(days=limit_period_days)
+        
+        # We only count personal spending towards the personal limit.
+        # Circle payments (where initiated_by_id is not None and not the current user) are EXCLUDED.
         spent_sum = db.query(func.sum(models.Transaction.amount)).filter(
-            (models.Transaction.sender_id == current_user.id) | (models.Transaction.initiated_by_id == current_user.id),
+            or_(
+                and_(models.Transaction.sender_id == current_user.id, models.Transaction.initiated_by_id == None),
+                models.Transaction.initiated_by_id == current_user.id
+            ),
             models.Transaction.status == "SUCCESS",
             models.Transaction.timestamp >= start_time
         ).scalar() or 0.0

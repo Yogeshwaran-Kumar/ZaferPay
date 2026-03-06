@@ -27,6 +27,7 @@ import 'payment_pin_screen.dart';
 import 'conversation_screen.dart';
 import 'money_screen.dart'; // For RouteObserver
 import 'services/notification_service.dart';
+import 'upi_circle_setup_pin_screen.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:google_mlkit_barcode_scanning/google_mlkit_barcode_scanning.dart'
     as mlkit;
@@ -571,6 +572,17 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   ModalRoute.of(context)!.settings.arguments
                       as Map<String, dynamic>;
               return ConversationScreen(args: args);
+            },
+            '/upi-circle-setup-pin': (context) {
+              final args =
+                  ModalRoute.of(context)!.settings.arguments
+                      as Map<String, dynamic>;
+              return UPICircleSetupPinScreen(
+                secondaryUpi: args['secondaryUpi'],
+                secondaryName: args['secondaryName'],
+                limit: args['limit'],
+                delegationType: args['delegationType'],
+              );
             },
           },
         );

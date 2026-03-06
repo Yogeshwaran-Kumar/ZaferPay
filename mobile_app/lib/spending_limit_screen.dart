@@ -548,16 +548,17 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
           final txDate = DateTime.parse(tx['timestamp']).toLocal();
           if (txDate.isAfter(limitStart)) {
             final amt = (tx['amount'] ?? 0).toDouble();
-            spent += amt;
 
+            // EXCLUDE circle payments where initiated_by_upi is NOT the user
+            // These don't count towards the parent's personal limit.
             if (tx['initiated_by_upi'] != null &&
                 tx['initiated_by_upi'] != widget.user['upi_id']) {
-              circleSpent += amt;
-              String childName = tx['initiated_by_name'] ?? 'Assistant';
-              childSpendMap[childName] = (childSpendMap[childName] ?? 0) + amt;
-            } else {
-              selfSpent += amt;
+              // We skip these for the parent's personal tracking
+              continue;
             }
+
+            spent += amt;
+            selfSpent += amt;
           }
         } catch (_) {}
       } else if (tx['initiated_by_upi'] == widget.user['upi_id']) {
@@ -1008,9 +1009,17 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
     Map<String, double> categorySpends = {};
     for (var tx in widget.history) {
       if (tx['status'] != 'SUCCESS') continue;
-      if (tx['sender_upi_id'] != widget.user['upi_id'] &&
-          tx['initiated_by_upi'] != widget.user['upi_id'])
+
+      // EXCLUDE circle payments where initiated_by_upi is NOT the user
+      if (tx['initiated_by_upi'] != null &&
+          tx['initiated_by_upi'] != widget.user['upi_id']) {
         continue;
+      }
+
+      if (tx['sender_upi_id'] != widget.user['upi_id'] &&
+          tx['initiated_by_upi'] != widget.user['upi_id']) {
+        continue;
+      }
       try {
         final txDate = DateTime.parse(tx['timestamp']).toLocal();
         if (txDate.isAfter(limitStart)) {

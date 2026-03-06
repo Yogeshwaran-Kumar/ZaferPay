@@ -131,9 +131,13 @@ class _AmountScreenState extends State<AmountScreen> {
       qrLimitExceeded = true;
     }
 
-    // Check custom spending limit
+    // Check custom spending limit (skip for circle payments)
     bool spendingLimitExceeded = false;
-    if (amount != null && _spendingLimit != null && _spendingLimit! > 0) {
+    if (amount != null &&
+        _spendingLimit != null &&
+        _spendingLimit! > 0 &&
+        _selectedCircle == null &&
+        !_isCirclePaymentApproval) {
       if (_spentInPeriod + amount > _spendingLimit!) {
         spendingLimitExceeded = true;
       }
@@ -694,10 +698,12 @@ class _AmountScreenState extends State<AmountScreen> {
       color = const Color(0xFFE53935); // Red 600
       icon = Icons.block_rounded;
       title = "Transaction Blocked";
-    } else if (status == "FAILED") {
+    } else if (status == "FAILED" || status == "CANCELLED") {
       color = const Color(0xFFE53935);
       icon = Icons.error_rounded;
-      title = "Payment Failed";
+      title = status == "CANCELLED"
+          ? "Transaction Cancelled"
+          : "Payment Failed";
     } else if (risk == "WARN") {
       color = const Color(0xFFFB8C00); // Orange 600
       icon = Icons.warning_rounded;
@@ -712,6 +718,10 @@ class _AmountScreenState extends State<AmountScreen> {
       color = const Color(0xFFC62828); // Sharp Red
       icon = Icons.gpp_bad_rounded;
       title = "Fraud Detected";
+    } else if (status == "PENDING_APPROVAL") {
+      color = const Color(0xFFFB8C00); // Orange 600
+      icon = Icons.hourglass_empty_rounded;
+      title = "Approval Required";
     }
 
     showDialog(
@@ -932,21 +942,27 @@ class _AmountScreenState extends State<AmountScreen> {
                     (_isSelfTransfer ||
                         _isAmountTooHigh ||
                         _isQrLimitExceeded ||
-                        _isSpendingLimitExceeded)
+                        (_isSpendingLimitExceeded &&
+                            _selectedCircle == null &&
+                            !_isCirclePaymentApproval))
                     ? null
                     : _onPayPressed,
                 backgroundColor:
                     (_isSelfTransfer ||
                         _isAmountTooHigh ||
                         _isQrLimitExceeded ||
-                        _isSpendingLimitExceeded)
+                        (_isSpendingLimitExceeded &&
+                            _selectedCircle == null &&
+                            !_isCirclePaymentApproval))
                     ? (isDark ? Colors.grey[800] : Colors.grey[300])
                     : const Color(0xFF00B9F1), // Brand Cyan/Blue
                 elevation:
                     (_isSelfTransfer ||
                         _isAmountTooHigh ||
                         _isQrLimitExceeded ||
-                        _isSpendingLimitExceeded)
+                        (_isSpendingLimitExceeded &&
+                            _selectedCircle == null &&
+                            !_isCirclePaymentApproval))
                     ? 0
                     : 4,
                 shape: RoundedRectangleBorder(
@@ -957,7 +973,9 @@ class _AmountScreenState extends State<AmountScreen> {
                       ? "Cannot transfer to self"
                       : _isQrLimitExceeded
                       ? "Exceeds ₹2,000 Limit"
-                      : _isSpendingLimitExceeded
+                      : (_isSpendingLimitExceeded &&
+                            _selectedCircle == null &&
+                            !_isCirclePaymentApproval)
                       ? "Spending Limit Exceeded"
                       : (_isCirclePaymentApproval
                             ? "Approve"
@@ -971,7 +989,9 @@ class _AmountScreenState extends State<AmountScreen> {
                         (_isSelfTransfer ||
                             _isAmountTooHigh ||
                             _isQrLimitExceeded ||
-                            _isSpendingLimitExceeded)
+                            (_isSpendingLimitExceeded &&
+                                _selectedCircle == null &&
+                                !_isCirclePaymentApproval))
                         ? Colors.grey[500]
                         : Colors.white,
                   ),
@@ -986,7 +1006,9 @@ class _AmountScreenState extends State<AmountScreen> {
                       (_isSelfTransfer ||
                           _isAmountTooHigh ||
                           _isQrLimitExceeded ||
-                          _isSpendingLimitExceeded)
+                          (_isSpendingLimitExceeded &&
+                              _selectedCircle == null &&
+                              !_isCirclePaymentApproval))
                       ? Colors.grey[500]
                       : Colors.white,
                 ),
