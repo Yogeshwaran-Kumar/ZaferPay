@@ -76,17 +76,19 @@ class _SpendingLimitPinScreenState extends State<SpendingLimitPinScreen> {
     if (!mounted) return;
 
     if (status == PinVerificationStatus.success) {
-      // Save the spending limit settings
+      // Save the spending limit settings in background
       if (!widget.isEnabled) {
-        await _api.updateSettings(clearSpendingLimit: true);
+        _api.updateSettings(clearSpendingLimit: true).catchError((_) => false);
       } else if (widget.amount != null) {
-        await _api.updateSettings(
-          spendingLimit: widget.amount,
-          spendingLimitPeriod: widget.period,
-        );
+        _api
+            .updateSettings(
+              spendingLimit: widget.amount,
+              spendingLimitPeriod: widget.period,
+            )
+            .catchError((_) => false);
       }
       if (!mounted) return;
-      // Pop with a success result so the caller can refresh + show a snackbar
+      // Pop with a success result so the caller can refresh + show a snackbar immediately
       Navigator.pop(context, {'success': true, 'isEnabled': widget.isEnabled});
     } else if (status == PinVerificationStatus.lockedOut) {
       await _api.logout();

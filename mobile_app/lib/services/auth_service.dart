@@ -208,6 +208,30 @@ class AuthService {
     }
   }
 
+  Future<bool> signup(
+    String username,
+    String mobile,
+    String? email,
+    String pin,
+    bool hasBankAccount,
+  ) async {
+    try {
+      final response = await _apiClient.post(
+        '/auth/signup',
+        body: {
+          'username': username,
+          'mobile_number': mobile,
+          'email': email,
+          'pin': pin,
+          'has_bank_account': hasBankAccount,
+        },
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<bool> setPin(String mobile, String pin) async {
     try {
       final response = await _apiClient.post(
