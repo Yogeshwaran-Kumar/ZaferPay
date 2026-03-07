@@ -26,20 +26,28 @@ class CallStateService {
   /// Stream that emits `true` when a call starts and `false` when it ends.
   Stream<bool> get stream => _controller.stream;
 
+  /// Checks if the READ_PHONE_STATE permission is granted.
+  Future<bool> hasPermission() async {
+    if (kIsWeb) return true;
+    return await Permission.phone.isGranted;
+  }
+
   /// Initialises the call state listener. Safe to call multiple times.
-  Future<void> init() async {
-    if (_subscription != null) return; // already listening
+  /// Returns true if initialized with permission, false otherwise.
+  Future<bool> init() async {
+    if (_subscription != null) return true; // already listening
 
     // Request permission (Android requires READ_PHONE_STATE)
     if (!kIsWeb) {
       final status = await Permission.phone.request();
       if (!status.isGranted) {
         debugPrint('[CallStateService] Phone state permission denied.');
-        return;
+        return false;
       }
     }
 
     _subscription = PhoneState.stream.listen(_onPhoneStateChanged);
+    return true;
   }
 
   void _onPhoneStateChanged(PhoneState state) {

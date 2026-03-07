@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'api_service.dart';
 import 'mcc_helper.dart';
 import 'processing_shield_screen.dart';
@@ -45,6 +46,7 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
   String _enteredPin = '';
   final ApiService _api = ApiService();
   bool _isOnCall = false;
+  bool _hasPhonePermission = true;
   StreamSubscription<bool>? _callStateSub;
   static const _securityChannel = MethodChannel(
     'com.company.zaferpay/security',
@@ -70,9 +72,10 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
   }
 
   Future<void> _initCallDetection() async {
-    await CallStateService.instance.init();
+    final hasPerm = await CallStateService.instance.init();
     if (!mounted) return;
     setState(() {
+      _hasPhonePermission = hasPerm;
       _isOnCall = CallStateService.instance.isOnCall;
     });
     _callStateSub = CallStateService.instance.stream.listen((onCall) {
@@ -106,6 +109,16 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
     if (_isOnCall) {
       _showOnCallDialog();
       return;
+    }
+
+    // Guard: block payment if phone state permission is missing for security
+    if (!_hasPhonePermission) {
+      final stillNoPerm = !await CallStateService.instance.init();
+      if (mounted) setState(() => _hasPhonePermission = !stillNoPerm);
+      if (stillNoPerm) {
+        _showPermissionRequiredDialog();
+        return;
+      }
     }
 
     // 1. FAST Local Check (Avoids navigation if PIN is definitely wrong)
@@ -200,6 +213,10 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
   }
 
   void _showOnCallDialog() {
+    // ... (existing code remains)
+  }
+
+  void _showPermissionRequiredDialog() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
@@ -212,22 +229,21 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Icon
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.red.withValues(alpha: 0.12),
+                  color: Colors.blue.withValues(alpha: 0.12),
                 ),
                 child: const Icon(
-                  Icons.phone_in_talk_rounded,
-                  color: Colors.red,
+                  Icons.security_rounded,
+                  color: Colors.blue,
                   size: 40,
                 ),
               ),
               const SizedBox(height: 20),
               Text(
-                'Payment Blocked During Call',
+                'Security Permission Required',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 18,
@@ -237,7 +253,7 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                'For your security, UPI payments cannot be made while you are on a phone call.\n\nPlease end the call and try again.',
+                'To protect you from fraudulent calls, Safe Pay needs permission to detect if you are on a call during payments.\n\nPlease grant the Phone permission to proceed.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,
@@ -250,7 +266,7 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
+                    backgroundColor: const Color(0xFF1A237E),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
@@ -258,9 +274,12 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
                     ),
                     elevation: 0,
                   ),
-                  onPressed: () => Navigator.pop(ctx),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    openAppSettings();
+                  },
                   child: const Text(
-                    'I Understand',
+                    'Open Settings',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                   ),
                 ),
