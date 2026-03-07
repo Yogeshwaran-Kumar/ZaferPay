@@ -10,6 +10,7 @@ import 'services/call_state_service.dart';
 import 'services/transaction_service.dart';
 import 'services/user_service.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'fraud_scanning_animation.dart';
 
 class AmountScreen extends StatefulWidget {
@@ -69,6 +70,7 @@ class _AmountScreenState extends State<AmountScreen> {
 
   // Phone call detection
   bool _isOnCall = false;
+  bool _hasPhonePermission = true;
   StreamSubscription<bool>? _callStateSub;
 
   // --- Inline Risk Analysis State ---
@@ -91,9 +93,10 @@ class _AmountScreenState extends State<AmountScreen> {
   }
 
   Future<void> _initCallDetection() async {
-    await CallStateService.instance.init();
+    final hasPerm = await CallStateService.instance.init();
     if (!mounted) return;
     setState(() {
+      _hasPhonePermission = hasPerm;
       _isOnCall = CallStateService.instance.isOnCall;
     });
     _callStateSub = CallStateService.instance.stream.listen((onCall) {
@@ -402,6 +405,16 @@ class _AmountScreenState extends State<AmountScreen> {
       return;
     }
 
+    // Guard: block payment if phone state permission is missing for security
+    if (!_hasPhonePermission) {
+      final stillNoPerm = !await CallStateService.instance.init();
+      if (mounted) setState(() => _hasPhonePermission = !stillNoPerm);
+      if (stillNoPerm) {
+        _showPermissionRequiredDialog();
+        return;
+      }
+    }
+
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount < 1) {
       ScaffoldMessenger.of(
@@ -605,6 +618,10 @@ class _AmountScreenState extends State<AmountScreen> {
   }
 
   void _showOnCallDialog() {
+    // ... (existing code remains)
+  }
+
+  void _showPermissionRequiredDialog() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
@@ -621,17 +638,17 @@ class _AmountScreenState extends State<AmountScreen> {
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.red.withValues(alpha: 0.12),
+                  color: Colors.blue.withValues(alpha: 0.12),
                 ),
                 child: const Icon(
-                  Icons.phone_in_talk_rounded,
-                  color: Colors.red,
+                  Icons.security_rounded,
+                  color: Colors.blue,
                   size: 40,
                 ),
               ),
               const SizedBox(height: 20),
               Text(
-                'Payment Blocked During Call',
+                'Security Permission Required',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.outfit(
                   fontSize: 18,
@@ -641,7 +658,7 @@ class _AmountScreenState extends State<AmountScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                'For your security, UPI payments cannot be made while you are on a phone call.\n\nPlease end the call and try again.',
+                'To protect you from fraudulent calls, Safe Pay needs permission to detect if you are on a call during payments.\n\nPlease grant the Phone permission to proceed.',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.outfit(
                   fontSize: 13,
@@ -654,7 +671,7 @@ class _AmountScreenState extends State<AmountScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
+                    backgroundColor: const Color(0xFF00B9F1),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
@@ -662,9 +679,12 @@ class _AmountScreenState extends State<AmountScreen> {
                     ),
                     elevation: 0,
                   ),
-                  onPressed: () => Navigator.pop(ctx),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    openAppSettings();
+                  },
                   child: Text(
-                    'I Understand',
+                    'Open Settings',
                     style: GoogleFonts.outfit(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
@@ -674,6 +694,54 @@ class _AmountScreenState extends State<AmountScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPermissionWarning(bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.orange.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.warning_amber_rounded,
+              color: Colors.orange,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Call security is disabled. Grant Phone permission for safe payments.',
+                style: GoogleFonts.outfit(
+                  fontSize: 12,
+                  color: isDark ? Colors.orange[200] : Colors.orange[800],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () async {
+                final hasPerm = await CallStateService.instance.init();
+                if (mounted) setState(() => _hasPhonePermission = hasPerm);
+              },
+              child: Text(
+                'Enable',
+                style: GoogleFonts.outfit(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF00B9F1),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1197,6 +1265,11 @@ class _AmountScreenState extends State<AmountScreen> {
                         ],
                       ),
                     ),
+
+                    if (!_hasPhonePermission &&
+                        !_isAnalyzingRisk &&
+                        !_hasAnalyzedRisk)
+                      _buildPermissionWarning(isDark),
 
                     SizedBox(
                       height: (_isAnalyzingRisk || _hasAnalyzedRisk) ? 16 : 32,
