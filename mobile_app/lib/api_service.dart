@@ -165,6 +165,7 @@ class ApiService {
     int? requestId,
     String? paymentSource,
     bool isScreenSharing = false,
+    bool isOnCall = false,
     bool isCirclePayment = false,
     int? circleId,
   }) => _tx.createTransactionOptimistic(
@@ -179,6 +180,7 @@ class ApiService {
     requestId: requestId,
     paymentSource: paymentSource,
     isScreenSharing: isScreenSharing,
+    isOnCall: isOnCall,
     isCirclePayment: isCirclePayment,
     circleId: circleId,
   );
@@ -192,6 +194,7 @@ class ApiService {
     bool isContact = false,
     String? paymentSource,
     bool isScreenSharing = false,
+    bool isOnCall = false,
   }) => _tx.analyzeRisk(
     receiverUpi,
     amount,
@@ -200,6 +203,7 @@ class ApiService {
     isContact: isContact,
     paymentSource: paymentSource,
     isScreenSharing: isScreenSharing,
+    isOnCall: isOnCall,
   );
 
   Future<Map<String, dynamic>> createTransaction(

@@ -1497,6 +1497,18 @@ def analyze_transaction_risk(
             receiver_exists=False,
             detail={"message": "First time sending to this receiver", "risk": "WARN"}
         )
+
+    # 1.5. Block if on call (v5.0 Scam Protection)
+    if tx.is_on_call:
+        return schemas.TransactionAnalyzeResponse(
+            risk_score="FRAUD_BLOCKED",
+            risk_reason="ON_CALL_RESTRICTION",
+            is_blocked=True,
+            receiver_name=receiver_name,
+            receiver_exists=True,
+            is_bypassable=False,
+            detail={"message": "Transaction blocked for security. You cannot perform risky actions while on an active phone call.", "risk": "FRAUD_BLOCKED"}
+        )
         
     if receiver.is_fraud:
         return schemas.TransactionAnalyzeResponse(
@@ -1593,6 +1605,13 @@ def create_transaction(
     Idempotency Key: If provided, prevents duplicate transactions when user
     clicks pay button multiple times due to slow network.
     """
+
+    # 0. Block if on call (v5.0 Scam Protection) - HARD BLOCK
+    if tx.is_on_call:
+        raise HTTPException(
+            status_code=403, 
+            detail="Transaction blocked for security. Please end your phone call to proceed."
+        )
     
     # ═══════════════════════════════════════════════════════════════════════════
     # IDEMPOTENCY CHECK - Prevent Duplicate Transactions

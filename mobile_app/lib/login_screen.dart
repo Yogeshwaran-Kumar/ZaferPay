@@ -7,6 +7,7 @@ import 'api_service.dart';
 import 'services/notification_service.dart';
 import 'services/biometric_service.dart';
 import 'services/sim_service.dart';
+import 'permission_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   final bool isUnlockMode;
@@ -242,6 +243,49 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MANDATORY PERMISSION CHECK: Phone + Contacts
+  // First tries an inline request. If that fails (denied/permanently denied),
+  // pushes the full PermissionScreen as a mandatory gateway.
+  // Returns true if BOTH permissions are granted, false otherwise.
+  // ═══════════════════════════════════════════════════════════════════════════
+  Future<bool> _ensurePermissions() async {
+    // Quick check: already granted?
+    final phoneGranted = await Permission.phone.isGranted;
+    final contactsGranted = await Permission.contacts.isGranted;
+
+    if (phoneGranted && contactsGranted) return true;
+
+    // Try inline request first (system dialog)
+    Map<Permission, PermissionStatus> statuses = await [
+      Permission.phone,
+      Permission.contacts,
+    ].request();
+
+    if (statuses[Permission.phone]!.isGranted &&
+        statuses[Permission.contacts]!.isGranted) {
+      return true;
+    }
+
+    // Inline request failed → Push the full PermissionScreen
+    if (!mounted) return false;
+
+    // Mark as requesting permission so app lock doesn't trigger
+    MyApp.isRequestingPermission = true;
+
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const PermissionScreen(),
+        fullscreenDialog: true,
+      ),
+    );
+
+    MyApp.isRequestingPermission = false;
+
+    return result == true;
+  }
+
   // Handle "Proceed Next" button
   Future<void> _handleMobileSubmit() async {
     final mobile = _mobileController.text.trim();
@@ -253,9 +297,6 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       return;
     }
-
-    // Basic validation: Check if it's alphanumeric (email) or digits (phone)
-    // For now, we trust the backend to handle the lookup
 
     // Clear any previous error snackbars (e.g. from previous failed SIM check)
     ScaffoldMessenger.of(context).clearSnackBars();
@@ -299,6 +340,12 @@ class _LoginScreenState extends State<LoginScreen> {
     if (result['status'] == 'new') {
       if (result['exists'] == true) {
         // User exists but needs to set PIN
+        // ═════════════════════════════════════════════════════════════════
+        // MANDATORY: Ensure Phone + Contacts permissions (existing user)
+        // ═════════════════════════════════════════════════════════════════
+        final permissionsGranted = await _ensurePermissions();
+        if (!permissionsGranted) return;
+
         _secureScreen();
         setState(() {
           _currentStep = 1; // Create PIN
@@ -306,19 +353,27 @@ class _LoginScreenState extends State<LoginScreen> {
           _upiId = result['upi_id'] ?? '';
         });
       } else {
-        // User does not exist - Go to Signup Form
+        // User does not exist - Show error message (NO permission check here)
         if (mounted) {
-          setState(() {
-            _isNewUserSignup = true;
-            _currentStep = 4; // Show Signup Profile Form
-            _mobileController.clear(); // Clear for fresh signup entry
-            _nameController.clear();
-            _emailController.clear();
-          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'User does not exist in our app. Please create an account.',
+              ),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 4),
+            ),
+          );
         }
       }
     } else if (result['exists'] == true && result['status'] == 'existing') {
       // Existing user - proceed to PIN entry
+      // ═════════════════════════════════════════════════════════════════════
+      // MANDATORY: Ensure Phone + Contacts permissions (existing user)
+      // ═════════════════════════════════════════════════════════════════════
+      final permissionsGranted = await _ensurePermissions();
+      if (!permissionsGranted) return;
+
       _secureScreen();
       setState(() {
         _currentStep = 3; // Enter PIN
@@ -363,6 +418,13 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (result['valid'] == true) {
+        // ═════════════════════════════════════════════════════════════════
+        // MANDATORY: Ensure Phone + Contacts permissions (valid signup)
+        // ═════════════════════════════════════════════════════════════════
+        if (mounted) setState(() => _isLoading = false);
+        final permissionsGranted = await _ensurePermissions();
+        if (!permissionsGranted) return;
+
         setState(() {
           _currentStep = 1; // proceed to create PIN
           _enteredPin = '';

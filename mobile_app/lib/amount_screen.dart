@@ -399,8 +399,11 @@ class _AmountScreenState extends State<AmountScreen> {
       return;
     }
 
-    // Guard: block payment during active phone call
-    if (_isOnCall) {
+    // Guard: block payment during active phone call (directly queries Android OS)
+    final bool onCallNow = await CallStateService.isCurrentlyOnCall();
+    if (!mounted) return;
+
+    if (onCallNow || _isOnCall) {
       _showOnCallDialog();
       return;
     }
@@ -460,6 +463,7 @@ class _AmountScreenState extends State<AmountScreen> {
         mcc: _rawMcc,
         note: _noteController.text.trim(),
         paymentSource: _paymentSource,
+        isOnCall: _isOnCall,
       );
 
       if (result['risk_score'] == 'FRAUD_BLOCKED') {
@@ -619,7 +623,77 @@ class _AmountScreenState extends State<AmountScreen> {
   }
 
   void _showOnCallDialog() {
-    // ... (existing code remains)
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        backgroundColor: isDark ? const Color(0xFF1A1A2E) : Colors.white,
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.red.withValues(alpha: 0.12),
+                ),
+                child: const Icon(
+                  Icons.phone_disabled_rounded,
+                  color: Colors.red,
+                  size: 40,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Security Block',
+                style: GoogleFonts.outfit(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : const Color(0xFF1A1A2E),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'For your safety, payments are disabled while you are on an active phone call to prevent potential scams.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(
+                  fontSize: 15,
+                  color: isDark ? Colors.white70 : Colors.black54,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    'Got it',
+                    style: GoogleFonts.outfit(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _showPermissionRequiredDialog() {

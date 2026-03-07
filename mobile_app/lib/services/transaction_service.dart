@@ -38,6 +38,7 @@ class TransactionService {
     String?
     paymentSource, // 'qr_scan', 'deep_link', 'manual_entry', 'contact_list'
     bool isScreenSharing = false, // true if AnyDesk/TeamViewer detected
+    bool isOnCall = false, // true if user is on a phone call
   }) async {
     final body = {
       'receiver_upi_id': receiverUpi,
@@ -47,6 +48,7 @@ class TransactionService {
       'is_contact': isContact,
       if (paymentSource != null) 'payment_source': paymentSource,
       'is_screen_sharing': isScreenSharing,
+      'is_on_call': isOnCall,
     };
 
     try {
@@ -84,6 +86,7 @@ class TransactionService {
     String? acknowledgedRisk,
     String? paymentSource, // v5.0 scam telemetry
     bool isScreenSharing = false, // v5.0 scam telemetry
+    bool isOnCall = false, // v5.0 scam telemetry
     bool isCirclePayment = false,
     int? circleId,
   }) async {
@@ -146,6 +149,7 @@ class TransactionService {
       acknowledgedRisk: acknowledgedRisk,
       paymentSource: paymentSource,
       isScreenSharing: isScreenSharing,
+      isOnCall: isOnCall,
       isCirclePayment: isCirclePayment,
       circleId: circleId,
     );
@@ -182,6 +186,7 @@ class TransactionService {
     String? acknowledgedRisk,
     String? paymentSource, // v5.0 scam telemetry
     bool isScreenSharing = false, // v5.0 scam telemetry
+    bool isOnCall = false, // v5.0 scam telemetry
     bool isCirclePayment = false,
     int? circleId,
   }) async {
@@ -207,6 +212,7 @@ class TransactionService {
         if (acknowledgedRisk != null) 'acknowledged_risk': acknowledgedRisk,
         if (paymentSource != null) 'payment_source': paymentSource,
         'is_screen_sharing': isScreenSharing,
+        'is_on_call': isOnCall,
         'is_circle_payment': isCirclePayment,
         'circle_id': circleId,
       };
