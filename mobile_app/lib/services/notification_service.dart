@@ -16,17 +16,8 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     print("Background Notification: ${message.messageId}");
   }
 
-  // Increment Badge Count
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    int count = (prefs.getInt('badge_count') ?? 0) + 1;
-    await prefs.setInt('badge_count', count);
-    FlutterAppBadger.updateBadgeCount(count);
-  } catch (e) {
-    if (kDebugMode) {
-      print("Example: Failed to update badge in background: $e");
-    }
-  }
+  // Use the static helper to ensure consistent increment logic
+  await NotificationService.incrementBadgeCount();
 }
 
 class NotificationService {
@@ -155,16 +146,7 @@ class NotificationService {
       RemoteNotification? notification = message.notification;
 
       // Increment Badge Count (Foreground)
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        int count = (prefs.getInt('badge_count') ?? 0) + 1;
-        await prefs.setInt('badge_count', count);
-        FlutterAppBadger.updateBadgeCount(count);
-      } catch (e) {
-        if (kDebugMode) {
-          print("Example: Failed to update badge in foreground: $e");
-        }
-      }
+      await NotificationService.incrementBadgeCount();
 
       // Check for custom data to update UI if needed
       if (message.data['type'] == 'transaction_received') {
@@ -247,9 +229,8 @@ class NotificationService {
       // even if it loads sync cached data on cold start.
       await ApiService().clearCachedUnreadCounts();
 
-      // Clear badge
+      // Clear badge completely (Nothing should show on icon)
       FlutterAppBadger.removeBadge();
-      FlutterAppBadger.updateBadgeCount(0);
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('badge_count', 0);
@@ -275,4 +256,31 @@ class NotificationService {
   }
 
   String? get fcmToken => _fcmToken;
+
+  /// Global static helper to increment the launcher badge count.
+  /// Used by both background handler and foreground listener.
+  static Future<void> incrementBadgeCount() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      int currentCount = prefs.getInt('badge_count') ?? 0;
+      int newCount = currentCount + 1;
+
+      // Update local storage
+      await prefs.setInt('badge_count', newCount);
+
+      // Update Launcher Icon (System Badge)
+      bool isSupported = await FlutterAppBadger.isAppBadgeSupported();
+      if (isSupported) {
+        FlutterAppBadger.updateBadgeCount(newCount);
+      }
+
+      if (kDebugMode) {
+        print("🔔 Badge Incremented: $currentCount -> $newCount");
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print("❌ Failed to increment badge: $e");
+      }
+    }
+  }
 }
