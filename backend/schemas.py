@@ -183,6 +183,7 @@ class TransactionCreate(BaseModel):
     # v5.0: Scam telemetry fields (sent by mobile app)
     payment_source: Optional[str] = None  # 'qr_scan', 'qr_upload', 'qr_share', 'deep_link', 'manual_entry', 'contact_list'
     is_screen_sharing: bool = False  # True if remote-access app (AnyDesk/TeamViewer) detected
+    is_on_call: bool = False  # True if user is on a phone call (v5.0 scam telemetry)
     
     # UPI Circle Support
     is_circle_payment: bool = False
@@ -223,6 +224,7 @@ class TransactionAnalyze(BaseModel):
     # v5.0: Scam telemetry fields (sent by mobile app)
     payment_source: Optional[str] = None  # 'qr_scan', 'qr_upload', 'qr_share', 'deep_link', 'manual_entry', 'contact_list'
     is_screen_sharing: bool = False  # True if remote-access app detected
+    is_on_call: bool = False  # True if user is on a phone call (v5.0 scam telemetry)
 
 class TransactionAnalyzeResponse(BaseModel):
     risk_score: str  # 'SAFE', 'WARN', 'HIGH'

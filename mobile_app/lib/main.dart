@@ -8,7 +8,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_jailbreak_detection/flutter_jailbreak_detection.dart';
 import 'login_screen.dart';
 import 'api_service.dart';
-
 import 'main_navigation_screen.dart';
 import 'scan_screen.dart';
 import 'pay_screen.dart';

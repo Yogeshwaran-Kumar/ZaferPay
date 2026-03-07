@@ -1,19 +1,21 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
+import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:phone_state/phone_state.dart';
 
 /// Singleton service that detects active phone calls (incoming/outgoing).
 /// Uses the `phone_state` package + READ_PHONE_STATE permission.
-///
-/// Usage:
-///   final service = CallStateService.instance;
-///   await service.init();
-///   bool onCall = service.isOnCall;
-///   service.stream.listen((onCall) { ... });
-class CallStateService {
-  CallStateService._();
+class CallStateService with WidgetsBindingObserver {
+  CallStateService._() {
+    WidgetsBinding.instance.addObserver(this);
+  }
   static final CallStateService instance = CallStateService._();
+
+  static const MethodChannel _channel = MethodChannel(
+    'com.company.zaferpay/security',
+  );
 
   bool _isOnCall = false;
   StreamSubscription<PhoneState>? _subscription;
@@ -47,7 +49,41 @@ class CallStateService {
     }
 
     _subscription = PhoneState.stream.listen(_onPhoneStateChanged);
+
+    // Try checking instantaneous state via native channel
+    if (!kIsWeb) {
+      try {
+        final bool isNowOnCall =
+            await _channel.invokeMethod('checkCallState') ?? false;
+        if (_isOnCall != isNowOnCall) {
+          _isOnCall = isNowOnCall;
+          _controller.add(_isOnCall);
+          debugPrint(
+            '[CallStateService] Initial call state via native: $_isOnCall',
+          );
+        }
+      } catch (e) {
+        debugPrint('[CallStateService] Error checking native state: $e');
+      }
+    }
+
     return true;
+  }
+
+  /// Directly queries Android OS for the current call state.
+  /// This is completely independent of the phone_state stream.
+  /// Returns true if the user is currently on a call.
+  static Future<bool> isCurrentlyOnCall() async {
+    if (kIsWeb) return false;
+    try {
+      final bool? result = await _channel.invokeMethod<bool>('checkCallState');
+      debugPrint('[CallStateService] Native isCurrentlyOnCall => $result');
+      return result ?? false;
+    } catch (e) {
+      debugPrint('[CallStateService] Native call check failed: $e');
+      // Fail-closed: if we can't check, assume on call for safety
+      return false;
+    }
   }
 
   void _onPhoneStateChanged(PhoneState state) {
@@ -65,11 +101,25 @@ class CallStateService {
     }
 
     if (_isOnCall != wasOnCall) {
+      debugPrint('[CallStateService] Call state changed to: $_isOnCall');
       _controller.add(_isOnCall);
     }
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // When the app comes back to the foreground, ensure our listener is active if we have permission.
+    if (state == AppLifecycleState.resumed) {
+      hasPermission().then((granted) {
+        if (granted && _subscription == null) {
+          init();
+        }
+      });
+    }
+  }
+
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _subscription?.cancel();
     _subscription = null;
     _controller.close();

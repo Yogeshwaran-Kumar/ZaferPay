@@ -33,10 +33,12 @@ class ProcessingShieldScreen extends StatefulWidget {
     this.paymentSource,
     this.isCirclePayment = false,
     this.circleId,
+    this.isOnCall = false,
   });
 
   final bool isCirclePayment;
   final int? circleId;
+  final bool isOnCall;
 
   @override
   State<ProcessingShieldScreen> createState() => _ProcessingShieldScreenState();
@@ -185,6 +187,7 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
       acknowledgedRisk: widget.acknowledgedRisk,
       requestId: widget.requestId,
       paymentSource: widget.paymentSource,
+      isOnCall: widget.isOnCall,
       isCirclePayment: widget.isCirclePayment,
       circleId: widget.circleId,
     );
