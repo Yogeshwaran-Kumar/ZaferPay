@@ -311,6 +311,9 @@ class _LoginScreenState extends State<LoginScreen> {
           setState(() {
             _isNewUserSignup = true;
             _currentStep = 4; // Show Signup Profile Form
+            _mobileController.clear(); // Clear for fresh signup entry
+            _nameController.clear();
+            _emailController.clear();
           });
         }
       }
@@ -333,6 +336,55 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _validateAndProceedSignup() async {
+    if (_nameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Name is required')));
+      return;
+    }
+    if (_mobileController.text.trim().length != 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid 10-digit phone number'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final result = await _api.validateSignup(
+        _mobileController.text.trim(),
+        _emailController.text.trim().isEmpty
+            ? null
+            : _emailController.text.trim(),
+      );
+
+      if (result['valid'] == true) {
+        setState(() {
+          _currentStep = 1; // proceed to create PIN
+          _enteredPin = '';
+          _firstPin = '';
+        });
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['detail'] ?? 'Validation failed'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   Future<void> _handlePinComplete() async {
     final pin = _enteredPin;
 
@@ -351,7 +403,7 @@ class _LoginScreenState extends State<LoginScreen> {
         bool success = false;
 
         if (_isNewUserSignup) {
-          success = await _api.signup(
+          final signupError = await _api.signup(
             _nameController.text.trim(),
             _mobileController.text.trim(),
             _emailController.text.trim().isEmpty
@@ -360,6 +412,28 @@ class _LoginScreenState extends State<LoginScreen> {
             pin,
             _hasBankAccount,
           );
+
+          if (signupError == null) {
+            success = true;
+          } else {
+            success = false;
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(signupError),
+                  backgroundColor: signupError.contains('already registered')
+                      ? Colors.orange
+                      : Colors.red,
+                ),
+              );
+
+              // If it's a conflict error, maybe go back to signup detail or stay here?
+              // User likely wants to fix the email or mobile, so staying on PIN confirmation
+              // might be confusing if they can't change it here.
+              // However, since they are in Step 2 (Confirm PIN), we should probably
+              // let them go back to Step 4 (Signup Details) if they want.
+            }
+          }
         } else {
           success = await _api.setPin(_mobileController.text, pin);
         }
@@ -380,6 +454,12 @@ class _LoginScreenState extends State<LoginScreen> {
           }
           // Auto login after setting
           _login(force: false, pinToUse: pin);
+        } else if (_isNewUserSignup) {
+          // Error already handled above with specific message
+          // Just reset slightly so they can try again or go back
+          setState(() {
+            _enteredPin = '';
+          });
         } else {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -840,6 +920,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   setState(() {
                     _isNewUserSignup = true;
                     _currentStep = 4;
+                    _mobileController.clear();
+                    _nameController.clear();
+                    _emailController.clear();
                   });
                 },
                 child: RichText(
@@ -919,127 +1002,170 @@ class _LoginScreenState extends State<LoginScreen> {
       children: [
         Expanded(
           flex: 4,
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const SizedBox(height: 20), // Add top padding for safety
-                _buildZaferPayLogo(),
-
-                // Lock Icon or Title
-                if (_currentStep == 3)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 20),
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 500),
-                      transitionBuilder: (child, animation) {
-                        return ScaleTransition(scale: animation, child: child);
-                      },
-                      child: _isUnlocking
-                          ? Container(
-                              key: const ValueKey('unlock'),
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: const Color(
-                                  0xFF00B9F1,
-                                ).withValues(alpha: 0.2),
-                                border: Border.all(
-                                  color: const Color(0xFF00B9F1),
-                                  width: 2,
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.lock_open_rounded,
-                                size: 32,
-                                color: Color(0xFF00B9F1),
-                              ),
-                            )
-                          : Container(
-                              key: const ValueKey('lock'),
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: _hasError
-                                    ? Colors.red.withValues(alpha: 0.1)
-                                    : Colors.black.withValues(alpha: 0.05),
-                                border: Border.all(
-                                  color: _hasError
-                                      ? Colors.redAccent
-                                      : Colors.black12,
-                                  width: 2,
-                                ),
-                              ),
-                              child: Icon(
-                                Icons.lock_outline_rounded,
-                                size: 32,
-                                color: _hasError
-                                    ? Colors.redAccent
-                                    : Colors.black87,
-                              ),
-                            ),
-                    ),
-                  )
-                else
-                  Text(
-                    _pinTitle,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-
-                const SizedBox(height: 8),
-                if (_currentStep == 1)
-                  const Text(
-                    "Create a 4-digit PIN",
-                    style: TextStyle(color: Colors.black54),
-                  )
-                else if (_currentStep == 2)
-                  const Text(
-                    "Re-enter PIN to confirm",
-                    style: TextStyle(color: Colors.black54),
-                  )
-                else if (_upiId.isNotEmpty && !_isUnlocking)
-                  Text(
-                    _upiId,
-                    style: const TextStyle(color: Colors.black87, fontSize: 16),
-                  ),
-
-                const SizedBox(height: 8),
-                // Dots
-                Row(
+          child: Stack(
+            children: [
+              SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(4, (index) {
-                    final filled = index < _enteredPin.length;
-                    return Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 12),
-                      width: 16,
-                      height: 16,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: filled
-                            ? const Color(0xFF00B9F1) // Blue filled
-                            : Colors.black12, // Empty
-                        border: Border.all(
-                          color: filled
-                              ? const Color(0xFF00B9F1)
-                              : Colors.black26,
-                          width: 2,
+                  children: [
+                    const SizedBox(height: 20), // Add top padding for safety
+                    _buildZaferPayLogo(),
+
+                    // Lock Icon or Title
+                    if (_currentStep == 3)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 20),
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 500),
+                          transitionBuilder: (child, animation) {
+                            return ScaleTransition(
+                              scale: animation,
+                              child: child,
+                            );
+                          },
+                          child: _isUnlocking
+                              ? Container(
+                                  key: const ValueKey('unlock'),
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: const Color(
+                                      0xFF00B9F1,
+                                    ).withValues(alpha: 0.2),
+                                    border: Border.all(
+                                      color: const Color(0xFF00B9F1),
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons.lock_open_rounded,
+                                    size: 32,
+                                    color: Color(0xFF00B9F1),
+                                  ),
+                                )
+                              : Container(
+                                  key: const ValueKey('lock'),
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: _hasError
+                                        ? Colors.red.withValues(alpha: 0.1)
+                                        : Colors.black.withValues(alpha: 0.05),
+                                    border: Border.all(
+                                      color: _hasError
+                                          ? Colors.redAccent
+                                          : Colors.black12,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: Icon(
+                                    Icons.lock_outline_rounded,
+                                    size: 32,
+                                    color: _hasError
+                                        ? Colors.redAccent
+                                        : Colors.black87,
+                                  ),
+                                ),
+                        ),
+                      )
+                    else
+                      Text(
+                        _pinTitle,
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
                         ),
                       ),
-                    );
-                  }),
+
+                    const SizedBox(height: 8),
+                    if (_currentStep == 1)
+                      const Text(
+                        "Create a 4-digit PIN",
+                        style: TextStyle(color: Colors.black54),
+                      )
+                    else if (_currentStep == 2)
+                      const Text(
+                        "Re-enter PIN to confirm",
+                        style: TextStyle(color: Colors.black54),
+                      )
+                    else if (_upiId.isNotEmpty && !_isUnlocking)
+                      Text(
+                        _upiId,
+                        style: const TextStyle(
+                          color: Colors.black87,
+                          fontSize: 16,
+                        ),
+                      ),
+
+                    const SizedBox(height: 8),
+                    // Dots
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(4, (index) {
+                        final filled = index < _enteredPin.length;
+                        return Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 12),
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: filled
+                                ? const Color(0xFF00B9F1) // Blue filled
+                                : Colors.black12, // Empty
+                            border: Border.all(
+                              color: filled
+                                  ? const Color(0xFF00B9F1)
+                                  : Colors.black26,
+                              width: 2,
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                    if (_isLoading) ...[
+                      const SizedBox(height: 32),
+                      const CircularProgressIndicator(color: Color(0xFF00B9F1)),
+                    ],
+                    const SizedBox(height: 20), // Bottom padding
+                  ],
                 ),
-                if (_isLoading) ...[
-                  const SizedBox(height: 32),
-                  const CircularProgressIndicator(color: Color(0xFF00B9F1)),
-                ],
-                const SizedBox(height: 20), // Bottom padding
-              ],
-            ),
+              ),
+              // Back Button for Signup/PIN flow (On top of scroller)
+              if (_currentStep == 1 || _currentStep == 2)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  child: IconButton(
+                    padding: const EdgeInsets.all(20),
+                    icon: const Icon(
+                      Icons.arrow_back_rounded,
+                      color: Colors.black87,
+                      size: 32,
+                    ),
+                    onPressed: () {
+                      if (_currentStep == 2) {
+                        setState(() {
+                          _currentStep = 1;
+                          _enteredPin = '';
+                          _firstPin = '';
+                        });
+                      } else if (_currentStep == 1) {
+                        setState(() {
+                          if (_isNewUserSignup) {
+                            _currentStep = 4;
+                          } else {
+                            _currentStep = 0;
+                            _mobileController.clear();
+                          }
+                          _enteredPin = '';
+                        });
+                      }
+                    },
+                  ),
+                ),
+            ],
           ),
         ),
         // Keypad or Biometric-Only Prompt
@@ -1165,197 +1291,198 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildStep4Signup() {
     return SafeArea(
-      child: Container(
-        alignment: const Alignment(0.0, -0.3),
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                _buildZaferPayLogo(),
-                const SizedBox(height: 20),
+      child: Stack(
+        children: [
+          Container(
+            alignment: const Alignment(0.0, -0.3),
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _buildZaferPayLogo(),
+                    const SizedBox(height: 20),
 
-                const Text(
-                  'Create Account',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Enter your details to register',
-                  style: TextStyle(color: Colors.black54, fontSize: 16),
-                ),
-                const SizedBox(height: 40),
-
-                TextField(
-                  controller: _nameController,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                  decoration: InputDecoration(
-                    labelText: 'User Name',
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: Colors.black12),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: Colors.black12),
-                    ),
-                    prefixIcon: const Icon(Icons.person_outline),
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                TextField(
-                  controller: _mobileController,
-                  keyboardType: TextInputType.phone,
-                  maxLength: 10,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                  decoration: InputDecoration(
-                    labelText: 'Phone Number',
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: Colors.black12),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: Colors.black12),
-                    ),
-                    prefixIcon: const Icon(Icons.phone_android),
-                    counterText: '',
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                TextField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                  decoration: InputDecoration(
-                    labelText: 'Gmail (Optional)',
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: Colors.black12),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: Colors.black12),
-                    ),
-                    prefixIcon: const Icon(Icons.email_outlined),
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.black12),
-                  ),
-                  child: SwitchListTile(
-                    title: const Text('Do you have a bank account?'),
-                    subtitle: Text(
-                      _hasBankAccount ? 'Parent User' : 'Child User',
+                    const Text(
+                      'Create Account',
                       style: TextStyle(
-                        color: _hasBankAccount ? Colors.blue : Colors.orange,
-                      ),
-                    ),
-                    value: _hasBankAccount,
-                    onChanged: (val) {
-                      setState(() => _hasBankAccount = val);
-                    },
-                    activeTrackColor: const Color(
-                      0xFF00B9F1,
-                    ).withValues(alpha: 0.5),
-                    activeThumbColor: const Color(0xFF00B9F1),
-                  ),
-                ),
-                const SizedBox(height: 40),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      if (_nameController.text.trim().isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Name is required')),
-                        );
-                        return;
-                      }
-                      if (_mobileController.text.trim().length != 10) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Please enter a valid 10-digit phone number',
-                            ),
-                          ),
-                        );
-                        return;
-                      }
-                      setState(() {
-                        _currentStep = 1; // proceed to create PIN
-                        _enteredPin = '';
-                        _firstPin = '';
-                      });
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00B9F1),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      elevation: 4,
-                    ),
-                    child: const Text(
-                      'Next',
-                      style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 28,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: 1.0,
+                        color: Colors.black87,
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _currentStep = 0;
-                      _isNewUserSignup = false;
-                    });
-                  },
-                  child: const Text(
-                    'Back to Login',
-                    style: TextStyle(
-                      color: Colors.black54,
-                      fontWeight: FontWeight.bold,
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Enter your details to register',
+                      style: TextStyle(color: Colors.black54, fontSize: 16),
                     ),
-                  ),
+                    const SizedBox(height: 40),
+
+                    TextField(
+                      controller: _nameController,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'User Name',
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(color: Colors.black12),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(color: Colors.black12),
+                        ),
+                        prefixIcon: const Icon(Icons.person_outline),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    TextField(
+                      controller: _mobileController,
+                      keyboardType: TextInputType.phone,
+                      maxLength: 10,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Phone Number',
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(color: Colors.black12),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(color: Colors.black12),
+                        ),
+                        prefixIcon: const Icon(Icons.phone_android),
+                        counterText: '',
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    TextField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Gmail (Optional)',
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(color: Colors.black12),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(color: Colors.black12),
+                        ),
+                        prefixIcon: const Icon(Icons.email_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.black12),
+                      ),
+                      child: SwitchListTile(
+                        title: const Text('Do you have a bank account?'),
+                        subtitle: Text(
+                          _hasBankAccount ? 'Parent User' : 'Child User',
+                          style: TextStyle(
+                            color: _hasBankAccount
+                                ? Colors.blue
+                                : Colors.orange,
+                          ),
+                        ),
+                        value: _hasBankAccount,
+                        onChanged: (val) {
+                          setState(() => _hasBankAccount = val);
+                        },
+                        activeTrackColor: const Color(
+                          0xFF00B9F1,
+                        ).withValues(alpha: 0.5),
+                        activeThumbColor: const Color(0xFF00B9F1),
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton(
+                        onPressed: _isLoading
+                            ? null
+                            : _validateAndProceedSignup,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00B9F1),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          elevation: 4,
+                        ),
+                        child: _isLoading
+                            ? const SizedBox(
+                                height: 24,
+                                width: 24,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                'Next',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  letterSpacing: 1.0,
+                                ),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
+          // Back Button for Signup Details (Step 4)
+          Positioned(
+            top: 0,
+            left: 0,
+            child: IconButton(
+              padding: const EdgeInsets.all(20),
+              icon: const Icon(
+                Icons.arrow_back_rounded,
+                color: Colors.black87,
+                size: 32,
+              ),
+              onPressed: () {
+                setState(() {
+                  _currentStep = 0;
+                  _isNewUserSignup = false;
+                  _mobileController.clear();
+                  _nameController.clear();
+                  _emailController.clear();
+                });
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1423,7 +1550,50 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     return PopScope(
-      canPop: !widget.isUnlockMode,
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+
+        if (widget.isUnlockMode) {
+          // In unlock mode, we don't allow popping the screen via system back
+          return;
+        }
+
+        if (_currentStep == 1) {
+          setState(() {
+            if (_isNewUserSignup) {
+              _currentStep = 4;
+            } else {
+              _currentStep = 0;
+              _mobileController.clear();
+            }
+            _enteredPin = '';
+          });
+        } else if (_currentStep == 2) {
+          setState(() {
+            _currentStep = 1;
+            _enteredPin = '';
+            _firstPin = '';
+          });
+        } else if (_currentStep == 4) {
+          setState(() {
+            _currentStep = 0;
+            _isNewUserSignup = false;
+            _mobileController.clear();
+            _nameController.clear();
+            _emailController.clear();
+          });
+        } else if (_currentStep == 3 && !widget.isUnlockMode) {
+          setState(() {
+            _currentStep = 0;
+            _enteredPin = '';
+            _mobileController.clear();
+          });
+        } else {
+          // If we are at Step 0 or anything else, we can close the app/screen
+          SystemNavigator.pop();
+        }
+      },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.dark,
         child: Scaffold(

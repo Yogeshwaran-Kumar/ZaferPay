@@ -58,6 +58,10 @@ class SignUpRequest(BaseModel):
 class PinSetRequest(BaseModel):
     mobile_number: str
     pin: str
+
+class SignupValidatorRequest(BaseModel):
+    mobile_number: str
+    email: Optional[str] = None
     upi_id: Optional[str] = None
 
 class ChangePinRequest(BaseModel):

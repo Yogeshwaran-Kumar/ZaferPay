@@ -218,7 +218,28 @@ class AuthService {
     }
   }
 
-  Future<bool> signup(
+  Future<Map<String, dynamic>> validateSignup(
+    String mobile,
+    String? email,
+  ) async {
+    try {
+      final response = await _apiClient.post(
+        '/auth/validate-signup',
+        body: {'mobile_number': mobile, 'email': email},
+      );
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+      return {
+        'valid': false,
+        'detail': 'Validation failed (${response.statusCode})',
+      };
+    } catch (e) {
+      return {'valid': false, 'detail': 'Connection failed'};
+    }
+  }
+
+  Future<String?> signup(
     String username,
     String mobile,
     String? email,
@@ -236,9 +257,18 @@ class AuthService {
           'has_bank_account': hasBankAccount,
         },
       );
-      return response.statusCode == 200;
-    } catch (_) {
-      return false;
+      if (response.statusCode == 200) return null; // Success
+
+      try {
+        final data = json.decode(response.body);
+        return data['detail']?.toString() ??
+            'Registration failed (${response.statusCode})';
+      } catch (_) {
+        return 'Registration failed (${response.statusCode})';
+      }
+    } catch (e) {
+      if (kDebugMode) print("Signup Error: $e");
+      return 'Connection failed';
     }
   }
 

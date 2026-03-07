@@ -628,6 +628,33 @@ def check_mobile(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+@app.post("/auth/validate-signup")
+def validate_signup_details(
+    req: schemas.SignupValidatorRequest,
+    db: Session = Depends(get_db)
+):
+    # Normalize mobile
+    normalized = ''.join(filter(str.isdigit, req.mobile_number)) if req.mobile_number else None
+    
+    # Robust check matching register logic
+    hashes = {security.hash_value(req.mobile_number), security.hash_value(normalized)}
+    if normalized and len(normalized) == 10:
+        hashes.add(security.hash_value(f"+91{normalized}"))
+        hashes.add(security.hash_value(f"91{normalized}"))
+    
+    # Check for existing mobile
+    db_mobile = db.query(models.User).filter(models.User.mobile_hash.in_(hashes)).first()
+    if db_mobile:
+        return {"valid": False, "detail": "Mobile already registered"}
+    
+    # Check for existing email
+    if req.email:
+        email_hash = security.hash_value(req.email)
+        db_email = db.query(models.User).filter(models.User.email_hash == email_hash).first()
+        if db_email:
+            return {"valid": False, "detail": "Email already registered"}
+            
+    return {"valid": True}
 
 @app.post("/auth/register", response_model=schemas.UserResponse)
 def register_user(
@@ -635,15 +662,18 @@ def register_user(
     db: Session = Depends(get_db)
 ):
     # Normalize mobile
-    normalized_mobile = ''.join(filter(str.isdigit, user.mobile_number)) if user.mobile_number else None
+    normalized = ''.join(filter(str.isdigit, user.mobile_number)) if user.mobile_number else None
     
-    # Check if user exists (check username OR mobile hash)
-    # Note: We check mobile_hash of normalized version
-    mobile_hash = security.hash_value(normalized_mobile) if normalized_mobile else None
+    # Check if user exists (check username OR mobile hash variations)
+    # Robust check matching check_mobile logic
+    hashes = {security.hash_value(user.mobile_number), security.hash_value(normalized)}
+    if normalized and len(normalized) == 10:
+        hashes.add(security.hash_value(f"+91{normalized}"))
+        hashes.add(security.hash_value(f"91{normalized}"))
     
     db_user = db.query(models.User).filter(
         (models.User.username == user.username) | 
-        (models.User.mobile_hash == mobile_hash if mobile_hash else False)
+        (models.User.mobile_hash.in_(hashes))
     ).first()
     
     if db_user:
@@ -653,11 +683,14 @@ def register_user(
     # Fallback to username instead of specific suffix
     new_upi = user.username
     
+    # Use normalized hash for primary storage
+    primary_mobile_hash = security.hash_value(normalized) if normalized else security.hash_value(user.mobile_number)
+
     new_user = models.User(
         username=user.username,
         # Mobile: SECURE - Hash + Encrypt only (no plain text)
-        mobile_hash=mobile_hash,
-        mobile_encrypted=security.encrypt_value(normalized_mobile) if normalized_mobile else None,
+        mobile_hash=primary_mobile_hash,
+        mobile_encrypted=security.encrypt_value(normalized) if normalized else None,
         # Email: SECURE - Hash + Encrypt only (no plain text)
         email_hash=security.hash_value(user.email) if user.email else None,
         email_encrypted=security.encrypt_value(user.email) if user.email else None,
@@ -696,30 +729,42 @@ def register_signup(
     db: Session = Depends(get_db)
 ):
     # Normalize mobile
-    normalized_mobile = ''.join(filter(str.isdigit, req.mobile_number)) if req.mobile_number else None
+    normalized = ''.join(filter(str.isdigit, req.mobile_number)) if req.mobile_number else None
     
-    mobile_hash = security.hash_value(normalized_mobile) if normalized_mobile else None
+    # Robust check matching check_mobile logic
+    hashes = {security.hash_value(req.mobile_number), security.hash_value(normalized)}
+    if normalized and len(normalized) == 10:
+        hashes.add(security.hash_value(f"+91{normalized}"))
+        hashes.add(security.hash_value(f"91{normalized}"))
     
-    db_mobile = db.query(models.User).filter(
-        models.User.mobile_hash == mobile_hash
-    ).first() if mobile_hash else None
-    
+    # Check for existing mobile
+    db_mobile = db.query(models.User).filter(models.User.mobile_hash.in_(hashes)).first()
     if db_mobile:
         raise HTTPException(status_code=400, detail="Mobile already registered")
+    
+    # Check for existing email (NEW)
+    if req.email:
+        email_hash = security.hash_value(req.email)
+        db_email = db.query(models.User).filter(models.User.email_hash == email_hash).first()
+        if db_email:
+            raise HTTPException(status_code=400, detail="Email already registered")
 
     final_username = req.username
     db_user = db.query(models.User).filter(models.User.username == final_username).first()
     if db_user:
-        suffix = normalized_mobile[-4:] if normalized_mobile else str(int(datetime.utcnow().timestamp()))[-4:]
+        suffix = normalized[-4:] if normalized else str(int(datetime.utcnow().timestamp()))[-4:]
         final_username = f"{req.username}_{suffix}"
     
-    new_upi = f"{normalized_mobile}@zaferpay"
+    new_upi = f"{normalized}@zaferpay" if normalized else f"user_{int(datetime.utcnow().timestamp())}@zaferpay"
 
     
+    # Use normalized hash for storage consistency
+    primary_mobile_hash = security.hash_value(normalized) if normalized else security.hash_value(req.mobile_number)
+
     new_user = models.User(
         username=final_username,
-        mobile_hash=mobile_hash,
-        mobile_encrypted=security.encrypt_value(normalized_mobile) if normalized_mobile else None,
+        mobile_hash=primary_mobile_hash,
+        mobile_encrypted=security.encrypt_value(normalized) if normalized else None,
         email_hash=security.hash_value(req.email) if req.email else None,
         email_encrypted=security.encrypt_value(req.email) if req.email else None,
         upi_id=new_upi,
