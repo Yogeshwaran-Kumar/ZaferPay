@@ -114,7 +114,8 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
     // Guard: block payment if phone state permission is missing for security
     if (!_hasPhonePermission) {
       final stillNoPerm = !await CallStateService.instance.init();
-      if (mounted) setState(() => _hasPhonePermission = !stillNoPerm);
+      if (!mounted) return;
+      setState(() => _hasPhonePermission = !stillNoPerm);
       if (stillNoPerm) {
         _showPermissionRequiredDialog();
         return;
