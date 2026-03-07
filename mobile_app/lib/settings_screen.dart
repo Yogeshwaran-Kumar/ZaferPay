@@ -26,7 +26,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _pinUpdatedAtText = 'Update the PIN used for transactions';
 
   int _summaryFrequency = 1;
-  bool _isLoadingSettings = true;
 
   @override
   void initState() {
@@ -69,7 +68,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _biometric.setBiometricEnabled(_biometricEnabled);
 
           _summaryFrequency = user['summary_frequency'] ?? 1;
-          _isLoadingSettings = false;
 
           final pinUpdatedAt = user['pin_updated_at'];
           if (pinUpdatedAt != null) {
@@ -126,6 +124,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final iconColor = isDark ? Colors.white : Colors.black87;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -134,503 +133,230 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'Settings',
           style: TextStyle(
             color: Theme.of(context).textTheme.titleLarge?.color,
+            fontSize: 20,
           ),
         ),
         backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         iconTheme: Theme.of(context).iconTheme,
+        elevation: 0,
       ),
       body: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'Security',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.grey[400] : Colors.grey[700],
+                  fontSize: 18,
+                  color: isDark ? Colors.white : Colors.black,
                 ),
               ),
-              const SizedBox(height: 16),
-
-              // ── App Lock Toggle ──────────────────────────────────────────────
-              Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(
-                        alpha: isDark ? 0.3 : 0.05,
-                      ),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: SwitchListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 8,
-                  ),
-                  secondary: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF00B9F1).withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.security_rounded,
-                      color: Color(0xFF00B9F1),
-                      size: 24,
-                    ),
-                  ),
-                  title: Text(
-                    'App Lock',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                      color: Theme.of(context).textTheme.bodyLarge?.color,
-                    ),
-                  ),
-                  subtitle: Text(
-                    'Require PIN to open ZaferPay',
-                    style: TextStyle(
-                      color: isDark
-                          ? Colors.grey.shade400
-                          : Colors.grey.shade600,
-                      fontSize: 13,
-                    ),
-                  ),
-                  value: _appLockEnabled,
-                  onChanged: (value) async {
-                    if (value) {
-                      if (!_hasMpin) {
-                        // If no PIN set, must set one first
-                        await Navigator.pushNamed(
-                          context,
-                          '/change-mpin',
-                          arguments: {'isSetOnly': true},
-                        );
-                      } else {
-                        // Persist to Backend
-                        await _api.updateSettings(appLockEnabled: true);
-                        MyApp.appLockEnabled = true;
-                        final prefs = await SharedPreferences.getInstance();
-                        await prefs.setBool('app_lock_enabled', true);
-                      }
-                      _loadUserState(); // Refresh state
-                    } else {
-                      // Turning OFF lock screen
-                      bool? confirmed = await showDialog<bool>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Disable App Lock?'),
-                          content: const Text(
-                            'Your app will open without a PIN.',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context, false),
-                              child: const Text('Cancel'),
-                            ),
-                            TextButton(
-                              onPressed: () => Navigator.pop(context, true),
-                              child: const Text('Disable'),
-                            ),
-                          ],
-                        ),
-                      );
-
-                      if (confirmed == true) {
-                        // Persist to Backend
-                        await _api.updateSettings(appLockEnabled: false);
-                        MyApp.appLockEnabled = false;
-                        final prefs = await SharedPreferences.getInstance();
-                        await prefs.setBool('app_lock_enabled', false);
-                        _loadUserState(); // Refresh state
-                      }
-                    }
-                  },
-                  activeThumbColor: const Color(0xFF00B9F1),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-
               const SizedBox(height: 12),
 
-              // ── PIN Settings Cards ──────────────────────────────────────────────
-              Container(
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(
-                        alpha: isDark ? 0.3 : 0.05,
-                      ),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    if (_hasMpin) ...[
-                      ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 8,
+              _buildSwitchTile(
+                icon: Icons.security_outlined,
+                title: 'App Lock',
+                subtitle: 'Require PIN to open ZaferPay',
+                value: _appLockEnabled,
+                onChanged: (value) async {
+                  if (value) {
+                    if (!_hasMpin) {
+                      await Navigator.pushNamed(
+                        context,
+                        '/change-mpin',
+                        arguments: {'isSetOnly': true},
+                      );
+                    } else {
+                      await _api.updateSettings(appLockEnabled: true);
+                      MyApp.appLockEnabled = true;
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setBool('app_lock_enabled', true);
+                    }
+                    _loadUserState();
+                  } else {
+                    bool? confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Disable App Lock?'),
+                        content: const Text(
+                          'Your app will open without a PIN.',
                         ),
-                        leading: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: const Color(
-                              0xFF8A2BE2,
-                            ).withValues(alpha: 0.1),
-                            shape: BoxShape.circle,
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancel'),
                           ),
-                          child: const Icon(
-                            Icons.password_rounded,
-                            color: Color(0xFF8A2BE2),
-                            size: 24,
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Disable'),
                           ),
-                        ),
-                        title: const Text(
-                          'Change App Login PIN',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                          ),
-                        ),
-                        subtitle: Text(
-                          'Update the PIN used to open ZaferPay',
-                          style: TextStyle(
-                            color: isDark
-                                ? Colors.grey.shade400
-                                : Colors.grey.shade600,
-                            fontSize: 13,
-                          ),
-                        ),
-                        trailing: const Icon(Icons.chevron_right_rounded),
-                        onTap: () async {
-                          await Navigator.pushNamed(context, '/change-mpin');
-                          _loadUserState(); // Reload state unconditionally
-                        },
+                        ],
                       ),
-                      Divider(
-                        height: 1,
-                        indent: 20,
-                        endIndent: 20,
-                        color: isDark
-                            ? Colors.grey.shade800
-                            : Colors.grey.shade200,
-                      ),
-                    ],
-                    ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 8,
-                      ),
-                      leading: Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF6200EE).withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.pin_rounded,
-                          color: Color(0xFF6200EE),
-                          size: 24,
-                        ),
-                      ),
-                      title: const Text(
-                        'Change UPI PIN',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                        ),
-                      ),
-                      subtitle: Text(
-                        _pinUpdatedAtText,
-                        style: TextStyle(
-                          color: isDark
-                              ? Colors.grey.shade400
-                              : Colors.grey.shade600,
-                          fontSize: 13,
-                        ),
-                      ),
-                      trailing: const Icon(Icons.chevron_right_rounded),
-                      onTap: () async {
-                        await Navigator.pushNamed(context, '/change-upi-pin');
-                        _loadUserState(); // Reload state unconditionally
-                      },
-                    ),
-                    Divider(
-                      height: 1,
-                      indent: 20,
-                      endIndent: 20,
-                      color: isDark
-                          ? Colors.grey.shade800
-                          : Colors.grey.shade200,
-                    ),
-                    SwitchListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 8,
-                      ),
-                      secondary: Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF00A2A7).withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.fingerprint_rounded,
-                          color: Color(0xFF00A2A7),
-                          size: 24,
-                        ),
-                      ),
-                      title: const Text(
-                        'Biometric Login',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                        ),
-                      ),
-                      subtitle: Text(
-                        _biometricAvailable
-                            ? 'Use fingerprint or face to unlock the app'
-                            : 'Not available on this device',
-                        style: TextStyle(
-                          color: isDark
-                              ? Colors.grey.shade400
-                              : Colors.grey.shade600,
-                          fontSize: 13,
-                        ),
-                      ),
-                      value: _biometricAvailable && _biometricEnabled,
-                      onChanged: _biometricAvailable
-                          ? (value) async {
-                              bool confirmed = false;
-                              if (value) {
-                                // Enabling: Confirm via auth
-                                confirmed = await _biometric.authenticate(
-                                  reason:
-                                      'Confirm your biometric to ENABLE this feature',
-                                );
-                              } else {
-                                // Disabling: Security Check - Must auth to disable
-                                confirmed = await _biometric.authenticate(
-                                  reason:
-                                      'Security Check: Confirm biometric to DISABLE this feature',
-                                );
-                              }
+                    );
 
-                              if (confirmed) {
-                                await _biometric.setBiometricEnabled(value);
-                                // Persist to Backend for multi-device/reinstall support
-                                await _api.updateSettings(
-                                  biometricEnabled: value,
-                                );
+                    if (confirmed == true) {
+                      await _api.updateSettings(appLockEnabled: false);
+                      MyApp.appLockEnabled = false;
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setBool('app_lock_enabled', false);
+                      _loadUserState();
+                    }
+                  }
+                },
+                isDark: isDark,
+                iconColor: iconColor,
+              ),
 
-                                if (mounted) {
-                                  setState(() {
-                                    _biometricEnabled = value;
-                                  });
-                                }
-                              }
-                            }
-                          : null,
-                      activeThumbColor: const Color(0xFF00B9F1),
-                    ),
-                  ],
+              if (_hasMpin)
+                _buildActionTile(
+                  icon: Icons.password_outlined,
+                  title: 'Change App Login PIN',
+                  subtitle: 'Update the PIN used to open ZaferPay',
+                  onTap: () async {
+                    await Navigator.pushNamed(context, '/change-mpin');
+                    _loadUserState();
+                  },
+                  isDark: isDark,
+                  iconColor: iconColor,
                 ),
+
+              _buildActionTile(
+                icon: Icons.pin_outlined,
+                title: 'Change UPI PIN',
+                subtitle: _pinUpdatedAtText,
+                onTap: () async {
+                  await Navigator.pushNamed(context, '/change-upi-pin');
+                  _loadUserState();
+                },
+                isDark: isDark,
+                iconColor: iconColor,
+              ),
+
+              _buildSwitchTile(
+                icon: Icons.fingerprint_outlined,
+                title: 'Biometric Login',
+                subtitle: _biometricAvailable
+                    ? 'Use fingerprint or face to unlock the app'
+                    : 'Not available on this device',
+                value: _biometricAvailable && _biometricEnabled,
+                onChanged: _biometricAvailable
+                    ? (value) async {
+                        bool confirmed = false;
+                        if (value) {
+                          confirmed = await _biometric.authenticate(
+                            reason:
+                                'Confirm your biometric to ENABLE this feature',
+                          );
+                        } else {
+                          confirmed = await _biometric.authenticate(
+                            reason:
+                                'Security Check: Confirm biometric to DISABLE this feature',
+                          );
+                        }
+
+                        if (confirmed) {
+                          await _biometric.setBiometricEnabled(value);
+                          await _api.updateSettings(biometricEnabled: value);
+
+                          if (mounted) {
+                            setState(() {
+                              _biometricEnabled = value;
+                            });
+                          }
+                        }
+                      }
+                    : null,
+                isDark: isDark,
+                iconColor: iconColor,
               ),
 
               const SizedBox(height: 32),
-
-              // ── Preferences ──────────────────────────────────────────────────
-              if (!_isLoadingSettings) ...[
-                Text(
-                  'Preferences',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.grey[400] : Colors.grey[700],
-                  ),
+              Text(
+                'Preferences',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: isDark ? Colors.white : Colors.black,
                 ),
-                const SizedBox(height: 16),
-                Container(
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(
-                          alpha: isDark ? 0.3 : 0.05,
-                        ),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(children: [_buildSummaryFrequencyTile(isDark)]),
-                ),
-                const SizedBox(height: 32),
-              ],
+              ),
+              const SizedBox(height: 12),
 
-              // ── Appearance ──────────────────────────────────────────────────
+              _buildSummaryFrequencyTile(isDark, iconColor),
+
+              const SizedBox(height: 32),
               Text(
                 'Appearance',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.grey[400] : Colors.grey[700],
+                  fontSize: 18,
+                  color: isDark ? Colors.white : Colors.black,
                 ),
               ),
-              const SizedBox(height: 16),
-              Container(
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(
-                        alpha: isDark ? 0.3 : 0.05,
-                      ),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: ExpansionTile(
-                  shape: const Border(), // Remove expanded border
-                  collapsedShape: const Border(), // Remove collapsed border
-                  leading: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF00B9F1).withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      isDark
-                          ? Icons.dark_mode_rounded
-                          : Icons.light_mode_rounded,
-                      color: const Color(0xFF00B9F1),
-                      size: 24,
-                    ),
-                  ),
-                  title: const Text(
-                    'Theme',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-                  ),
-                  subtitle: ValueListenableBuilder<ThemeMode>(
-                    valueListenable: themeNotifier,
-                    builder: (context, mode, _) {
-                      return Text(
-                        mode == ThemeMode.light ? 'Light Mode' : 'Dark Mode',
-                        style: TextStyle(
-                          color: isDark
-                              ? Colors.grey.shade400
-                              : Colors.grey.shade600,
-                          fontSize: 13,
-                        ),
-                      );
+              const SizedBox(height: 12),
+
+              ValueListenableBuilder<ThemeMode>(
+                valueListenable: themeNotifier,
+                builder: (context, mode, _) {
+                  return _buildActionTile(
+                    icon: mode == ThemeMode.dark
+                        ? Icons.dark_mode_outlined
+                        : Icons.light_mode_outlined,
+                    title: 'Theme',
+                    subtitle: mode == ThemeMode.dark
+                        ? 'Dark Mode'
+                        : 'Light Mode',
+                    onTap: () {
+                      _showThemeBottomSheet(isDark);
                     },
+                    isDark: isDark,
+                    iconColor: iconColor,
+                  );
+                },
+              ),
+
+              const SizedBox(height: 48),
+
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(
+                  Icons.logout_rounded,
+                  color: Colors.red,
+                  size: 28,
+                ),
+                title: const Text(
+                  'Logout',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 16,
                   ),
-                  iconColor: isDark ? Colors.white70 : Colors.black54,
-                  collapsedIconColor: isDark ? Colors.white70 : Colors.black54,
+                ),
+                onTap: _handleLogout,
+              ),
+
+              const SizedBox(height: 40),
+              Center(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    ValueListenableBuilder<ThemeMode>(
-                      valueListenable: themeNotifier,
-                      builder: (context, mode, _) {
-                        return RadioGroup<ThemeMode>(
-                          groupValue: mode,
-                          onChanged: (val) {
-                            if (val != null) {
-                              themeNotifier.value = val;
-                            }
-                          },
-                          child: Column(
-                            children: [
-                              RadioListTile<ThemeMode>(
-                                title: Text(
-                                  'Light Mode',
-                                  style: TextStyle(
-                                    color: Theme.of(
-                                      context,
-                                    ).textTheme.bodyLarge?.color,
-                                  ),
-                                ),
-                                value: ThemeMode.light,
-                                activeColor: const Color(0xFF00B9F1),
-                              ),
-                              RadioListTile<ThemeMode>(
-                                title: Text(
-                                  'Dark Mode',
-                                  style: TextStyle(
-                                    color: Theme.of(
-                                      context,
-                                    ).textTheme.bodyLarge?.color,
-                                  ),
-                                ),
-                                value: ThemeMode.dark,
-                                activeColor: const Color(0xFF00B9F1),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
+                    Icon(
+                      Icons.shield_outlined,
+                      color: Colors.grey.shade400,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Powered by ZaferPay',
+                      style: GoogleFonts.outfit(
+                        color: Colors.grey.shade400,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
+                      ),
                     ),
                   ],
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // ── Logout ──────────────────────────────────────────────────────
-              InkWell(
-                onTap: _handleLogout,
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.red.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.logout_rounded, color: Colors.red),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Logout',
-                        style: TextStyle(
-                          color: Colors.red,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 30),
-              Center(
-                child: Text(
-                  'Powered by ZaferPay',
-                  style: GoogleFonts.outfit(
-                    color: Colors.grey.shade400,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
                 ),
               ),
               const SizedBox(height: 30),
@@ -638,6 +364,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSwitchTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required void Function(bool)? onChanged,
+    required bool isDark,
+    required Color iconColor,
+  }) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon, color: iconColor, size: 28),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontWeight: FontWeight.w500,
+          fontSize: 16,
+          color: Theme.of(context).textTheme.bodyLarge?.color,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(
+          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+          fontSize: 13,
+        ),
+      ),
+      trailing: Switch(
+        value: value,
+        onChanged: onChanged,
+        activeThumbColor: const Color(
+          0xFF00B9F1,
+        ), // wait the error says Use activeColor on what? or activeTrackColor?
+      ),
+    );
+  }
+
+  Widget _buildActionTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    required bool isDark,
+    required Color iconColor,
+  }) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon, color: iconColor, size: 28),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontWeight: FontWeight.w500,
+          fontSize: 16,
+          color: Theme.of(context).textTheme.bodyLarge?.color,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(
+          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+          fontSize: 13,
+        ),
+      ),
+      trailing: Icon(
+        Icons.chevron_right_rounded,
+        color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
+        size: 24,
+      ),
+      onTap: onTap,
     );
   }
 
@@ -649,36 +447,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return '$p days';
   }
 
-  Widget _buildSummaryFrequencyTile(bool isDark) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      leading: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: const Color(0xFF00B9F1).withValues(alpha: 0.1),
-          shape: BoxShape.circle,
-        ),
-        child: const Icon(
-          Icons.notifications_active_rounded,
-          color: Color(0xFF00B9F1),
-          size: 24,
-        ),
-      ),
-      title: const Text(
-        'Summary Notifications',
-        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-      ),
-      subtitle: Text(
-        'Frequency: ${_getFrequencyLabel(_summaryFrequency)}',
-        style: TextStyle(
-          color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-          fontSize: 13,
-        ),
-      ),
-      trailing: const Icon(Icons.chevron_right_rounded),
+  Widget _buildSummaryFrequencyTile(bool isDark, Color iconColor) {
+    return _buildActionTile(
+      icon: Icons.notifications_outlined,
+      title: 'Summary Notifications',
+      subtitle: 'Frequency: ${_getFrequencyLabel(_summaryFrequency)}',
       onTap: () {
         _showFrequencyBottomSheet(isDark);
       },
+      isDark: isDark,
+      iconColor: iconColor,
     );
   }
 
@@ -724,6 +502,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   },
                 );
               }),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showThemeBottomSheet(bool isDark) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 16),
+              Text(
+                'Theme',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.black,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                title: const Text('Light Mode'),
+                trailing: themeNotifier.value == ThemeMode.light
+                    ? const Icon(
+                        Icons.check_circle_rounded,
+                        color: Color(0xFF00B9F1),
+                      )
+                    : null,
+                onTap: () {
+                  themeNotifier.value = ThemeMode.light;
+                  Navigator.pop(context);
+                },
+              ),
+              ListTile(
+                title: const Text('Dark Mode'),
+                trailing: themeNotifier.value == ThemeMode.dark
+                    ? const Icon(
+                        Icons.check_circle_rounded,
+                        color: Color(0xFF00B9F1),
+                      )
+                    : null,
+                onTap: () {
+                  themeNotifier.value = ThemeMode.dark;
+                  Navigator.pop(context);
+                },
+              ),
               const SizedBox(height: 16),
             ],
           ),

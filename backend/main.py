@@ -688,6 +688,68 @@ def register_user(
     
     return new_user
 
+@app.post("/auth/signup")
+@limiter.limit("5/minute")
+def register_signup(
+    request: Request,
+    req: schemas.SignUpRequest,
+    db: Session = Depends(get_db)
+):
+    # Normalize mobile
+    normalized_mobile = ''.join(filter(str.isdigit, req.mobile_number)) if req.mobile_number else None
+    
+    mobile_hash = security.hash_value(normalized_mobile) if normalized_mobile else None
+    
+    db_mobile = db.query(models.User).filter(
+        models.User.mobile_hash == mobile_hash
+    ).first() if mobile_hash else None
+    
+    if db_mobile:
+        raise HTTPException(status_code=400, detail="Mobile already registered")
+
+    final_username = req.username
+    db_user = db.query(models.User).filter(models.User.username == final_username).first()
+    if db_user:
+        suffix = normalized_mobile[-4:] if normalized_mobile else str(int(datetime.utcnow().timestamp()))[-4:]
+        final_username = f"{req.username}_{suffix}"
+    
+    new_upi = f"{normalized_mobile}@zaferpay"
+
+    
+    new_user = models.User(
+        username=final_username,
+        mobile_hash=mobile_hash,
+        mobile_encrypted=security.encrypt_value(normalized_mobile) if normalized_mobile else None,
+        email_hash=security.hash_value(req.email) if req.email else None,
+        email_encrypted=security.encrypt_value(req.email) if req.email else None,
+        upi_id=new_upi,
+        balance=0.0,
+        encrypted_balance=security.encrypt_value("0.0"),
+        hashed_mpin=auth.get_password_hash(req.pin),
+        pin_updated_at=datetime.utcnow()
+    )
+    
+    db.add(new_user)
+    db.commit() 
+    db.refresh(new_user)
+    
+    if req.has_bank_account:
+        bank_account = models.BankAccount(
+            user_id=new_user.id,
+            bank_name=models.detect_bank(new_upi),
+            upi_id=new_upi,
+            hashed_pin=auth.get_password_hash(req.pin)
+        )
+        db.add(bank_account)
+    
+    s_prof = models.SenderProfile(user_id=new_user.id)
+    r_prof = models.ReceiverProfile(user_id=new_user.id)
+    db.add(s_prof)
+    db.add(r_prof)
+    db.commit()
+    
+    return {"msg": "User created successfully", "upi_id": new_upi}
+
 @app.post("/auth/set-pin")
 @limiter.limit("10/minute")
 def set_pin(

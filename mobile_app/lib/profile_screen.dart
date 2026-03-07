@@ -14,6 +14,7 @@ import 'utils.dart';
 import 'language_selection_screen.dart';
 import 'cyber_chatbot_screen.dart';
 import 'upi_circle_screen.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ProfileScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -26,6 +27,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final _api = ApiService();
+  final _storage = const FlutterSecureStorage();
   Map<String, dynamic>? _user;
   bool _isLoading = true;
   final GlobalKey _qrKey = GlobalKey();
@@ -58,6 +60,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (_) {
       if (mounted && _user == null) {
         setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _handleLogout() async {
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldLogout == true) {
+      await _api.wipeAllCaches();
+      await _api.logout();
+      await _storage.deleteAll();
+      if (mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
       }
     }
   }
@@ -303,6 +335,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 );
               },
+            ),
+
+            const SizedBox(height: 16),
+
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 8,
+              ),
+              leading: const Icon(
+                Icons.logout_rounded,
+                color: Colors.red,
+                size: 28,
+              ),
+              title: const Text(
+                'Logout',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 16,
+                ),
+              ),
+              onTap: _handleLogout,
             ),
 
             const SizedBox(height: 40),

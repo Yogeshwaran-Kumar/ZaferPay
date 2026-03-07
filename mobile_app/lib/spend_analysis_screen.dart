@@ -1399,17 +1399,32 @@ class _SpendAnalysisScreenState extends State<SpendAnalysisScreen> {
     final status = await _api.verifyUpiPin(pin);
 
     if (status == PinVerificationStatus.success) {
-      // Save the settings
+      // Optimistic update for instant feedback
+      setState(() {
+        if (!isEnabled) {
+          widget.user['spending_limit'] = null;
+          widget.user['spending_limit_period'] = null;
+        } else {
+          widget.user['spending_limit'] = amount;
+          widget.user['spending_limit_period'] = period;
+          widget.user['spending_limit_updated_at'] = DateTime.now()
+              .toUtc()
+              .toIso8601String();
+        }
+      });
+      _calculateDataForMonth(); // Ensure UI reflects the change if there are logic dependencies
+
+      // Save the settings asynchronously
       if (!isEnabled) {
-        await _api.updateSettings(clearSpendingLimit: true);
+        _api.updateSettings(clearSpendingLimit: true).catchError((_) => false);
       } else if (amount != null) {
-        await _api.updateSettings(
-          spendingLimit: amount,
-          spendingLimitPeriod: period,
-        );
+        _api
+            .updateSettings(spendingLimit: amount, spendingLimitPeriod: period)
+            .catchError((_) => false);
       }
       if (!mounted || !ctx.mounted) return;
-      Navigator.pop(ctx); // close PIN dialog
+      Navigator.pop(ctx); // close PIN dialog immediately
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -1605,24 +1620,31 @@ class _SpendAnalysisScreenState extends State<SpendAnalysisScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.account_balance_wallet_rounded,
-                    color: progressColor,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '$periodLabel Spending Limit',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white : Colors.black87,
+              Expanded(
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.account_balance_wallet_rounded,
+                      color: progressColor,
+                      size: 20,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '$periodLabel Limit',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Row(
                 children: [
                   // Status pill

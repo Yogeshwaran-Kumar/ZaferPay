@@ -54,6 +54,13 @@ class ApiService {
   Future<void> removeSavedMobile() => _auth.removeSavedMobile();
   void clearCachedMobile() => _auth.clearCachedMobile();
   Future<Map<String, dynamic>> checkMobile(String m) => _auth.checkMobile(m);
+  Future<bool> signup(
+    String username,
+    String mobile,
+    String? email,
+    String pin,
+    bool hasBankAccount,
+  ) => _auth.signup(username, mobile, email, pin, hasBankAccount);
   Future<bool> setPin(String m, String p) => _auth.setPin(m, p);
   Future<bool> changeMpin(String currentPin, String newPin) =>
       _auth.changeMpin(currentPin, newPin);

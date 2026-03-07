@@ -48,6 +48,13 @@ class UserRegister(UserBase):
     email: Optional[str] = None
     password: str
 
+class SignUpRequest(BaseModel):
+    username: str
+    mobile_number: str
+    email: Optional[str] = None
+    pin: str
+    has_bank_account: bool
+
 class PinSetRequest(BaseModel):
     mobile_number: str
     pin: str

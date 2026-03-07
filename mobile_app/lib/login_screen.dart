@@ -18,6 +18,10 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _mobileController = TextEditingController();
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  bool _hasBankAccount = false;
+  bool _isNewUserSignup = false;
   final _api = ApiService();
   final _biometric = BiometricService();
   static const _securityChannel = MethodChannel(
@@ -123,6 +127,8 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _removeSecureScreen();
     _mobileController.dispose();
+    _nameController.dispose();
+    _emailController.dispose();
     super.dispose();
   }
 
@@ -300,14 +306,12 @@ class _LoginScreenState extends State<LoginScreen> {
           _upiId = result['upi_id'] ?? '';
         });
       } else {
-        // User does not exist
+        // User does not exist - Go to Signup Form
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Phone number does not exist'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          setState(() {
+            _isNewUserSignup = true;
+            _currentStep = 4; // Show Signup Profile Form
+          });
         }
       }
     } else if (result['exists'] == true && result['status'] == 'existing') {
@@ -344,13 +348,34 @@ class _LoginScreenState extends State<LoginScreen> {
       if (pin == _firstPin) {
         // Match! Set PIN on backend
         setState(() => _isLoading = true);
-        final success = await _api.setPin(_mobileController.text, pin);
+        bool success = false;
+
+        if (_isNewUserSignup) {
+          success = await _api.signup(
+            _nameController.text.trim(),
+            _mobileController.text.trim(),
+            _emailController.text.trim().isEmpty
+                ? null
+                : _emailController.text.trim(),
+            pin,
+            _hasBankAccount,
+          );
+        } else {
+          success = await _api.setPin(_mobileController.text, pin);
+        }
+
         setState(() => _isLoading = false);
 
         if (success) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('PIN Set Successfully! Login now.')),
+              SnackBar(
+                content: Text(
+                  _isNewUserSignup
+                      ? 'Account Created! Logging you in.'
+                      : 'PIN Set Successfully! Login now.',
+                ),
+              ),
             );
           }
           // Auto login after setting
@@ -358,7 +383,13 @@ class _LoginScreenState extends State<LoginScreen> {
         } else {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Failed to set PIN. Try again.')),
+              SnackBar(
+                content: Text(
+                  _isNewUserSignup
+                      ? 'Failed to create account. Try again.'
+                      : 'Failed to set PIN. Try again.',
+                ),
+              ),
             );
           }
           // Reset to start
@@ -801,7 +832,34 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
 
-              const SizedBox(height: 40),
+              const SizedBox(height: 24),
+
+              // Signup Button
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _isNewUserSignup = true;
+                    _currentStep = 4;
+                  });
+                },
+                child: RichText(
+                  text: const TextSpan(
+                    text: "Don't have an account? ",
+                    style: TextStyle(color: Colors.black54, fontSize: 14),
+                    children: [
+                      TextSpan(
+                        text: "Create account",
+                        style: TextStyle(
+                          color: Color(0xFF00B9F1),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 24),
 
               // Terms
               Text(
@@ -1105,6 +1163,203 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  Widget _buildStep4Signup() {
+    return SafeArea(
+      child: Container(
+        alignment: const Alignment(0.0, -0.3),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                _buildZaferPayLogo(),
+                const SizedBox(height: 20),
+
+                const Text(
+                  'Create Account',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Enter your details to register',
+                  style: TextStyle(color: Colors.black54, fontSize: 16),
+                ),
+                const SizedBox(height: 40),
+
+                TextField(
+                  controller: _nameController,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'User Name',
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: Colors.black12),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: Colors.black12),
+                    ),
+                    prefixIcon: const Icon(Icons.person_outline),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                TextField(
+                  controller: _mobileController,
+                  keyboardType: TextInputType.phone,
+                  maxLength: 10,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'Phone Number',
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: Colors.black12),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: Colors.black12),
+                    ),
+                    prefixIcon: const Icon(Icons.phone_android),
+                    counterText: '',
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                TextField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'Gmail (Optional)',
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: Colors.black12),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: Colors.black12),
+                    ),
+                    prefixIcon: const Icon(Icons.email_outlined),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.black12),
+                  ),
+                  child: SwitchListTile(
+                    title: const Text('Do you have a bank account?'),
+                    subtitle: Text(
+                      _hasBankAccount ? 'Parent User' : 'Child User',
+                      style: TextStyle(
+                        color: _hasBankAccount ? Colors.blue : Colors.orange,
+                      ),
+                    ),
+                    value: _hasBankAccount,
+                    onChanged: (val) {
+                      setState(() => _hasBankAccount = val);
+                    },
+                    activeTrackColor: const Color(
+                      0xFF00B9F1,
+                    ).withValues(alpha: 0.5),
+                    activeThumbColor: const Color(0xFF00B9F1),
+                  ),
+                ),
+                const SizedBox(height: 40),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      if (_nameController.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Name is required')),
+                        );
+                        return;
+                      }
+                      if (_mobileController.text.trim().length != 10) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Please enter a valid 10-digit phone number',
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+                      setState(() {
+                        _currentStep = 1; // proceed to create PIN
+                        _enteredPin = '';
+                        _firstPin = '';
+                      });
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00B9F1),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 4,
+                    ),
+                    child: const Text(
+                      'Next',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _currentStep = 0;
+                      _isNewUserSignup = false;
+                    });
+                  },
+                  child: const Text(
+                    'Back to Login',
+                    style: TextStyle(
+                      color: Colors.black54,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildKeyRow(List<String> keys) {
     return Expanded(
       child: Row(
@@ -1185,7 +1440,11 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             child: SafeArea(
               bottom: false,
-              child: _currentStep == 0 ? _buildStep1Mobile() : _buildStepPin(),
+              child: _currentStep == 0
+                  ? _buildStep1Mobile()
+                  : _currentStep == 4
+                  ? _buildStep4Signup()
+                  : _buildStepPin(),
             ),
           ),
         ),

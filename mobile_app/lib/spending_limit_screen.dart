@@ -133,13 +133,13 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Spend Analysis Card ──
-              _buildSpendAnalysisCard(isDark),
+              // ── Limit Card ──
+              _buildLimitCard(isDark),
 
               const SizedBox(height: 16),
 
-              // ── Limit Card ──
-              _buildLimitCard(isDark),
+              // ── Spend Analysis Card ──
+              _buildSpendAnalysisCard(isDark),
 
               const SizedBox(height: 32),
 
@@ -402,6 +402,21 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
 
     if (result != null && result is Map && result['success'] == true) {
       final wasEnabled = result['isEnabled'] as bool;
+
+      // Optimistic update for instant feedback
+      setState(() {
+        if (!wasEnabled) {
+          widget.user['spending_limit'] = null;
+          widget.user['spending_limit_period'] = null;
+        } else {
+          widget.user['spending_limit'] = amount;
+          widget.user['spending_limit_period'] = period;
+          widget.user['spending_limit_updated_at'] = DateTime.now()
+              .toUtc()
+              .toIso8601String();
+        }
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -645,24 +660,31 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.account_balance_wallet_rounded,
-                    color: progressColor,
-                    size: 22,
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    '$periodLabel Spending Limit',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white : Colors.black87,
+              Expanded(
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.account_balance_wallet_rounded,
+                      color: progressColor,
+                      size: 22,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '$periodLabel Limit',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Row(
                 children: [
                   // Status pill

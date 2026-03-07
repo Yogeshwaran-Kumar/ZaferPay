@@ -1134,92 +1134,6 @@ class _AmountScreenState extends State<AmountScreen> {
                             ),
                           ),
 
-                          // General QR Awareness Warning
-                          if (_paymentSource != null &&
-                              _paymentSource!.startsWith('qr_') &&
-                              !_isAnalyzingRisk &&
-                              !_hasAnalyzedRisk)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 32.0,
-                                vertical: 12.0,
-                              ),
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                child: Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.warning_rounded,
-                                      color: Colors.orange,
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        "Attention: QR codes are ONLY for sending money. Never scan a QR code to receive money.",
-                                        style: GoogleFonts.outfit(
-                                          color: isDark
-                                              ? const Color.fromARGB(
-                                                  255,
-                                                  246,
-                                                  31,
-                                                  2,
-                                                )
-                                              : const Color.fromARGB(
-                                                  255,
-                                                  255,
-                                                  1,
-                                                  1,
-                                                ),
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-
-                          // QR Limit Warning
-                          if (_isQrLimitExceeded &&
-                              !_isAnalyzingRisk &&
-                              !_hasAnalyzedRisk)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 32.0,
-                                vertical: 12.0,
-                              ),
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                child: Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.warning_amber_rounded,
-                                      color: Color.fromARGB(255, 253, 2, 2),
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        "You not able to send more than 2000 rupees by uploading QR code as a alte",
-                                        style: GoogleFonts.outfit(
-                                          color: const Color.fromARGB(
-                                            255,
-                                            255,
-                                            2,
-                                            2,
-                                          ),
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-
                           // Self-transfer warning
                           if (_isSelfTransfer &&
                               !_isAnalyzingRisk &&
@@ -1375,60 +1289,187 @@ class _AmountScreenState extends State<AmountScreen> {
                               ),
                             ),
 
-                          // Spending Limit Exceeded Warning
-                          if (_isSpendingLimitExceeded &&
-                              !_isAnalyzingRisk &&
-                              !_hasAnalyzedRisk)
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-                              child: Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 12,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: Colors.red.withValues(alpha: 0.3),
-                                  ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
+                          // Unified Alerts Box
+                          if (!_isAnalyzingRisk &&
+                              !_hasAnalyzedRisk &&
+                              ((_paymentSource != null &&
+                                      _paymentSource!.startsWith('qr_')) ||
+                                  _isQrLimitExceeded ||
+                                  _isSpendingLimitExceeded))
+                            Builder(
+                              builder: (context) {
+                                final alerts = <Widget>[];
+
+                                if (_paymentSource != null &&
+                                    _paymentSource!.startsWith('qr_')) {
+                                  alerts.add(
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        const Icon(
-                                          Icons.block_rounded,
-                                          color: Colors.red,
-                                          size: 18,
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.warning_amber_rounded,
+                                              color: Colors.red,
+                                              size: 18,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'Attention!',
+                                              style: GoogleFonts.outfit(
+                                                color: Colors.red,
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                        const SizedBox(width: 8),
+                                        const SizedBox(height: 6),
                                         Text(
-                                          'Spending Limit Exceeded',
+                                          "QR codes are ONLY for sending money. Never scan a QR code to receive money.",
                                           style: GoogleFonts.outfit(
-                                            color: Colors.red,
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.bold,
+                                            color: isDark
+                                                ? Colors.red[300]
+                                                : Colors.red[700],
+                                            fontSize: 12,
+                                            height: 1.4,
                                           ),
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      _spendingLimitMessage(),
-                                      style: GoogleFonts.outfit(
-                                        color: isDark
-                                            ? Colors.red[300]
-                                            : Colors.red[700],
-                                        fontSize: 12,
-                                        height: 1.4,
+                                  );
+                                }
+
+                                if (_isQrLimitExceeded) {
+                                  alerts.add(
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.warning_amber_rounded,
+                                              color: Colors.red,
+                                              size: 18,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'QR Limit Exceeded',
+                                              style: GoogleFonts.outfit(
+                                                color: Colors.red,
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          "You cannot send more than 2000 rupees by scanning a QR code.",
+                                          style: GoogleFonts.outfit(
+                                            color: isDark
+                                                ? Colors.red[300]
+                                                : Colors.red[700],
+                                            fontSize: 12,
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }
+
+                                if (_isSpendingLimitExceeded) {
+                                  alerts.add(
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.block_rounded,
+                                              color: Colors.red,
+                                              size: 18,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'Spending Limit Exceeded',
+                                              style: GoogleFonts.outfit(
+                                                color: Colors.red,
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          _spendingLimitMessage(),
+                                          style: GoogleFonts.outfit(
+                                            color: isDark
+                                                ? Colors.red[300]
+                                                : Colors.red[700],
+                                            fontSize: 12,
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }
+
+                                return Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    24,
+                                    12,
+                                    24,
+                                    0,
+                                  ),
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 12,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.withValues(alpha: 0.08),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: Colors.red.withValues(
+                                          alpha: 0.3,
+                                        ),
                                       ),
                                     ),
-                                  ],
-                                ),
-                              ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        for (
+                                          int i = 0;
+                                          i < alerts.length;
+                                          i++
+                                        ) ...[
+                                          alerts[i],
+                                          if (i < alerts.length - 1)
+                                            const SizedBox(height: 12),
+                                          if (i < alerts.length - 1)
+                                            Divider(
+                                              color: Colors.red.withValues(
+                                                alpha: 0.2,
+                                              ),
+                                              height: 1,
+                                            ),
+                                          if (i < alerts.length - 1)
+                                            const SizedBox(height: 12),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
 
                           SizedBox(
