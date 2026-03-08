@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'services/app_localizations.dart';
 
 /// A mandatory permission gateway screen.
 /// Push this screen and await the result.
@@ -75,9 +76,12 @@ class _PermissionScreenState extends State<PermissionScreen>
         _showSettingsDialog();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              'Phone and Contacts permissions are mandatory to use ZaferPay.',
+              AppLocalizations.of(
+                    context,
+                  )?.translate('permissions.mandatory_snackbar') ??
+                  'Phone and Contacts permissions are mandatory to use ZaferPay.',
             ),
             backgroundColor: Colors.red,
           ),
@@ -91,18 +95,35 @@ class _PermissionScreenState extends State<PermissionScreen>
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: const Text('Permissions Required'),
-        content: const Text(
-          'ZaferPay strictly requires Phone and Contacts access for secure device binding and payments. Please enable them in Settings.',
+        title: Text(
+          AppLocalizations.of(
+                context,
+              )?.translate('common.permissions_required') ??
+              'Permissions Required',
+        ),
+        content: Text(
+          AppLocalizations.of(context)?.translate('permissions.desc') ??
+              "This app needs your permission to ensure safe transactions. Please enable required permissions in settings.",
         ),
         actions: [
           TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              AppLocalizations.of(context)?.translate('common.cancel') ??
+                  'Cancel',
+            ),
+          ),
+          ElevatedButton(
             onPressed: () {
-              Navigator.pop(ctx);
-              _returnedFromSettings = true;
+              Navigator.pop(context);
+              _returnedFromSettings =
+                  true; // Keep this line as it's part of the original logic for re-checking permissions
               openAppSettings();
             },
-            child: const Text('Open Settings'),
+            child: Text(
+              AppLocalizations.of(context)?.translate('common.open_settings') ??
+                  'Open Settings',
+            ),
           ),
         ],
       ),
@@ -162,7 +183,10 @@ class _PermissionScreenState extends State<PermissionScreen>
                   const SizedBox(height: 32),
 
                   Text(
-                    'Essential Permissions',
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('permissions.essential_title') ??
+                        'Essential Permissions',
                     style: GoogleFonts.outfit(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
@@ -173,7 +197,10 @@ class _PermissionScreenState extends State<PermissionScreen>
                   const SizedBox(height: 16),
 
                   Text(
-                    'To ensure absolute security and provide a seamless payment experience, ZaferPay requires access to your Phone and Contacts.',
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('permissions.essential_desc') ??
+                        'To ensure absolute security and provide a seamless payment experience, ZaferPay requires access to your Phone and Contacts.',
                     style: GoogleFonts.outfit(
                       fontSize: 16,
                       color: Colors.black54,
@@ -186,15 +213,29 @@ class _PermissionScreenState extends State<PermissionScreen>
                   // Permission List
                   _buildPermissionItem(
                     icon: Icons.phone_android_rounded,
-                    title: 'Phone State Access',
+                    title:
+                        AppLocalizations.of(
+                          context,
+                        )?.translate('permissions.phone_title') ??
+                        'Phone State Access',
                     subtitle:
+                        AppLocalizations.of(
+                          context,
+                        )?.translate('permissions.phone_subtitle') ??
                         'Mandatory for secure device binding (SIM verification).',
                   ),
                   const SizedBox(height: 24),
                   _buildPermissionItem(
                     icon: Icons.contacts_rounded,
-                    title: 'Contacts Access',
+                    title:
+                        AppLocalizations.of(
+                          context,
+                        )?.translate('permissions.contacts_title') ??
+                        'Contacts Access',
                     subtitle:
+                        AppLocalizations.of(
+                          context,
+                        )?.translate('permissions.contacts_subtitle') ??
                         'Navigate your contacts easily for blazing fast UPI payments.',
                   ),
 
@@ -224,7 +265,10 @@ class _PermissionScreenState extends State<PermissionScreen>
                               ),
                             )
                           : Text(
-                              'Allow Access',
+                              AppLocalizations.of(
+                                    context,
+                                  )?.translate('permissions.allow_btn') ??
+                                  'Allow Access',
                               style: GoogleFonts.outfit(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w600,
@@ -235,7 +279,10 @@ class _PermissionScreenState extends State<PermissionScreen>
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'These permissions are strictly required.',
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('permissions.strictly_required') ??
+                        'These permissions are strictly required.',
                     style: GoogleFonts.outfit(
                       fontSize: 12,
                       color: Colors.black38,

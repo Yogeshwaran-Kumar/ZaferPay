@@ -14,6 +14,10 @@ class UserService {
   static const String _phoneCachePrefix = 'user_phone_cache_';
   static const String _userCachePrefix = 'user_cache_';
 
+  // Optimistic Overrides (to prevent poll-overwrite flutter)
+  static final Map<String, dynamic> _optimisticUserOverrides = {};
+  static DateTime? _overridesExpiry;
+
   UserService(this._apiClient);
 
   // --- Home Data (Aggregate) ---
@@ -31,23 +35,61 @@ class UserService {
     return {'user': null, 'history': [], 'people': [], 'merchants': []};
   }
 
-  Map<String, dynamic>? getCachedHomeDataSync() => _homeRamCache;
+  Map<String, dynamic>? getCachedHomeDataSync() {
+    if (_homeRamCache != null) {
+      return _applyOptimisticOverridesToAggregate(_homeRamCache!);
+    }
+    return null;
+  }
 
   Future<Map<String, dynamic>?> getCachedHomeData() async {
-    if (_homeRamCache != null) return _homeRamCache;
+    if (_homeRamCache != null) {
+      return _applyOptimisticOverridesToAggregate(_homeRamCache!);
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
       final String? jsonString = prefs.getString(_homeCacheKey);
       if (jsonString != null) {
         _homeRamCache = json.decode(jsonString);
-        return _homeRamCache;
+        return _applyOptimisticOverridesToAggregate(_homeRamCache!);
       }
     } catch (_) {}
     return null;
   }
 
+  Map<String, dynamic> _applyOptimisticOverridesToAggregate(
+    Map<String, dynamic> data,
+  ) {
+    if (_overridesExpiry != null &&
+        DateTime.now().isBefore(_overridesExpiry!)) {
+      final user = data['user'];
+      if (user != null) {
+        _optimisticUserOverrides.forEach((key, value) {
+          user[key] = value;
+        });
+      }
+    } else {
+      _optimisticUserOverrides.clear();
+      _overridesExpiry = null;
+    }
+    return data;
+  }
+
+  Map<String, dynamic> _applyOptimisticOverridesToUser(
+    Map<String, dynamic> user,
+  ) {
+    if (_overridesExpiry != null &&
+        DateTime.now().isBefore(_overridesExpiry!)) {
+      _optimisticUserOverrides.forEach((key, value) {
+        user[key] = value;
+      });
+    }
+    return user;
+  }
+
   Future<void> _cacheHomeData(Map<String, dynamic> data) async {
     try {
+      _applyOptimisticOverridesToAggregate(data);
       _homeRamCache = data;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_homeCacheKey, json.encode(data));
@@ -66,13 +108,29 @@ class UserService {
     } catch (_) {}
   }
 
+  /// Sets temporary overrides for the current user object in the cache.
+  /// These overrides will persist for [duration] even if a network refresh occurs.
+  void setOptimisticUserOverrides(
+    Map<String, dynamic> overrides, {
+    Duration duration = const Duration(seconds: 5),
+  }) {
+    _optimisticUserOverrides.addAll(overrides);
+    _overridesExpiry = DateTime.now().add(duration);
+
+    // Also apply to current RAM cache immediately if it exists
+    if (_homeRamCache != null && _homeRamCache!['user'] != null) {
+      overrides.forEach((key, value) {
+        _homeRamCache!['user'][key] = value;
+      });
+    }
+  }
+
   /// Zeroes out all unread_count values in the RAM cache (and persists to disk).
   /// Called by NotificationService.resetBadgeCount() BEFORE HomeScreen is created,
   /// so that stale badge counts never appear from cached data.
   Future<void> clearCachedUnreadCounts() async {
     if (_homeRamCache == null) return;
 
-    // Zero out in RAM
     if (_homeRamCache!['people'] != null) {
       for (var p in _homeRamCache!['people']) {
         p['unread_count'] = 0;
@@ -87,7 +145,6 @@ class UserService {
       _homeRamCache!['total_unread'] = 0;
     }
 
-    // Persist zeroed-out data to disk so it survives app restarts
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_homeCacheKey, json.encode(_homeRamCache));
@@ -100,7 +157,7 @@ class UserService {
       final response = await _apiClient.get('/users/me');
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        // Update Home Cache User
+        _applyOptimisticOverridesToUser(data);
         if (_homeRamCache == null) await getCachedHomeData();
         _homeRamCache ??= {};
         _homeRamCache!['user'] = data;
@@ -112,11 +169,9 @@ class UserService {
   }
 
   Future<Map<String, dynamic>?> getCachedMe() async {
-    // 1. Try RAM
     if (_homeRamCache != null && _homeRamCache!['user'] != null) {
-      return _homeRamCache!['user'];
+      return _applyOptimisticOverridesToUser(_homeRamCache!['user']);
     }
-    // 2. Try Disk via Home Data
     final homeData = await getCachedHomeData();
     if (homeData != null && homeData['user'] != null) {
       return homeData['user'];
@@ -136,11 +191,9 @@ class UserService {
   }
 
   Future<Map<String, dynamic>?> getCachedUserByPhone(String phone) async {
-    // 1. Try RAM
     if (_phoneRamCache.containsKey(phone)) {
       return _phoneRamCache[phone];
     }
-    // 2. Try Disk
     try {
       final prefs = await SharedPreferences.getInstance();
       final String? jsonString = prefs.getString('$_phoneCachePrefix$phone');
@@ -291,7 +344,6 @@ class UserService {
           'delegation_type': type,
         },
       );
-
       final data = json.decode(response.body);
       if (response.statusCode == 200) {
         return {'success': true, 'message': data['msg'] ?? 'Invitation sent'};
@@ -352,9 +404,7 @@ class UserService {
   Future<Map<String, dynamic>?> getPaymentRequest(int requestId) async {
     try {
       final response = await _apiClient.get('/requests/$requestId');
-      if (response.statusCode == 200) {
-        return json.decode(response.body);
-      }
+      if (response.statusCode == 200) return json.decode(response.body);
     } catch (_) {}
     return null;
   }

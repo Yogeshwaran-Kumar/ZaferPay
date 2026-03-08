@@ -5,6 +5,7 @@ import 'home_screen.dart';
 import 'money_screen.dart';
 import 'spending_limit_tab_screen.dart';
 import 'profile_screen.dart';
+import 'services/app_localizations.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -80,25 +81,37 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   _buildNavItem(
                     icon: Icons.home_outlined,
                     activeIcon: Icons.home_rounded,
-                    label: 'Home',
+                    label:
+                        AppLocalizations.of(context)?.translate('nav.home') ??
+                        'Home',
                     index: 0,
                   ),
                   _buildNavItem(
                     icon: Icons.account_balance_wallet_outlined,
                     activeIcon: Icons.account_balance_wallet_rounded,
-                    label: 'Money',
+                    label:
+                        AppLocalizations.of(context)?.translate('nav.money') ??
+                        'Money',
                     index: 1,
                   ),
                   _buildNavItem(
                     icon: Icons.donut_large_outlined,
                     activeIcon: Icons.donut_large_rounded,
-                    label: 'Analytics',
+                    label:
+                        AppLocalizations.of(
+                          context,
+                        )?.translate('nav.analytics') ??
+                        'Analytics',
                     index: 2,
                   ),
                   _buildNavItem(
                     icon: Icons.person_outline_rounded,
                     activeIcon: Icons.person_rounded,
-                    label: 'You',
+                    label:
+                        AppLocalizations.of(
+                          context,
+                        )?.translate('nav.profile') ??
+                        'You',
                     index: 3,
                   ),
                 ],
@@ -158,6 +171,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             const SizedBox(height: 3),
             Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
               style: GoogleFonts.outfit(
                 fontSize: 11,
                 color: isActive ? activeIconColor : inactiveIconColor,

@@ -4,12 +4,13 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart' as io;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
   // Default URLs
   static String get _defaultBaseUrl {
     if (kIsWeb) return 'http://127.0.0.1:8000';
-    return 'https://hampshire-now-secretariat-strategic.trycloudflare.com';
+    return 'https://rainbow-framing-beth-posting.trycloudflare.com';
   }
 
   static const Duration _timeout = Duration(seconds: 30);
@@ -68,8 +69,11 @@ class ApiClient {
     return _retryRequest(() async {
       final url = await baseUrl;
       final token = await _storage.read(key: 'token');
+      final prefs = await SharedPreferences.getInstance();
+      final lang = prefs.getString('language') ?? 'en';
       final combinedHeaders = {
         'Content-Type': 'application/json',
+        'Accept-Language': lang,
         if (token != null) 'Authorization': 'Bearer $token',
         ...?headers,
       };
@@ -93,8 +97,11 @@ class ApiClient {
     return _retryRequest(() async {
       final url = await baseUrl;
       final token = await _storage.read(key: 'token');
+      final prefs = await SharedPreferences.getInstance();
+      final lang = prefs.getString('language') ?? 'en';
       final combinedHeaders = {
         'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept-Language': lang,
         if (token != null) 'Authorization': 'Bearer $token',
         ...?headers,
       };
@@ -116,7 +123,10 @@ class ApiClient {
     return _retryRequest(() async {
       final url = await baseUrl;
       final token = await _storage.read(key: 'token');
+      final prefs = await SharedPreferences.getInstance();
+      final lang = prefs.getString('language') ?? 'en';
       final combinedHeaders = {
+        'Accept-Language': lang,
         if (token != null) 'Authorization': 'Bearer $token',
         ...?headers,
       };
@@ -135,8 +145,11 @@ class ApiClient {
     return _retryRequest(() async {
       final url = await baseUrl;
       final token = await _storage.read(key: 'token');
+      final prefs = await SharedPreferences.getInstance();
+      final lang = prefs.getString('language') ?? 'en';
       final combinedHeaders = {
         'Content-Type': 'application/json',
+        'Accept-Language': lang,
         if (token != null) 'Authorization': 'Bearer $token',
         ...?headers,
       };
@@ -159,8 +172,11 @@ class ApiClient {
     return _retryRequest(() async {
       final url = await baseUrl;
       final token = await _storage.read(key: 'token');
+      final prefs = await SharedPreferences.getInstance();
+      final lang = prefs.getString('language') ?? 'en';
       final combinedHeaders = {
         'Content-Type': 'application/json',
+        'Accept-Language': lang,
         if (token != null) 'Authorization': 'Bearer $token',
         ...?headers,
       };
@@ -182,7 +198,10 @@ class ApiClient {
     return _retryRequest(() async {
       final url = await baseUrl;
       final token = await _storage.read(key: 'token');
+      final prefs = await SharedPreferences.getInstance();
+      final lang = prefs.getString('language') ?? 'en';
       final combinedHeaders = {
+        'Accept-Language': lang,
         if (token != null) 'Authorization': 'Bearer $token',
         ...?headers,
       };

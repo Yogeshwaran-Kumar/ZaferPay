@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/app_localizations.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // QR Awareness Dialog — shown whenever a QR scan leads to a personal account
@@ -62,7 +63,7 @@ class QrAwarenessDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final config = _getConfig();
+    final config = _getConfig(context);
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       backgroundColor: config.bgColor,
@@ -107,9 +108,12 @@ class QrAwarenessDialog extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: Colors.red.shade700),
               ),
-              child: const Text(
-                'Do NOT proceed if someone asked you to scan this code to '
-                '"get a refund", "verify your account", or "claim a reward".',
+              child: Text(
+                AppLocalizations.of(
+                      context,
+                    )?.translate('qr_awareness.high_risk_notice') ??
+                    'Do NOT proceed if someone asked you to scan this code to '
+                        '"get a refund", "verify your account", or "claim a reward".',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 13,
@@ -133,7 +137,10 @@ class QrAwarenessDialog extends StatelessWidget {
             ),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
           ),
-          child: const Text('Go back'),
+          child: Text(
+            AppLocalizations.of(context)?.translate('qr_awareness.go_back') ??
+                'Go back',
+          ),
         ),
         // Confirm — present for all levels (not a hard block)
         ElevatedButton(
@@ -152,8 +159,10 @@ class QrAwarenessDialog extends StatelessWidget {
     );
   }
 
-  _DialogConfig _getConfig() {
+  _DialogConfig _getConfig(BuildContext context) {
     final amountStr = '₹${amount.toStringAsFixed(0)}';
+    final loc = AppLocalizations.of(context);
+
     switch (level) {
       // ── Soft nudge for known friend paying via QR for the first time ──────
       case QrAwarenessLevel.friendFirstTime:
@@ -161,18 +170,29 @@ class QrAwarenessDialog extends StatelessWidget {
           icon: Icons.info_outline,
           iconColor: Colors.blueAccent,
           titleColor: Colors.white,
-          title: 'Confirm QR Payment',
+          title:
+              loc?.translate('qr_awareness.title_friend') ??
+              'Confirm QR Payment',
           bgColor: const Color(0xFF1C2A3A),
           body:
+              loc?.translate(
+                'qr_awareness.body_friend',
+                arguments: {'name': receiverName, 'amount': amountStr},
+              ) ??
               'You are about to PAY $receiverName via QR scan.\n\n'
-              'Amount: $amountStr will be DEBITED from your account.\n\n'
-              'This is a SEND — money goes to them, not to you.\n\n'
-              'Tap Confirm only if you intended to pay this person.',
+                  'Amount: $amountStr will be DEBITED from your account.\n\n'
+                  'This is a SEND — money goes to them, not to you.\n\n'
+                  'Tap Confirm only if you intended to pay this person.',
           bodyColor: Colors.white70,
           cancelColor: Colors.white54,
           confirmBg: Colors.blueAccent,
           confirmFg: Colors.white,
-          confirmLabel: 'Yes, Pay $amountStr',
+          confirmLabel:
+              loc?.translate(
+                'qr_awareness.confirm_friend',
+                arguments: {'amount': amountStr},
+              ) ??
+              'Yes, Pay $amountStr',
         );
 
       // ── Full warning for stranger or FoF ──────────────────────────────────
@@ -181,20 +201,31 @@ class QrAwarenessDialog extends StatelessWidget {
           icon: Icons.warning_amber_rounded,
           iconColor: Colors.orange,
           titleColor: Colors.orange.shade200,
-          title: 'Personal Account — Not a Shop',
+          title:
+              loc?.translate('qr_awareness.title_stranger') ??
+              'Personal Account — Not a Shop',
           bgColor: const Color(0xFF1F1800),
           body:
+              loc?.translate(
+                'qr_awareness.body_stranger',
+                arguments: {'name': receiverName, 'amount': amountStr},
+              ) ??
               'You are requesting to PAY $receiverName\n\n'
-              'Scanning a QR code will DEBIT money FROM your account. '
-              'This is not a merchant — it is a personal UPI account.\n\n'
-              'Scammers show personal QR codes claiming you will RECEIVE '
-              'money. That is not how UPI works. QR codes only SEND.\n\n'
-              'Proceed only if you intend to send $amountStr to this person.',
+                  'Scanning a QR code will DEBIT money FROM your account. '
+                  'This is not a merchant — it is a personal UPI account.\n\n'
+                  'Scammers show personal QR codes claiming you will RECEIVE '
+                  'money. That is not how UPI works. QR codes only SEND.\n\n'
+                  'Proceed only if you intend to send $amountStr to this person.',
           bodyColor: Colors.orange.shade100,
           cancelColor: Colors.orange.shade300,
           confirmBg: Colors.orange.shade700,
           confirmFg: Colors.white,
-          confirmLabel: 'I understand, Pay $amountStr',
+          confirmLabel:
+              loc?.translate(
+                'qr_awareness.confirm_stranger',
+                arguments: {'amount': amountStr},
+              ) ??
+              'I understand, Pay $amountStr',
         );
 
       // ── High risk: stranger + first-time + large amount ───────────────────
@@ -203,18 +234,29 @@ class QrAwarenessDialog extends StatelessWidget {
           icon: Icons.dangerous_rounded,
           iconColor: Colors.red.shade300,
           titleColor: Colors.red.shade200,
-          title: 'High Risk: First Payment to Unknown Person',
+          title:
+              loc?.translate('qr_awareness.title_high_risk') ??
+              'High Risk: First Payment to Unknown Person',
           bgColor: const Color(0xFF1A0000),
           body:
+              loc?.translate(
+                'qr_awareness.body_high_risk',
+                arguments: {'name': receiverName, 'amount': amountStr},
+              ) ??
               'You have NEVER paid $receiverName before.\n\n'
-              'Sending $amountStr to a stranger via QR is one of the most '
-              'common scam methods reported in India.\n\n'
-              'This is a personal account, not a verified merchant.',
+                  'Sending $amountStr to a stranger via QR is one of the most '
+                  'common scam methods reported in India.\n\n'
+                  'This is a personal account, not a verified merchant.',
           bodyColor: Colors.red.shade100,
           cancelColor: Colors.red.shade300,
           confirmBg: Colors.red.shade800,
           confirmFg: Colors.white,
-          confirmLabel: 'I accept the risk, Pay $amountStr',
+          confirmLabel:
+              loc?.translate(
+                'qr_awareness.confirm_high_risk',
+                arguments: {'amount': amountStr},
+              ) ??
+              'I accept the risk, Pay $amountStr',
         );
     }
   }

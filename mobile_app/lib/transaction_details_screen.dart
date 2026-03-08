@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 // ignore_for_file: use_build_context_synchronously
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'services/app_localizations.dart';
 import 'mcc_helper.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -264,7 +265,10 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                 PopupMenuItem<String>(
                   value: 'get_help',
                   child: Text(
-                    'Get help',
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('details.get_help') ??
+                        'Get help',
                     style: GoogleFonts.outfit(
                       color: isDark ? Colors.white : Colors.black87,
                       fontSize: 15,
@@ -313,7 +317,11 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
 
                       // ──── Direction + Name ────
                       Text(
-                        isDebit ? 'To $displayName' : 'From $displayName',
+                        (AppLocalizations.of(context)?.translate(
+                                  isDebit ? 'details.to' : 'details.from',
+                                ) ??
+                                (isDebit ? 'To {name}' : 'From {name}'))
+                            .replaceAll('{name}', displayName),
                         style: GoogleFonts.outfit(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
@@ -349,7 +357,15 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            status == 'SUCCESS' ? 'Completed' : 'Failed',
+                            status == 'SUCCESS'
+                                ? AppLocalizations.of(
+                                        context,
+                                      )?.translate('transaction.completed') ??
+                                      'Completed'
+                                : AppLocalizations.of(
+                                        context,
+                                      )?.translate('transaction.failed') ??
+                                      'Failed',
                             style: GoogleFonts.outfit(
                               fontSize: 15,
                               fontWeight: FontWeight.w500,
@@ -367,7 +383,10 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 40),
                           child: Text(
-                            "Payment failed due to the parent account cancelling the request",
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('details.rejection_msg') ??
+                                "Payment failed due to the parent account cancelling the request",
                             textAlign: TextAlign.center,
                             style: GoogleFonts.outfit(
                               fontSize: 13,
@@ -407,7 +426,14 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
-                              'Risk: ${transaction['risk_score']}',
+                              (AppLocalizations.of(
+                                        context,
+                                      )?.translate('details.risk') ??
+                                      'Risk: {level}')
+                                  .replaceAll(
+                                    '{level}',
+                                    transaction['risk_score'].toString(),
+                                  ),
                               style: TextStyle(
                                 color: transaction['risk_score'] == 'WARN'
                                     ? Colors.orange
@@ -479,7 +505,10 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
-                                    'Payment request pending',
+                                    AppLocalizations.of(context)?.translate(
+                                          'details.request_pending',
+                                        ) ??
+                                        'Payment request pending',
                                     style: TextStyle(
                                       color: isDark
                                           ? Colors.amber.shade300
@@ -498,9 +527,12 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                                         horizontal: 12,
                                       ),
                                     ),
-                                    child: const Text(
-                                      'Withdraw',
-                                      style: TextStyle(fontSize: 12),
+                                    child: Text(
+                                      AppLocalizations.of(
+                                            context,
+                                          )?.translate('details.withdraw') ??
+                                          'Withdraw',
+                                      style: const TextStyle(fontSize: 12),
                                     ),
                                   ),
                               ],
@@ -529,13 +561,28 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                               padding: const EdgeInsets.all(16),
                               child: _buildDetailRow(
                                 context,
-                                label: 'Spending by',
+                                label:
+                                    AppLocalizations.of(
+                                      context,
+                                    )?.translate('details.spending_by') ??
+                                    'Spending by',
                                 value:
                                     transaction['initiated_by_upi'] != null &&
                                         transaction['initiated_by_upi'] !=
                                             transaction['sender_upi_id']
-                                    ? 'UPI Circle by ${transaction['initiated_by_name']}'
-                                    : 'Self',
+                                    ? (AppLocalizations.of(context)?.translate(
+                                                'details.upi_circle_by',
+                                              ) ??
+                                              'UPI Circle by {name}')
+                                          .replaceAll(
+                                            '{name}',
+                                            transaction['initiated_by_name'] ??
+                                                '',
+                                          )
+                                    : AppLocalizations.of(
+                                            context,
+                                          )?.translate('details.self') ??
+                                          'Self',
                               ),
                             ),
                             Divider(
@@ -549,7 +596,11 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                               padding: const EdgeInsets.all(16),
                               child: _buildDetailRow(
                                 context,
-                                label: 'UPI transaction ID',
+                                label:
+                                    AppLocalizations.of(
+                                      context,
+                                    )?.translate('details.txn_id') ??
+                                    'UPI transaction ID',
                                 value: (transaction['transaction_id'] ?? '-')
                                     .toString()
                                     .replaceAll('TXN', ''),
@@ -569,13 +620,15 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                                 children: [
                                   _buildDetailRow(
                                     context,
-                                    label: 'To: $receiverName',
+                                    label:
+                                        '${AppLocalizations.of(context)?.translate('details.to_label') ?? 'To'}: $receiverName',
                                     value: transaction['receiver_upi_id'] ?? '',
                                   ),
                                   const SizedBox(height: 12),
                                   _buildDetailRow(
                                     context,
-                                    label: 'From: $senderName',
+                                    label:
+                                        '${AppLocalizations.of(context)?.translate('details.from_label') ?? 'From'}: $senderName',
                                     value: transaction['sender_upi_id'] ?? '',
                                   ),
                                 ],
@@ -600,7 +653,11 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                                 Expanded(
                                   child: _buildActionChip(
                                     icon: Icons.currency_rupee_rounded,
-                                    label: 'Request for amount',
+                                    label:
+                                        AppLocalizations.of(context)?.translate(
+                                          'details.request_amount',
+                                        ) ??
+                                        'Request for amount',
                                     iconColor: isDark
                                         ? Colors.white
                                         : Colors.black87,
@@ -631,7 +688,11 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                                 Expanded(
                                   child: _buildActionChip(
                                     icon: Icons.error_outline_rounded,
-                                    label: 'Report complete',
+                                    label:
+                                        AppLocalizations.of(context)?.translate(
+                                          'details.report_complete',
+                                        ) ??
+                                        'Report complete',
                                     iconColor: isDark
                                         ? Colors.red.shade300
                                         : Colors.red.shade600,
@@ -691,7 +752,10 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                                   ),
                                   const SizedBox(width: 10),
                                   Text(
-                                    'Call Cyber Crime (1930)',
+                                    AppLocalizations.of(
+                                          context,
+                                        )?.translate('details.call_cyber') ??
+                                        'Call Cyber Crime (1930)',
                                     style: GoogleFonts.outfit(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w600,
@@ -708,7 +772,10 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
 
                       // ──── Footer ────
                       Text(
-                        'Powered by ZaferPay',
+                        AppLocalizations.of(
+                              context,
+                            )?.translate('common.powered_by') ??
+                            'Powered by ZaferPay',
                         style: GoogleFonts.outfit(
                           color: Colors.grey.shade400,
                           fontWeight: FontWeight.bold,
@@ -818,18 +885,27 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Withdraw Request'),
-        content: const Text(
-          'Are you sure you want to withdraw this payment request?',
+        title: Text(
+          AppLocalizations.of(context)?.translate('details.withdraw_title') ??
+              'Withdraw Request',
+        ),
+        content: Text(
+          AppLocalizations.of(context)?.translate('details.withdraw_confirm') ??
+              'Are you sure you want to withdraw this payment request?',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('No'),
+            child: Text(
+              AppLocalizations.of(context)?.translate('details.no') ?? 'No',
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Yes, Withdraw'),
+            child: Text(
+              AppLocalizations.of(context)?.translate('details.yes_withdraw') ??
+                  'Yes, Withdraw',
+            ),
           ),
         ],
       ),
@@ -847,13 +923,25 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
           _requestStatus = 'cancelled';
           _existingRequestId = null;
         });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Request withdrawn')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(
+                    context,
+                  )?.translate('details.request_withdrawn') ??
+                  'Request withdrawn',
+            ),
+          ),
+        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to withdraw request'),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(
+                    context,
+                  )?.translate('details.withdraw_failed') ??
+                  'Failed to withdraw request',
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -891,9 +979,14 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     bool isLoading = false;
 
     final reasons = {
-      'wrongly_sent': 'Wrongly Sent',
-      'wrong_amount': 'Wrong Amount',
-      'other': 'Other',
+      'wrongly_sent':
+          AppLocalizations.of(context)?.translate('details.wrongly_sent') ??
+          'Wrongly Sent',
+      'wrong_amount':
+          AppLocalizations.of(context)?.translate('details.wrong_amount') ??
+          'Wrong Amount',
+      'other':
+          AppLocalizations.of(context)?.translate('details.other') ?? 'Other',
     };
 
     showModalBottomSheet(
@@ -956,7 +1049,10 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
 
                         // ── Title ──
                         Text(
-                          'Request Money',
+                          AppLocalizations.of(
+                                context,
+                              )?.translate('details.request_money') ??
+                              'Request Money',
                           style: GoogleFonts.outfit(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -965,7 +1061,11 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'from $targetName',
+                          (AppLocalizations.of(
+                                    context,
+                                  )?.translate('details.request_money_from') ??
+                                  'from {name}')
+                              .replaceAll('{name}', targetName.toString()),
                           style: GoogleFonts.outfit(
                             color: isDark
                                 ? Colors.grey.shade400
@@ -979,7 +1079,10 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                         Align(
                           alignment: Alignment.centerLeft,
                           child: Text(
-                            'Reason',
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('details.reason') ??
+                                'Reason',
                             style: GoogleFonts.outfit(
                               fontWeight: FontWeight.w600,
                               fontSize: 13,
@@ -1043,7 +1146,11 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                             fontWeight: FontWeight.w600,
                           ),
                           decoration: InputDecoration(
-                            labelText: 'Amount',
+                            labelText:
+                                AppLocalizations.of(
+                                  context,
+                                )?.translate('details.amount') ??
+                                'Amount',
                             labelStyle: GoogleFonts.outfit(
                               color: isDark
                                   ? Colors.grey.shade400
@@ -1098,8 +1205,14 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                           ),
                           decoration: InputDecoration(
                             labelText: selectedReason == 'other'
-                                ? 'Note (Required)'
-                                : 'Note (Optional)',
+                                ? AppLocalizations.of(
+                                        context,
+                                      )?.translate('details.note_required') ??
+                                      'Note (Required)'
+                                : AppLocalizations.of(
+                                        context,
+                                      )?.translate('details.note_optional') ??
+                                      'Note (Optional)',
                             labelStyle: GoogleFonts.outfit(
                               color: isDark
                                   ? Colors.grey.shade400
@@ -1163,7 +1276,10 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                                   ),
                                 ),
                                 child: Text(
-                                  'Cancel',
+                                  AppLocalizations.of(
+                                        context,
+                                      )?.translate('details.cancel') ??
+                                      'Cancel',
                                   style: GoogleFonts.outfit(
                                     color: isDark
                                         ? Colors.grey.shade300
@@ -1190,9 +1306,14 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                                           ScaffoldMessenger.of(
                                             sheetContext,
                                           ).showSnackBar(
-                                            const SnackBar(
+                                            SnackBar(
                                               content: Text(
-                                                'Enter a valid amount',
+                                                AppLocalizations.of(
+                                                      context,
+                                                    )?.translate(
+                                                      'details.enter_valid_amount',
+                                                    ) ??
+                                                    'Enter a valid amount',
                                               ),
                                             ),
                                           );
@@ -1237,11 +1358,15 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                                             context,
                                           ).showSnackBar(
                                             SnackBar(
-                                              content: const Text(
-                                                'Request sent successfully!',
+                                              content: Text(
+                                                AppLocalizations.of(
+                                                      context,
+                                                    )?.translate(
+                                                      'details.request_success',
+                                                    ) ??
+                                                    'Request sent successfully',
                                               ),
-                                              backgroundColor:
-                                                  Colors.green.shade600,
+                                              backgroundColor: Colors.green,
                                               behavior:
                                                   SnackBarBehavior.floating,
                                             ),
@@ -1253,7 +1378,12 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                                             SnackBar(
                                               content: Text(
                                                 result['message'] ??
-                                                    'Failed to send request',
+                                                    (AppLocalizations.of(
+                                                          context,
+                                                        )?.translate(
+                                                          'details.request_failed',
+                                                        ) ??
+                                                        'Failed to send request'),
                                               ),
                                               backgroundColor: Colors.red,
                                               behavior:
@@ -1283,7 +1413,10 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                                         ),
                                       )
                                     : Text(
-                                        'Send Request',
+                                        AppLocalizations.of(context)?.translate(
+                                              'details.send_request',
+                                            ) ??
+                                            'Send Request',
                                         style: GoogleFonts.outfit(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 15,
@@ -1335,17 +1468,29 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                 borderRadius: BorderRadius.circular(20),
               ),
               title: Text(
-                'Complaint Already Raised',
+                AppLocalizations.of(
+                      context,
+                    )?.translate('details.report_already_raised') ??
+                    'Complaint Already Raised',
                 style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
               ),
               content: Text(
-                'You have already raised a complaint for this transaction. For further official action, please use the Cyber Crime portal.',
+                AppLocalizations.of(
+                      context,
+                    )?.translate('details.report_already_msg') ??
+                    'You have already raised a complaint for this transaction. For further official action, please use the Cyber Crime portal.',
                 style: GoogleFonts.outfit(),
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: Text('Go Back', style: GoogleFonts.outfit()),
+                  child: Text(
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('details.go_back') ??
+                        'Go Back',
+                    style: GoogleFonts.outfit(),
+                  ),
                 ),
                 ElevatedButton(
                   onPressed: () {
@@ -1365,7 +1510,10 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                     ),
                   ),
                   child: Text(
-                    'Continue to Cyber Crime Portal',
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('details.continue_portal') ??
+                        'Continue to Cyber Crime Portal',
                     style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -1391,7 +1539,14 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
       if (context.mounted) {
         Navigator.pop(context); // Remove loading if error
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error checking complaint status')),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(
+                    context,
+                  )?.translate('details.error_checking_complaint') ??
+                  'Error checking complaint status',
+            ),
+          ),
         );
       }
     }

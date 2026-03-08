@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'services/chatbot_service.dart';
+import 'services/app_localizations.dart';
 
 class CyberChatbotScreen extends StatefulWidget {
   const CyberChatbotScreen({super.key});
@@ -25,20 +26,29 @@ class _CyberChatbotScreenState extends State<CyberChatbotScreen>
   @override
   void initState() {
     super.initState();
-    // Add welcome message
-    _messages.add(
-      _ChatMessage(
-        text:
-            "Hello! 👋 I'm your **Cyber Complaint Assistant**.\n\n"
-            "I can help you with:\n"
-            "• Filing UPI fraud complaints\n"
-            "• Reporting unauthorized transactions\n"
-            "• Contacting the Cyber Crime Helpline\n"
-            "• Understanding your rights\n\n"
-            "How can I help you today?",
-        isUser: false,
-      ),
-    );
+    // Add welcome message from localizations
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() {
+          _messages.add(
+            _ChatMessage(
+              text:
+                  AppLocalizations.of(
+                    context,
+                  )?.translate('chatbot.welcome_text') ??
+                  "Hello! 👋 I'm your **Cyber Complaint Assistant**.\n\n"
+                      "I can help you with:\n"
+                      "• Filing UPI fraud complaints\n"
+                      "• Reporting unauthorized transactions\n"
+                      "• Contacting the Cyber Crime Helpline\n"
+                      "• Understanding your rights\n\n"
+                      "How can I help you today?",
+              isUser: false,
+            ),
+          );
+        });
+      }
+    });
   }
 
   @override
@@ -65,7 +75,11 @@ class _CyberChatbotScreenState extends State<CyberChatbotScreen>
     _history.add({'role': 'user', 'content': userMessage});
 
     // Get response from chatbot
-    final reply = await _chatbotService.sendMessage(userMessage, _history);
+    final reply = await _chatbotService.sendMessage(
+      userMessage,
+      _history,
+      context,
+    );
 
     if (mounted) {
       setState(() {
@@ -131,7 +145,8 @@ class _CyberChatbotScreenState extends State<CyberChatbotScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Cyber Help',
+                  AppLocalizations.of(context)?.translate('chatbot.title') ??
+                      'Cyber Help',
                   style: GoogleFonts.outfit(
                     fontSize: 17,
                     fontWeight: FontWeight.w600,
@@ -139,7 +154,8 @@ class _CyberChatbotScreenState extends State<CyberChatbotScreen>
                   ),
                 ),
                 Text(
-                  'UPI Fraud Complaint Assistant',
+                  AppLocalizations.of(context)?.translate('chatbot.subtitle') ??
+                      'UPI Fraud Complaint Assistant',
                   style: GoogleFonts.outfit(
                     fontSize: 12,
                     color: isDark ? Colors.grey.shade500 : Colors.grey.shade600,
@@ -387,10 +403,14 @@ class _CyberChatbotScreenState extends State<CyberChatbotScreen>
 
   Widget _buildQuickSuggestions(bool isDark) {
     final suggestions = [
-      '🚨 How to file a UPI fraud complaint?',
-      '📞 What is helpline 1930?',
-      '🏦 Report unauthorized transaction',
-      '📋 Documents needed for complaint',
+      AppLocalizations.of(context)?.translate('chatbot.suggest_fraud') ??
+          '🚨 How to file a UPI fraud complaint?',
+      AppLocalizations.of(context)?.translate('chatbot.suggest_helpline') ??
+          '📞 What is helpline 1930?',
+      AppLocalizations.of(context)?.translate('chatbot.suggest_unauthorized') ??
+          '🏦 Report unauthorized transaction',
+      AppLocalizations.of(context)?.translate('chatbot.suggest_docs') ??
+          '📋 Documents needed for complaint',
     ];
 
     return Container(
@@ -478,7 +498,9 @@ class _CyberChatbotScreenState extends State<CyberChatbotScreen>
                 textInputAction: TextInputAction.send,
                 onSubmitted: _sendMessage,
                 decoration: InputDecoration(
-                  hintText: 'Ask about UPI fraud complaints...',
+                  hintText:
+                      AppLocalizations.of(context)?.translate('chatbot.hint') ??
+                      'Ask about UPI fraud complaints...',
                   hintStyle: GoogleFonts.outfit(
                     color: isDark ? Colors.white38 : Colors.grey.shade500,
                     fontSize: 15,

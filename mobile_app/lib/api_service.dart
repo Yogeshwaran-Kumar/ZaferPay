@@ -75,6 +75,11 @@ class ApiService {
     bool isCirclePayment = false,
   }) => _auth.verifyUpiPin(pin, isCirclePayment: isCirclePayment);
   Future<List<dynamic>?> getLoginHistory() => _auth.getLoginHistory();
+  static final StreamController<void> _userSettingsController =
+      StreamController<void>.broadcast();
+  Stream<void> get onUserSettingsChanged => _userSettingsController.stream;
+  void notifyUserSettingsChanged() => _userSettingsController.add(null);
+
   Future<bool> updateSettings({
     bool? biometricEnabled,
     bool? appLockEnabled,
@@ -82,14 +87,41 @@ class ApiService {
     double? spendingLimit,
     int? spendingLimitPeriod,
     bool clearSpendingLimit = false,
-  }) => _auth.updateSettings(
-    biometricEnabled: biometricEnabled,
-    appLockEnabled: appLockEnabled,
-    summaryFrequency: summaryFrequency,
-    spendingLimit: spendingLimit,
-    spendingLimitPeriod: spendingLimitPeriod,
-    clearSpendingLimit: clearSpendingLimit,
-  );
+  }) async {
+    // Optimistic Cache Update for ZERO-LATENCY UI (0.01s target)
+    // We lock these values for 3 seconds to prevent background polls from overwriting them
+    final overrides = <String, dynamic>{};
+    if (biometricEnabled != null) {
+      overrides['biometric_enabled'] = biometricEnabled;
+    }
+    if (appLockEnabled != null) {
+      overrides['app_lock_enabled'] = appLockEnabled;
+    }
+    if (summaryFrequency != null) {
+      overrides['summary_frequency'] = summaryFrequency;
+    }
+    if (clearSpendingLimit) {
+      overrides['spending_limit'] = null;
+    } else if (spendingLimit != null) {
+      overrides['spending_limit'] = spendingLimit;
+    }
+    if (spendingLimitPeriod != null) {
+      overrides['spending_limit_period'] = spendingLimitPeriod;
+    }
+
+    _user.setOptimisticUserOverrides(overrides);
+    notifyUserSettingsChanged();
+
+    return _auth.updateSettings(
+      biometricEnabled: biometricEnabled,
+      appLockEnabled: appLockEnabled,
+      summaryFrequency: summaryFrequency,
+      spendingLimit: spendingLimit,
+      spendingLimitPeriod: spendingLimitPeriod,
+      clearSpendingLimit: clearSpendingLimit,
+    );
+  }
+
   Future<void> syncUserSettings() => _auth.syncUserSettings();
 
   // --- User Delegates ---

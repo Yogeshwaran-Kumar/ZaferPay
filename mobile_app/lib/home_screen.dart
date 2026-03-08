@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'services/app_localizations.dart';
 import 'api_service.dart';
 import 'contact_service.dart';
 import 'services/api_client.dart';
@@ -10,6 +11,7 @@ import 'services/transaction_service.dart';
 import 'services/user_service.dart';
 import 'utils.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'widgets/risk_status_widget.dart';
 // To reuse logic if needed, or better, keep logic in widget
@@ -66,6 +68,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   StreamSubscription? _authSubscription;
   StreamSubscription? _resetSubscription;
+  StreamSubscription? _settingsSubscription;
+
+  // Protection against settings flip-back (0.01s target)
+  DateTime? _settingsProtectionUntil;
 
   @override
   void initState() {
@@ -144,6 +150,22 @@ class _HomeScreenState extends State<HomeScreen> {
         _loadData(showLoading: false, bypassCache: true);
       }
     });
+
+    // Listen for Settings changes (e.g., summary frequency) to update UI instantly
+    _settingsSubscription = _api.onUserSettingsChanged.listen((_) {
+      if (mounted) {
+        final freshUser = _api.getUserSync();
+        if (freshUser != null) {
+          setState(() {
+            _user = freshUser;
+            // Lock this value for 5 seconds to prevent background polls from flickering it back
+            _settingsProtectionUntil = DateTime.now().add(
+              const Duration(seconds: 5),
+            );
+          });
+        }
+      }
+    });
   }
 
   @override
@@ -151,6 +173,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _timer?.cancel();
     _authSubscription?.cancel();
     _resetSubscription?.cancel();
+    _settingsSubscription?.cancel();
 
     super.dispose();
   }
@@ -201,6 +224,17 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }
       return;
+    }
+
+    // Protection for Settings Flip-back (0.01s target)
+    // If we are within the protection window, preserve our local optimistic summary_frequency
+    if (_settingsProtectionUntil != null &&
+        DateTime.now().isBefore(_settingsProtectionUntil!)) {
+      if (_user != null && _user!['summary_frequency'] != null) {
+        user['summary_frequency'] = _user!['summary_frequency'];
+      }
+    } else {
+      _settingsProtectionUntil = null;
     }
 
     setState(() {
@@ -287,7 +321,12 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_user == null) {
       return Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        body: const Center(child: Text("Failed to load user")),
+        body: Center(
+          child: Text(
+            AppLocalizations.of(context)?.translate('home.failed_load_user') ??
+                "Failed to load user",
+          ),
+        ),
       );
     }
 
@@ -303,8 +342,14 @@ class _HomeScreenState extends State<HomeScreen> {
         title: _riskTitle.isNotEmpty
             ? _riskTitle
             : (_riskScore == 'HIGH'
-                  ? "CRITICAL RISK DETECTED"
-                  : "SECURITY WARNING"),
+                  ? (AppLocalizations.of(
+                          context,
+                        )?.translate('home.risk_detected') ??
+                        "CRITICAL RISK DETECTED")
+                  : (AppLocalizations.of(
+                          context,
+                        )?.translate('home.security_warning') ??
+                        "SECURITY WARNING")),
         description: _riskDescription,
         riskFactors: _riskFactors.isNotEmpty
             ? _riskFactors
@@ -312,7 +357,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 _buildRiskFactorItem(
                   _riskDescription.isNotEmpty
                       ? _riskDescription
-                      : "Unusual account activity detected.",
+                      : (AppLocalizations.of(
+                              context,
+                            )?.translate('home.unusual_activity') ??
+                            "Unusual account activity detected."),
                   Icons.warning_amber_rounded,
                   _riskScore == 'HIGH'
                       ? const Color(0xFFEF5350)
@@ -325,7 +373,11 @@ class _HomeScreenState extends State<HomeScreen> {
             _isRisk = false; // Dismiss warning
           });
         },
-        proceedButtonText: "I Understand, Proceed",
+        proceedButtonText:
+            AppLocalizations.of(
+              context,
+            )?.translate('home.understand_proceed') ??
+            "I Understand, Proceed",
         showBackButton:
             false, // Don't allow backing out of home screen warning easily
       );
@@ -359,7 +411,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     Expanded(
                       child: _buildQuickActionCard(
                         icon: Icons.send_rounded,
-                        label: "Pay anyone",
+                        label:
+                            AppLocalizations.of(
+                              context,
+                            )?.translate('home.pay_anyone') ??
+                            "Pay anyone",
                         onTap: _handlePayAnyone,
                         isDark: isDark,
                       ),
@@ -368,7 +424,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     Expanded(
                       child: _buildQuickActionCard(
                         icon: Icons.account_balance_wallet_rounded,
-                        label: "Check balance",
+                        label:
+                            AppLocalizations.of(
+                              context,
+                            )?.translate('home.check_balance') ??
+                            "Check balance",
                         onTap: _handleViewBalance,
                         isDark: isDark,
                       ),
@@ -398,7 +458,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      "People",
+                      AppLocalizations.of(context)?.translate('home.people') ??
+                          "People",
                       style: GoogleFonts.outfit(
                         fontSize: 20,
                         fontWeight: FontWeight.w600,
@@ -422,9 +483,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      "Businesses",
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('home.businesses') ??
+                          'Businesses',
                       style: GoogleFonts.outfit(
-                        fontSize: 20,
+                        fontSize: 16,
                         fontWeight: FontWeight.w600,
                         color: textColor,
                       ),
@@ -449,7 +513,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 24),
                     _buildListItem(
                       icon: Icons.history_rounded,
-                      text: "See transaction history",
+                      text:
+                          AppLocalizations.of(
+                            context,
+                          )?.translate('home.see_history') ??
+                          "See transaction history",
                       onTap: () {
                         widget.onSwitchTab?.call(1);
                       },
@@ -458,7 +526,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 16),
                     _buildListItem(
                       icon: Icons.settings_outlined,
-                      text: "View settings",
+                      text:
+                          AppLocalizations.of(
+                            context,
+                          )?.translate('home.view_settings') ??
+                          "View settings",
                       onTap: () {
                         Navigator.pushNamed(context, '/settings');
                       },
@@ -482,7 +554,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      "Powered by ZaferPay",
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('details.powered_by') ??
+                          "Powered by ZaferPay",
                       style: GoogleFonts.outfit(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -527,7 +602,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Cyber\nHelp',
+                  AppLocalizations.of(context)?.translate('chatbot.fab_text') ??
+                      'Cyber\nHelp',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.outfit(
                     color: Colors.white,
@@ -568,8 +644,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     if (!isDark)
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.04),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
+                        blurRadius: 10.r,
+                        offset: Offset(0, 4.h),
                       ),
                   ],
                 ),
@@ -578,14 +654,20 @@ class _HomeScreenState extends State<HomeScreen> {
                     Icon(
                       Icons.search_rounded,
                       color: isDark ? Colors.white70 : Colors.grey.shade600,
+                      size: 24.r,
                     ),
-                    const SizedBox(width: 12),
-                    Text(
-                      "Pay friends or merchants",
-                      style: GoogleFonts.outfit(
-                        color: isDark ? Colors.white60 : Colors.grey.shade500,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
+                    SizedBox(width: 12.w),
+                    Expanded(
+                      child: Text(
+                        AppLocalizations.of(
+                              context,
+                            )?.translate('home.search_hint') ??
+                            "Pay friends or merchants",
+                        style: GoogleFonts.outfit(
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                          fontSize: 15.sp,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -593,15 +675,15 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-          const SizedBox(width: 16),
+          SizedBox(width: 16.w),
           // Profile Icon
           GestureDetector(
             onTap: () {
               Navigator.pushNamed(context, '/profile');
             },
             child: Container(
-              width: 44,
-              height: 44,
+              width: 36.r,
+              height: 36.r,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: getAvatarColor(_user!['username']),
@@ -612,7 +694,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   style: GoogleFonts.outfit(
                     color: Colors.white,
                     fontWeight: FontWeight.w600,
-                    fontSize: 24,
+                    fontSize: 18.sp,
                   ),
                 ),
               ),
@@ -628,10 +710,10 @@ class _HomeScreenState extends State<HomeScreen> {
       onTap: _handleScan,
       child: Container(
         width: double.infinity,
-        constraints: const BoxConstraints(minHeight: 160),
+        constraints: BoxConstraints(minHeight: 140.h),
         decoration: BoxDecoration(
           color: const Color(0xFF00B9F1), // ZaferPay Blue
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(24.r),
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -640,56 +722,60 @@ class _HomeScreenState extends State<HomeScreen> {
           boxShadow: [
             BoxShadow(
               color: const Color(0xFF00B9F1).withValues(alpha: 0.3),
-              blurRadius: 12,
-              offset: const Offset(0, 6),
+              blurRadius: 12.r,
+              offset: Offset(0, 6.h),
             ),
           ],
         ),
         child: Stack(
           children: [
             Positioned(
-              right: -20,
-              bottom: -20,
+              right: -20.w,
+              bottom: -20.h,
               child: Icon(
                 Icons.qr_code_scanner_rounded,
-                size: 140,
+                size: 140.r,
                 color: Colors.white.withValues(alpha: 0.1),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(24),
+              padding: EdgeInsets.all(20.r),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: EdgeInsets.all(12.r),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.2),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.qr_code_scanner_rounded,
                       color: Colors.white,
-                      size: 28,
+                      size: 24.r,
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: 16.h),
                   Text(
-                    "Scan any QR code",
+                    AppLocalizations.of(context)?.translate('home.scan_qr') ??
+                        "Scan any QR code",
                     style: GoogleFonts.outfit(
                       color: Colors.white,
-                      fontSize: 26,
+                      fontSize: 22.sp,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: 4.h),
                   Flexible(
                     child: Text(
-                      "Pay at shops or send to friends",
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('home.scan_subtitle') ??
+                          "Pay at shops or send to friends",
                       style: GoogleFonts.outfit(
                         color: Colors.white.withValues(alpha: 0.8),
-                        fontSize: 15,
+                        fontSize: 14.sp,
                       ),
                     ),
                   ),
@@ -711,10 +797,10 @@ class _HomeScreenState extends State<HomeScreen> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 20),
+        padding: EdgeInsets.symmetric(vertical: 16.h, horizontal: 8.w),
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF1E2630) : Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(20.r),
           border: Border.all(
             color: isDark ? Colors.white10 : Colors.grey.shade200,
           ),
@@ -722,21 +808,29 @@ class _HomeScreenState extends State<HomeScreen> {
             if (!isDark)
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+                blurRadius: 8.r,
+                offset: Offset(0, 2.h),
               ),
           ],
         ),
         child: Column(
           children: [
-            Icon(icon, color: const Color(0xFF00B9F1), size: 28),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: GoogleFonts.outfit(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: isDark ? Colors.white : const Color(0xFF1F1F1F),
+            Icon(icon, color: const Color(0xFF00B9F1), size: 24.r),
+            SizedBox(height: 6.h),
+            SizedBox(
+              height: 36.h,
+              child: Center(
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.outfit(
+                    fontSize: 13.sp,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : const Color(0xFF1F1F1F),
+                  ),
+                ),
               ),
             ),
           ],
@@ -770,7 +864,14 @@ class _HomeScreenState extends State<HomeScreen> {
       if (myUpi != null && myUpi == scannedUpi) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cannot send money to self')),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(
+                    context,
+                  )?.translate('home.cannot_send_self') ??
+                  'Cannot send money to self',
+            ),
+          ),
         );
         return;
       }
@@ -921,8 +1022,8 @@ class _HomeScreenState extends State<HomeScreen> {
             clipBehavior: Clip.none,
             children: [
               Container(
-                width: 56,
-                height: 56,
+                width: 48.r,
+                height: 48.r,
                 decoration: BoxDecoration(color: color, shape: BoxShape.circle),
                 child: Center(
                   child: Text(
@@ -930,7 +1031,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: GoogleFonts.outfit(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
-                      fontSize: 26,
+                      fontSize: 22.sp,
                     ),
                   ),
                 ),
@@ -938,30 +1039,30 @@ class _HomeScreenState extends State<HomeScreen> {
               // Badge — hidden during reset suppression window
               if (!_isResetting && (person['unread_count'] ?? 0) > 0)
                 Positioned(
-                  right: -2,
-                  top: -2,
+                  right: -2.r,
+                  top: -2.r,
                   child: Container(
-                    padding: const EdgeInsets.all(5),
+                    padding: EdgeInsets.all(5.r),
                     decoration: BoxDecoration(
                       color: Colors.red,
                       shape: BoxShape.circle,
                       border: Border.all(
                         color: Theme.of(context).scaffoldBackgroundColor,
-                        width: 2,
+                        width: 2.r,
                       ),
                     ),
-                    constraints: const BoxConstraints(
-                      minWidth: 22,
-                      minHeight: 22,
+                    constraints: BoxConstraints(
+                      minWidth: 22.r,
+                      minHeight: 22.r,
                     ),
                     child: Center(
                       child: Text(
                         person['unread_count'] > 9
                             ? "9+"
                             : "${person['unread_count']}",
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: Colors.white,
-                          fontSize: 10,
+                          fontSize: 10.sp,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -970,13 +1071,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
             ],
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 6.h),
           Text(
             name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.outfit(
-              fontSize: 14,
+              fontSize: 13.sp,
               fontWeight: FontWeight.w500,
               color: isDark ? Colors.white70 : const Color(0xFF1F1F1F),
             ),
@@ -1015,7 +1116,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            isDown ? "More" : "Less",
+            isDown
+                ? (AppLocalizations.of(context)?.translate('home.more') ??
+                      "More")
+                : (AppLocalizations.of(context)?.translate('home.less') ??
+                      "Less"),
             style: GoogleFonts.outfit(
               fontSize: 13,
               color: isDark ? Colors.white70 : Colors.black87,
@@ -1146,7 +1251,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      '${_pendingRequests.length} Pending Request${_pendingRequests.length > 1 ? 's' : ''}',
+                      AppLocalizations.of(context)?.translate(
+                            'home.pending_requests_title',
+                            arguments: {
+                              'count': _pendingRequests.length.toString(),
+                              'suffix': _pendingRequests.length > 1 ? 's' : '',
+                            },
+                          ) ??
+                          '${_pendingRequests.length} Pending Request${_pendingRequests.length > 1 ? 's' : ''}',
                       style: GoogleFonts.outfit(
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
@@ -1166,7 +1278,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         });
                       },
                       child: Text(
-                        "View all",
+                        AppLocalizations.of(
+                              context,
+                            )?.translate('home.view_all') ??
+                            "View all",
                         style: GoogleFonts.outfit(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -1248,6 +1363,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                   children: [
                                     TextSpan(
                                       text:
+                                          AppLocalizations.of(
+                                            context,
+                                          )?.translate(
+                                            'home.requested_amount',
+                                            arguments: {
+                                              'amount': formatAmount(amount),
+                                            },
+                                          ) ??
                                           'requested ₹${formatAmount(amount)}',
                                       style: GoogleFonts.outfit(
                                         color: isDark
@@ -1301,7 +1424,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
                           child: Text(
-                            'Decline',
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('home.decline') ??
+                                'Decline',
                             style: GoogleFonts.outfit(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
@@ -1359,7 +1485,15 @@ class _HomeScreenState extends State<HomeScreen> {
                             elevation: 0,
                           ),
                           child: Text(
-                            req['circle_id'] != null ? 'Approve' : 'Pay',
+                            req['circle_id'] != null
+                                ? (AppLocalizations.of(
+                                        context,
+                                      )?.translate('home.approve') ??
+                                      'Approve')
+                                : (AppLocalizations.of(
+                                        context,
+                                      )?.translate('home.pay') ??
+                                      'Pay'),
                             style: GoogleFonts.outfit(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
@@ -1419,7 +1553,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      '${_pendingCircleInvites.length} Circle Invite${_pendingCircleInvites.length > 1 ? 's' : ''}',
+                      AppLocalizations.of(context)?.translate(
+                            'home.circle_invite_title',
+                            arguments: {
+                              'count': _pendingCircleInvites.length.toString(),
+                              'suffix': _pendingCircleInvites.length > 1
+                                  ? 's'
+                                  : '',
+                            },
+                          ) ??
+                          '${_pendingCircleInvites.length} Circle Invite${_pendingCircleInvites.length > 1 ? 's' : ''}',
                       style: GoogleFonts.outfit(
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
@@ -1438,7 +1581,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         ).then((_) => _loadData(showLoading: false));
                       },
                       child: Text(
-                        "View all",
+                        AppLocalizations.of(
+                              context,
+                            )?.translate('home.view_all') ??
+                            "View all",
                         style: GoogleFonts.outfit(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
@@ -1503,7 +1649,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'invited you to their UPI Circle (₹${formatAmount(limit)}/mo)',
+                              AppLocalizations.of(context)?.translate(
+                                    'home.circle_invite_body',
+                                    arguments: {'amount': formatAmount(limit)},
+                                  ) ??
+                                  'invited you to their UPI Circle (₹${formatAmount(limit)}/mo)',
                               style: GoogleFonts.outfit(
                                 color: isDark
                                     ? Colors.white70
@@ -1652,17 +1802,17 @@ class _HomeScreenState extends State<HomeScreen> {
       timeRange = "Last 24 hours";
     }
 
-    String summaryTitle = "Daily Summary";
+    String summaryKey = 'home.daily_summary';
     if (_user != null && _user!['summary_frequency'] != null) {
       int freq = _user!['summary_frequency'];
       if (freq == 7) {
-        summaryTitle = "Weekly Summary";
+        summaryKey = 'home.weekly_summary';
       } else if (freq == 14) {
-        summaryTitle = "Bi-Weekly Summary";
+        summaryKey = 'home.biweekly_summary';
       } else if (freq == 30) {
-        summaryTitle = "Monthly Summary";
+        summaryKey = 'home.monthly_summary';
       } else if (freq != 1) {
-        summaryTitle = "Spending Summary";
+        summaryKey = 'home.spending_summary';
       }
     }
 
@@ -1701,9 +1851,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    summaryTitle,
+                    AppLocalizations.of(context)?.translate(summaryKey) ??
+                        'Daily Summary',
                     style: GoogleFonts.outfit(
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: FontWeight.w600,
                       color: textColor,
                     ),
@@ -1726,7 +1877,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Expanded(
                     child: _buildSummaryItem(
-                      label: "Received",
+                      label:
+                          AppLocalizations.of(
+                            context,
+                          )?.translate('analysis.incoming') ??
+                          "Received",
                       amount: received,
                       color: Colors.green,
                       isDark: isDark,

@@ -4,6 +4,7 @@ import 'package:mobile_app/api_service.dart';
 import 'fraud_scanning_animation.dart';
 import 'utils.dart';
 import 'package:flutter/foundation.dart'; // For kDebugMode
+import 'services/app_localizations.dart';
 
 class RiskAnalysisScreen extends StatefulWidget {
   const RiskAnalysisScreen({super.key});
@@ -124,6 +125,7 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
           _riskScore = 'SAFE';
           _isRisk = false;
           _riskExplanation =
+              AppLocalizations.of(context)?.translate('risk.verified_safe') ??
               'Analysis unavailable - proceeding with standard checks';
           _isLoading = false;
         });
@@ -134,11 +136,16 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
   String _getDefaultExplanation() {
     switch (_riskScore) {
       case 'HIGH':
-        return 'High risk transaction detected. Please review carefully.';
+        return AppLocalizations.of(context)?.translate('risk.f18_desc') ??
+            'High risk transaction detected. Please review carefully.';
       case 'WARN':
-        return 'Unusual pattern detected. Proceed with caution.';
+        return AppLocalizations.of(
+              context,
+            )?.translate('risk.security_warning') ??
+            'Unusual pattern detected. Proceed with caution.';
       default:
-        return 'Transaction appears safe.';
+        return AppLocalizations.of(context)?.translate('risk.verified_safe') ??
+            'Transaction appears safe.';
     }
   }
 
@@ -147,31 +154,31 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
     if (code == null) return null;
 
     if (code.contains("F18_DAILY")) {
-      return "Transaction exceeds the daily safety threshold for this recipient.";
+      return AppLocalizations.of(context)?.translate('risk.f18_desc');
     }
     if (code.contains("F1_VELOCITY")) {
-      return "Frequent transfers detected in a short window. This pattern matches known scam tactics.";
+      return AppLocalizations.of(context)?.translate('risk.f1_velocity_desc');
     }
     if (code.contains("AI_DETECTED")) {
-      return "Our 'Neural Shield' AI identified behavior incompatible with your typical transaction profile.";
+      return AppLocalizations.of(context)?.translate('risk.ai_detected_desc');
     }
     if (code.contains("F29_GEO")) {
-      return "Security Alert: Geographic anomaly detected. Transaction location is physically impossible.";
+      return AppLocalizations.of(context)?.translate('risk.geo_desc');
     }
     if (code.contains("F15_RAPID_DRAIN")) {
-      return "Warning: Unusual rapid depletion of funds detected. Verify if you are under pressure.";
+      return AppLocalizations.of(context)?.translate('risk.rapid_drain_desc');
     }
     if (code.contains("NEW_RECEIVER")) {
-      return "First-time interaction. We recommend verifying the recipient's identity verbally.";
+      return AppLocalizations.of(context)?.translate('risk.new_receiver_desc');
     }
     if (code.contains("SELF_TRANSFER")) {
-      return "Transfers to your own UPI ID are restricted for security reasons.";
+      return AppLocalizations.of(context)?.translate('risk.self_transfer_desc');
     }
     if (code.contains("F52_LAYERING")) {
-      return "Complex routing pattern detected. This is a high-risk indicator for money laundering.";
+      return AppLocalizations.of(context)?.translate('risk.layering_desc');
     }
     if (code.contains("F30_WEEKLY")) {
-      return "Weekly cumulative limit reached for this specific recipient.";
+      return AppLocalizations.of(context)?.translate('risk.weekly_limit_desc');
     }
 
     return null; // Fallback to generic
@@ -240,7 +247,9 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
               FraudScanningAnimation(isDark: useDarkTheme),
               const SizedBox(height: 24),
               Text(
-                "Analyzing Transaction...",
+                AppLocalizations.of(context)?.translate('risk.analyzing') ??
+                    "Analyzing Transaction...",
+                textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
@@ -249,12 +258,20 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                "Checking recipient pattern...",
+                AppLocalizations.of(
+                      context,
+                    )?.translate('risk.checking_pattern') ??
+                    "Checking recipient pattern...",
+                textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: Colors.grey[500]),
               ),
               const SizedBox(height: 4),
               Text(
-                "Verifying scam database...",
+                AppLocalizations.of(
+                      context,
+                    )?.translate('risk.verifying_scam_db') ??
+                    "Verifying scam database...",
+                textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: Colors.grey[500]),
               ),
               const SizedBox(height: 30),
@@ -265,7 +282,10 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
                   Icon(Icons.security, size: 16, color: Colors.grey[400]),
                   const SizedBox(width: 8),
                   Text(
-                    "Powered by ZaferPay AI",
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('common.powered_by') ??
+                        "Powered by ZaferPay AI",
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -327,13 +347,23 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
                 // Title
                 Text(
                   _isHighRisk
-                      ? "Critical Fraud Risk!"
+                      ? (AppLocalizations.of(
+                              context,
+                            )?.translate('risk.critical_fraud_risk') ??
+                            "Critical Fraud Risk!")
                       : (_isWarn
-                            ? "Security Warning"
-                            : "Transaction Verified Safe"),
+                            ? (AppLocalizations.of(
+                                    context,
+                                  )?.translate('risk.security_warning') ??
+                                  "Security Warning")
+                            : (AppLocalizations.of(
+                                    context,
+                                  )?.translate('risk.verified_safe') ??
+                                  "Transaction Verified Safe")),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 24,
+                    height: 1.2,
                     fontWeight: FontWeight.bold,
                     color: statusColor,
                   ),
@@ -359,14 +389,24 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
                         ),
                         child: Text(
                           _isHighRisk
-                              ? "CRITICAL RISK"
+                              ? (AppLocalizations.of(
+                                      context,
+                                    )?.translate('risk.critical_risk_badge') ??
+                                    "CRITICAL RISK")
                               : (_isRisk
-                                    ? "SECURITY WARNING"
-                                    : "VERIFIED SAFE"),
+                                    ? (AppLocalizations.of(context)?.translate(
+                                            'risk.security_warning_badge',
+                                          ) ??
+                                          "SECURITY WARNING")
+                                    : (AppLocalizations.of(context)?.translate(
+                                            'risk.verified_safe_badge',
+                                          ) ??
+                                          "VERIFIED SAFE")),
+                          textAlign: TextAlign.center,
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 13,
                             fontWeight: FontWeight.w800,
-                            letterSpacing: 1.2,
+                            letterSpacing: 1.0,
                             color: statusColor,
                           ),
                         ),
@@ -413,7 +453,10 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            "ZaferPay AI Breakdown",
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('risk.ai_breakdown') ??
+                                "ZaferPay AI Breakdown",
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -467,8 +510,19 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
                     ),
                     child: Text(
                       _isRisk
-                          ? (_isBypassable ? "Proceed with Caution" : "Go Back")
-                          : "Proceed to Secure Payment",
+                          ? (_isBypassable
+                                ? (AppLocalizations.of(context)?.translate(
+                                        'risk.proceed_caution_btn',
+                                      ) ??
+                                      "Proceed with Caution")
+                                : (AppLocalizations.of(
+                                        context,
+                                      )?.translate('risk.go_back_btn') ??
+                                      "Go Back"))
+                          : (AppLocalizations.of(
+                                  context,
+                                )?.translate('risk.secure_payment_btn') ??
+                                "Proceed to Secure Payment"),
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -495,7 +549,8 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
         // Fallback for unknown codes (generic warning)
         return [
           _buildRiskItem(
-            "Unusual activity detected.",
+            AppLocalizations.of(context)?.translate('risk.unusual_activity') ??
+                "Unusual activity detected.",
             Icons.warning_amber_rounded,
             false,
             textColor,
@@ -504,7 +559,10 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
           _buildRiskItem(
             _riskExplanation.isNotEmpty
                 ? _riskExplanation
-                : "Please revie   w before proceeding.",
+                : (AppLocalizations.of(
+                        context,
+                      )?.translate('risk.review_before') ??
+                      "Please review before proceeding."),
             Icons.shield_outlined,
             false,
             textColor,
@@ -515,14 +573,16 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
       // SAFE STATE - Same as before
       return [
         _buildRiskItem(
-          "Receiver identity has been successfully verified by ZaferPay.",
+          AppLocalizations.of(context)?.translate('risk.identity_verified') ??
+              "Receiver identity has been successfully verified by ZaferPay.",
           Icons.verified_rounded,
           true,
           textColor,
         ),
         const SizedBox(height: 16),
         _buildRiskItem(
-          "Transaction amount is within your normal spending patterns.",
+          AppLocalizations.of(context)?.translate('risk.within_patterns') ??
+              "Transaction amount is within your normal spending patterns.",
           Icons.check_circle_outline_rounded,
           true,
           textColor,
@@ -536,39 +596,53 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
     List<Widget> items = [];
 
     // 1. PRIMARY FINDING
-    String primaryTitle = "Primary Finding";
-    String desc = "Potentially unsafe transaction.";
+    String primaryTitle =
+        AppLocalizations.of(context)?.translate('risk.primary_finding') ??
+        "Primary Finding";
+    String desc =
+        AppLocalizations.of(context)?.translate('risk.f18_desc') ??
+        "Potentially unsafe transaction.";
     IconData icon = Icons.warning_amber_rounded;
 
     if (code.contains("F18") || code.contains("DAILY_LIMIT")) {
-      desc = "Daily limit exceeded for this receiver type.";
+      desc =
+          AppLocalizations.of(context)?.translate('risk.f18_desc') ??
+          "Daily limit exceeded for this receiver type.";
       icon = Icons.block_flipped;
     } else if (code.contains("F1") || code.contains("VELOCITY")) {
       desc =
+          AppLocalizations.of(context)?.translate('risk.f1_velocity_desc') ??
           "Sending too frequently. This pattern matches rapid automated scams.";
       icon = Icons.speed_rounded;
     } else if (code.contains("AI_DETECTED")) {
       desc =
+          AppLocalizations.of(context)?.translate('risk.ai_detected_desc') ??
           "Our Neural Shield detected behavior that doesn't match your profile.";
       icon = Icons.psychology_rounded;
     } else if (code.contains("GEO") || code.contains("LOCATION")) {
       desc =
+          AppLocalizations.of(context)?.translate('risk.geo_desc') ??
           "Impossible travel detected. Your phone is at a different location than the transaction.";
       icon = Icons.location_off_rounded;
     } else if (code.contains("F40") || code.contains("NEW_RECEIVER")) {
       desc =
+          AppLocalizations.of(context)?.translate('risk.new_receiver_desc') ??
           "High-value transfer to a recipient you haven't interacted with before.";
       icon = Icons.person_add_disabled_rounded;
     } else if (code.contains("F52") || code.contains("LAYERING")) {
       desc =
+          AppLocalizations.of(context)?.translate('risk.layering_desc') ??
           "Money is being routed through multiple layers, which is a high-risk indicator.";
       icon = Icons.account_tree_rounded;
     } else if (code.contains("F5") || code.contains("SPIKE")) {
       desc =
+          AppLocalizations.of(context)?.translate('risk.spike_desc') ??
           "This payment is 10x higher than your usual average for this category.";
       icon = Icons.trending_up_rounded;
     } else if (code.contains("SELF_TRANSFER")) {
-      desc = "Self-transfer is restricted to prevent unintentional loops.";
+      desc =
+          AppLocalizations.of(context)?.translate('risk.self_transfer_desc') ??
+          "Self-transfer is restricted to prevent unintentional loops.";
       icon = Icons.loop_rounded;
     } else {
       desc = _riskExplanation;
@@ -584,11 +658,18 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
         items.add(const SizedBox(height: 16));
         items.add(
           _buildRiskItem(
-            "Recipient has been flagged by other users or has low network tenure.",
+            AppLocalizations.of(
+                  context,
+                )?.translate('risk.trust_score_low_desc') ??
+                "Recipient has been flagged by other users or has low network tenure.",
             Icons.handshake_outlined,
             false,
             textColor,
-            title: "Security Context",
+            title:
+                AppLocalizations.of(
+                  context,
+                )?.translate('risk.security_context') ??
+                "Security Context",
           ),
         );
       } else if ((_fraudFeatures!['is_new_receiver'] ?? 0) == 1 &&
@@ -596,11 +677,16 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
         items.add(const SizedBox(height: 16));
         items.add(
           _buildRiskItem(
-            "You are interacting with this individual for the first time on ZaferPay.",
+            AppLocalizations.of(context)?.translate('risk.never_paid_desc') ??
+                "You are interacting with this individual for the first time on ZaferPay.",
             Icons.person_outline_rounded,
             false,
             textColor,
-            title: "Network History",
+            title:
+                AppLocalizations.of(
+                  context,
+                )?.translate('risk.network_history') ??
+                "Network History",
           ),
         );
       }
@@ -611,20 +697,26 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
     items.add(Divider(color: textColor.withValues(alpha: 0.1)));
     items.add(const SizedBox(height: 16));
 
-    String recTitle = "Our Recommendation";
+    String recTitle =
+        AppLocalizations.of(context)?.translate('risk.our_recommendation') ??
+        "Our Recommendation";
     String recDesc =
+        AppLocalizations.of(context)?.translate('risk.rec_call_confirm') ??
         "Call the person and confirm their identity before proceeding.";
     IconData recIcon = Icons.lightbulb_outline_rounded;
 
     if (_isHighRisk) {
       recDesc =
+          AppLocalizations.of(context)?.translate('risk.rec_do_not_proceed') ??
           "Do NOT proceed. Contact support if you believe this is an error.";
       recIcon = Icons.gpp_maybe_rounded;
     } else if (code.contains("NEW_RECEIVER")) {
       recDesc =
+          AppLocalizations.of(context)?.translate('risk.rec_double_check') ??
           "Double-check the UPI ID name. Scammers often use similar-looking names.";
     } else if (code.contains("VELOCITY")) {
       recDesc =
+          AppLocalizations.of(context)?.translate('risk.rec_wait_30') ??
           "Wait at least 30 minutes before trying again to avoid auto-blocking.";
     }
 
@@ -648,7 +740,8 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              "AI Confidence",
+              AppLocalizations.of(context)?.translate('risk.ai_confidence') ??
+                  "AI Confidence",
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -678,8 +771,14 @@ class _RiskAnalysisScreenState extends State<RiskAnalysisScreen> {
         const SizedBox(height: 8),
         Text(
           _aiConfidence > 0.9
-              ? "High-certainty verification powered by Neural Shield v5.0"
-              : "Pattern analysis based on recent network telemetry",
+              ? (AppLocalizations.of(
+                      context,
+                    )?.translate('risk.confidence_high') ??
+                    "High-certainty verification powered by Neural Shield v5.0")
+              : (AppLocalizations.of(
+                      context,
+                    )?.translate('risk.confidence_pattern') ??
+                    "Pattern analysis based on recent network telemetry"),
           style: TextStyle(
             fontSize: 10,
             fontStyle: FontStyle.italic,

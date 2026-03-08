@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import '../api_service.dart';
 import '../contact_service.dart';
+import '../services/app_localizations.dart';
 
 class SelectMemberScreen extends StatefulWidget {
   const SelectMemberScreen({super.key});
@@ -166,7 +167,10 @@ class _SelectMemberScreenState extends State<SelectMemberScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Select Member"),
+        title: Text(
+          AppLocalizations.of(context)?.translate('circle.select_member') ??
+              "Select Member",
+        ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(70),
           child: Padding(
@@ -175,7 +179,11 @@ class _SelectMemberScreenState extends State<SelectMemberScreen> {
               controller: _searchController,
               autofocus: true,
               decoration: InputDecoration(
-                hintText: "Search name, phone or UPI ID",
+                hintText:
+                    AppLocalizations.of(
+                      context,
+                    )?.translate('circle.search_hint') ??
+                    "Search name, phone or UPI ID",
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _isLookingUp
                     ? const Padding(
@@ -204,7 +212,12 @@ class _SelectMemberScreenState extends State<SelectMemberScreen> {
           : ListView(
               children: [
                 if (_foundUser != null || _globalUsers.isNotEmpty) ...[
-                  _buildSectionHeader("Global Reach"),
+                  _buildSectionHeader(
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('circle.global_reach') ??
+                        "Global Reach",
+                  ),
                   if (_foundUser != null)
                     _buildUserTile(
                       _foundUser!['username'] ?? "User",
@@ -243,7 +256,10 @@ class _SelectMemberScreenState extends State<SelectMemberScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            "User not found in ZaferPay database.",
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('circle.user_not_found') ??
+                                "User not found in ZaferPay database.",
                             style: TextStyle(color: Colors.grey.shade600),
                           ),
                         ),
@@ -252,7 +268,15 @@ class _SelectMemberScreenState extends State<SelectMemberScreen> {
                   ),
 
                 _buildSectionHeader(
-                  _searchQuery.isEmpty ? "All Contacts" : "Matching Contacts",
+                  _searchQuery.isEmpty
+                      ? (AppLocalizations.of(
+                              context,
+                            )?.translate('circle.all_contacts') ??
+                            "All Contacts")
+                      : (AppLocalizations.of(
+                              context,
+                            )?.translate('circle.matching_contacts') ??
+                            "Matching Contacts"),
                 ),
                 ..._filteredContacts.map((contact) {
                   final upi = ContactService.instance.contactUpiMap[contact.id];
@@ -265,7 +289,12 @@ class _SelectMemberScreenState extends State<SelectMemberScreen> {
                         : "No phone",
                     null, // Use name letter as icon
                     isVerified: isRegistered,
-                    customSubtitle: isRegistered ? upi : "Not on ZaferPay",
+                    customSubtitle: isRegistered
+                        ? upi
+                        : (AppLocalizations.of(
+                                context,
+                              )?.translate('circle.not_on_zaferpay') ??
+                              "Not on ZaferPay"),
                     onTap: isRegistered
                         ? () => _selectUser(upi, contact.displayName)
                         : null,
@@ -276,9 +305,16 @@ class _SelectMemberScreenState extends State<SelectMemberScreen> {
                     _foundUser == null &&
                     _globalUsers.isEmpty &&
                     !_isLookingUp)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 40),
-                    child: Center(child: Text("No matching contacts found")),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 40),
+                    child: Center(
+                      child: Text(
+                        AppLocalizations.of(
+                              context,
+                            )?.translate('circle.no_matching') ??
+                            "No matching contacts found",
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -350,7 +386,8 @@ class _SelectMemberScreenState extends State<SelectMemberScreen> {
           : TextButton(
               onPressed: null,
               child: Text(
-                "Invite",
+                AppLocalizations.of(context)?.translate('circle.invite') ??
+                    "Invite",
                 style: TextStyle(color: Colors.grey.shade400),
               ),
             ),

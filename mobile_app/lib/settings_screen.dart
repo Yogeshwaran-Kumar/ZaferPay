@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'services/app_localizations.dart';
 import 'main.dart';
 import 'api_service.dart';
 import 'services/biometric_service.dart';
@@ -75,9 +76,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
               final date = DateTime.parse(pinUpdatedAt);
               final diff = DateTime.now().difference(date).inDays;
               if (diff == 0) {
-                _pinUpdatedAtText = 'Last changed: Today';
+                _pinUpdatedAtText =
+                    AppLocalizations.of(
+                      context,
+                    )?.translate('settings.last_changed_today') ??
+                    'Last changed: Today';
               } else {
-                _pinUpdatedAtText = 'Last changed: $diff days ago';
+                _pinUpdatedAtText =
+                    AppLocalizations.of(context)?.translate(
+                      'settings.last_changed_days',
+                      arguments: {'days': diff.toString()},
+                    ) ??
+                    'Last changed: $diff days ago';
               }
             } catch (_) {}
           }
@@ -91,17 +101,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final shouldLogout = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('Are you sure you want to logout?'),
+        title: Text(
+          AppLocalizations.of(context)?.translate('settings.logout') ??
+              'Logout',
+        ),
+        content: Text(
+          AppLocalizations.of(context)?.translate('profile.logout_confirm') ??
+              'Are you sure you want to logout?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(
+              AppLocalizations.of(context)?.translate('details.cancel') ??
+                  'Cancel',
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Logout'),
+            child: Text(
+              AppLocalizations.of(context)?.translate('settings.logout') ??
+                  'Logout',
+            ),
           ),
         ],
       ),
@@ -130,7 +152,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
-          'Settings',
+          AppLocalizations.of(context)?.translate('settings.title') ??
+              'Settings',
           style: TextStyle(
             color: Theme.of(context).textTheme.titleLarge?.color,
             fontSize: 20,
@@ -147,7 +170,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Security',
+                AppLocalizations.of(context)?.translate('settings.security') ??
+                    'Security',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
@@ -158,8 +182,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               _buildSwitchTile(
                 icon: Icons.security_outlined,
-                title: 'App Lock',
-                subtitle: 'Require PIN to open ZaferPay',
+                title:
+                    AppLocalizations.of(
+                      context,
+                    )?.translate('settings.app_lock') ??
+                    'App Lock',
+                subtitle:
+                    AppLocalizations.of(
+                      context,
+                    )?.translate('settings.app_lock_subtitle') ??
+                    'Require PIN to open ZaferPay',
                 value: _appLockEnabled,
                 onChanged: (value) async {
                   if (value) {
@@ -180,18 +212,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     bool? confirmed = await showDialog<bool>(
                       context: context,
                       builder: (context) => AlertDialog(
-                        title: const Text('Disable App Lock?'),
-                        content: const Text(
-                          'Your app will open without a PIN.',
+                        title: Text(
+                          AppLocalizations.of(
+                                context,
+                              )?.translate('settings.disable_lock_title') ??
+                              'Disable App Lock?',
+                        ),
+                        content: Text(
+                          AppLocalizations.of(
+                                context,
+                              )?.translate('settings.disable_lock_msg') ??
+                              'Your app will open without a PIN.',
                         ),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(context, false),
-                            child: const Text('Cancel'),
+                            child: Text(
+                              AppLocalizations.of(
+                                    context,
+                                  )?.translate('details.cancel') ??
+                                  'Cancel',
+                            ),
                           ),
                           TextButton(
                             onPressed: () => Navigator.pop(context, true),
-                            child: const Text('Disable'),
+                            child: Text(
+                              AppLocalizations.of(
+                                    context,
+                                  )?.translate('settings.disable') ??
+                                  'Disable',
+                            ),
                           ),
                         ],
                       ),
@@ -213,8 +263,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               if (_hasMpin)
                 _buildActionTile(
                   icon: Icons.password_outlined,
-                  title: 'Change App Login PIN',
-                  subtitle: 'Update the PIN used to open ZaferPay',
+                  title:
+                      AppLocalizations.of(
+                        context,
+                      )?.translate('settings.change_pin') ??
+                      'Change App Login PIN',
+                  subtitle:
+                      AppLocalizations.of(
+                        context,
+                      )?.translate('settings.change_pin_subtitle') ??
+                      'Update the PIN used to open ZaferPay',
                   onTap: () async {
                     await Navigator.pushNamed(context, '/change-mpin');
                     _loadUserState();
@@ -225,7 +283,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               _buildActionTile(
                 icon: Icons.pin_outlined,
-                title: 'Change UPI PIN',
+                title:
+                    AppLocalizations.of(
+                      context,
+                    )?.translate('settings.change_upi_pin') ??
+                    'Change UPI PIN',
                 subtitle: _pinUpdatedAtText,
                 onTap: () async {
                   await Navigator.pushNamed(context, '/change-upi-pin');
@@ -237,10 +299,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               _buildSwitchTile(
                 icon: Icons.fingerprint_outlined,
-                title: 'Biometric Login',
+                title:
+                    AppLocalizations.of(
+                      context,
+                    )?.translate('settings.biometric') ??
+                    'Biometric Login',
                 subtitle: _biometricAvailable
-                    ? 'Use fingerprint or face to unlock the app'
-                    : 'Not available on this device',
+                    ? (AppLocalizations.of(
+                            context,
+                          )?.translate('settings.biometric_subtitle') ??
+                          'Use fingerprint or face to unlock the app')
+                    : (AppLocalizations.of(
+                            context,
+                          )?.translate('settings.biometric_not_available') ??
+                          'Not available on this device'),
                 value: _biometricAvailable && _biometricEnabled,
                 onChanged: _biometricAvailable
                     ? (value) async {
@@ -248,11 +320,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         if (value) {
                           confirmed = await _biometric.authenticate(
                             reason:
+                                AppLocalizations.of(context)?.translate(
+                                  'settings.confirm_enable_biometric',
+                                ) ??
                                 'Confirm your biometric to ENABLE this feature',
                           );
                         } else {
                           confirmed = await _biometric.authenticate(
                             reason:
+                                AppLocalizations.of(context)?.translate(
+                                  'settings.confirm_disable_biometric',
+                                ) ??
                                 'Security Check: Confirm biometric to DISABLE this feature',
                           );
                         }
@@ -275,7 +353,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               const SizedBox(height: 32),
               Text(
-                'Preferences',
+                AppLocalizations.of(
+                      context,
+                    )?.translate('settings.preferences') ??
+                    'Preferences',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
@@ -288,7 +369,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               const SizedBox(height: 32),
               Text(
-                'Appearance',
+                AppLocalizations.of(
+                      context,
+                    )?.translate('settings.appearance') ??
+                    'Appearance',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
@@ -304,10 +388,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     icon: mode == ThemeMode.dark
                         ? Icons.dark_mode_outlined
                         : Icons.light_mode_outlined,
-                    title: 'Theme',
+                    title:
+                        AppLocalizations.of(
+                          context,
+                        )?.translate('settings.theme') ??
+                        'Theme',
                     subtitle: mode == ThemeMode.dark
-                        ? 'Dark Mode'
-                        : 'Light Mode',
+                        ? (AppLocalizations.of(
+                                context,
+                              )?.translate('settings.dark_mode') ??
+                              'Dark Mode')
+                        : (AppLocalizations.of(
+                                context,
+                              )?.translate('settings.light_mode') ??
+                              'Light Mode'),
                     onTap: () {
                       _showThemeBottomSheet(isDark);
                     },
@@ -326,9 +420,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   color: Colors.red,
                   size: 28,
                 ),
-                title: const Text(
-                  'Logout',
-                  style: TextStyle(
+                title: Text(
+                  AppLocalizations.of(context)?.translate('settings.logout') ??
+                      'Logout',
+                  style: const TextStyle(
                     color: Colors.red,
                     fontWeight: FontWeight.w500,
                     fontSize: 16,
@@ -349,7 +444,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'Powered by ZaferPay',
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('common.powered_by') ??
+                          'Powered by ZaferPay',
                       style: GoogleFonts.outfit(
                         color: Colors.grey.shade400,
                         fontWeight: FontWeight.w500,
@@ -440,18 +538,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   String _getFrequencyLabel(int p) {
-    if (p == 1) return 'Daily';
-    if (p == 7) return 'Weekly';
-    if (p == 14) return 'Bi-Weekly';
-    if (p == 30) return 'Monthly';
-    return '$p days';
+    final loc = AppLocalizations.of(context);
+    if (p == 1) return loc?.translate('settings.daily') ?? 'Daily';
+    if (p == 7) return loc?.translate('settings.weekly') ?? 'Weekly';
+    if (p == 14) return loc?.translate('settings.biweekly') ?? 'Bi-Weekly';
+    if (p == 30) return loc?.translate('settings.monthly') ?? 'Monthly';
+    return loc?.translate(
+          'settings.days_custom',
+          arguments: {'days': p.toString()},
+        ) ??
+        '$p days';
   }
 
   Widget _buildSummaryFrequencyTile(bool isDark, Color iconColor) {
     return _buildActionTile(
       icon: Icons.notifications_outlined,
-      title: 'Summary Notifications',
-      subtitle: 'Frequency: ${_getFrequencyLabel(_summaryFrequency)}',
+      title:
+          AppLocalizations.of(
+            context,
+          )?.translate('settings.summary_notifications') ??
+          'Summary Notifications',
+      subtitle:
+          AppLocalizations.of(context)?.translate(
+            'settings.frequency_label',
+            arguments: {'label': _getFrequencyLabel(_summaryFrequency)},
+          ) ??
+          'Frequency: ${_getFrequencyLabel(_summaryFrequency)}',
       onTap: () {
         _showFrequencyBottomSheet(isDark);
       },
@@ -474,7 +586,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               const SizedBox(height: 16),
               Text(
-                'Summary Frequency',
+                AppLocalizations.of(
+                      context,
+                    )?.translate('settings.summary_frequency') ??
+                    'Summary Frequency',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -524,7 +639,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               const SizedBox(height: 16),
               Text(
-                'Theme',
+                AppLocalizations.of(context)?.translate('settings.theme') ??
+                    'Theme',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -533,7 +649,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 16),
               ListTile(
-                title: const Text('Light Mode'),
+                title: Text(
+                  AppLocalizations.of(
+                        context,
+                      )?.translate('settings.light_mode') ??
+                      'Light Mode',
+                ),
                 trailing: themeNotifier.value == ThemeMode.light
                     ? const Icon(
                         Icons.check_circle_rounded,
@@ -546,7 +667,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 },
               ),
               ListTile(
-                title: const Text('Dark Mode'),
+                title: Text(
+                  AppLocalizations.of(
+                        context,
+                      )?.translate('settings.dark_mode') ??
+                      'Dark Mode',
+                ),
                 trailing: themeNotifier.value == ThemeMode.dark
                     ? const Icon(
                         Icons.check_circle_rounded,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'api_service.dart';
+import 'services/app_localizations.dart';
 
 class ChangePinScreen extends StatefulWidget {
   final bool isMpin;
@@ -106,10 +107,13 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
         // Mismatch
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('PIN mismatch! Please enter new PIN again.'),
+            SnackBar(
+              content: Text(
+                AppLocalizations.of(context)?.translate('pin.mismatch') ??
+                    'PIN mismatch! Please enter new PIN again.',
+              ),
               backgroundColor: Colors.red,
-              duration: Duration(seconds: 2),
+              duration: const Duration(seconds: 2),
             ),
           );
         }
@@ -131,8 +135,11 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
 
     if (_api.failedAttempts == 1) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Incorrect Current PIN'),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context)?.translate('pin.incorrect_current') ??
+                'Incorrect Current PIN',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -141,14 +148,21 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
         context: context,
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
-          title: const Text("Security Warning"),
-          content: const Text(
-            "Warning: You have tried too many times. One more failed attempt will log you out.",
+          title: Text(
+            AppLocalizations.of(context)?.translate('pin.security_warning') ??
+                "Security Warning",
+          ),
+          content: Text(
+            AppLocalizations.of(context)?.translate('pin.too_many_attempts') ??
+                "Warning: You have tried too many times. One more failed attempt will log you out.",
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text("I Understand"),
+              child: Text(
+                AppLocalizations.of(context)?.translate('pin.i_understand') ??
+                    "I Understand",
+              ),
             ),
           ],
         ),
@@ -162,10 +176,14 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
     showDialog(
       context: context,
       barrierDismissible: false, // User cannot close this
-      builder: (ctx) => const AlertDialog(
-        title: Text("Account Locked"),
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          AppLocalizations.of(context)?.translate('pin.account_locked') ??
+              "Account Locked",
+        ),
         content: Text(
-          "Too many incorrect attempts so your account has been logged out.",
+          AppLocalizations.of(context)?.translate('pin.account_locked_desc') ??
+              "Too many incorrect attempts so your account has been logged out.",
         ),
       ),
     );
@@ -182,7 +200,12 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
     if (_username.isEmpty) {
       // Should catch this edge case
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error: User details not loaded')),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context)?.translate('pin.error_user_details') ??
+                'Error: User details not loaded',
+          ),
+        ),
       );
       return;
     }
@@ -198,8 +221,13 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
         if (success) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('App Lock disabled successfully!'),
+            SnackBar(
+              content: Text(
+                AppLocalizations.of(
+                      context,
+                    )?.translate('pin.app_lock_disabled') ??
+                    'App Lock disabled successfully!',
+              ),
               backgroundColor: Colors.green,
             ),
           );
@@ -268,8 +296,11 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
     if (mounted) {
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('PIN Changed Successfully!'),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context)?.translate('pin.pin_changed') ??
+                  'PIN Changed Successfully!',
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -277,8 +308,11 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
         Navigator.pop(context, true);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to change PIN. Try again.'),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context)?.translate('pin.fail_change') ??
+                  'Failed to change PIN. Try again.',
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -295,16 +329,27 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
 
   String get _title {
     if (widget.isDisableOnly) {
-      return "Confirm App Lock PIN";
+      return AppLocalizations.of(context)?.translate('pin.confirm_app_lock') ??
+          "Confirm App Lock PIN";
     }
-    String prefix = widget.isMpin ? "App Login PIN" : "UPI PIN";
+    String typeLabel = widget.isMpin
+        ? (AppLocalizations.of(context)?.translate('pin.app_login_pin') ??
+              "App Login PIN")
+        : (AppLocalizations.of(context)?.translate('pin.upi_pin') ?? "UPI PIN");
+
     switch (_step) {
       case 0:
-        return "Enter Current $prefix";
+        return (AppLocalizations.of(context)?.translate('pin.enter_current') ??
+                "Enter Current {type}")
+            .replaceAll('{type}', typeLabel);
       case 1:
-        return "Enter New $prefix";
+        return (AppLocalizations.of(context)?.translate('pin.enter_new') ??
+                "Enter New {type}")
+            .replaceAll('{type}', typeLabel);
       case 2:
-        return "Confirm New $prefix";
+        return (AppLocalizations.of(context)?.translate('pin.confirm_new') ??
+                "Confirm New {type}")
+            .replaceAll('{type}', typeLabel);
       default:
         return "";
     }

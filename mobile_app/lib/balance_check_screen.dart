@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'api_service.dart';
+import 'services/app_localizations.dart';
 
 class BalanceCheckScreen extends StatefulWidget {
   final String mobileNumber;
@@ -61,8 +62,11 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
 
     if (_api.failedAttempts == 1) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Incorrect PIN. Please try again.'),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context)?.translate('pin.incorrect') ??
+                'Incorrect PIN. Please try again.',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -71,14 +75,21 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
         context: context,
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
-          title: const Text("Security Warning"),
-          content: const Text(
-            "Warning: You have tried too many times. One more failed attempt will log you out.",
+          title: Text(
+            AppLocalizations.of(context)?.translate('pin.security_warning') ??
+                "Security Warning",
+          ),
+          content: Text(
+            AppLocalizations.of(context)?.translate('pin.too_many_attempts') ??
+                "Warning: You have tried too many times. One more failed attempt will log you out.",
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text("I Understand"),
+              child: Text(
+                AppLocalizations.of(context)?.translate('pin.i_understand') ??
+                    "I Understand",
+              ),
             ),
           ],
         ),
@@ -93,10 +104,14 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
     showDialog(
       context: context,
       barrierDismissible: false, // User cannot close this
-      builder: (ctx) => const AlertDialog(
-        title: Text("Account Locked"),
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          AppLocalizations.of(context)?.translate('pin.account_locked') ??
+              "Account Locked",
+        ),
         content: Text(
-          "Too many incorrect attempts so your account has been logged out.",
+          AppLocalizations.of(context)?.translate('pin.account_locked_desc') ??
+              "Too many incorrect attempts so your account has been logged out.",
         ),
       ),
     );
@@ -138,9 +153,13 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
         context: context,
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
-          title: const Text("PIN Expired"),
-          content: const Text(
-            "Security requirement: Your UPI PIN has expired (6 months old). Please update it to continue.",
+          title: Text(
+            AppLocalizations.of(context)?.translate('pin.expired') ??
+                "PIN Expired",
+          ),
+          content: Text(
+            AppLocalizations.of(context)?.translate('pin.expired_desc') ??
+                "Security requirement: Your UPI PIN has expired (6 months old). Please update it to continue.",
           ),
           actions: [
             TextButton(
@@ -148,7 +167,10 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
                 Navigator.pop(ctx);
                 Navigator.pushNamed(context, '/change-upi-pin');
               },
-              child: const Text("Update PIN"),
+              child: Text(
+                AppLocalizations.of(context)?.translate('pin.update') ??
+                    "Update PIN",
+              ),
             ),
           ],
         ),
@@ -241,7 +263,10 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    'You are checking your account balance',
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('pin.checking_balance') ??
+                        'You are checking your account balance',
                     style: GoogleFonts.outfit(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -283,7 +308,8 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Verified',
+                  AppLocalizations.of(context)?.translate('pin.verified') ??
+                      'Verified',
                   style: GoogleFonts.outfit(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -296,7 +322,8 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
             Column(
               children: [
                 Text(
-                  'Enter your PIN',
+                  AppLocalizations.of(context)?.translate('pin.enter_pin') ??
+                      'Enter your PIN',
                   style: GoogleFonts.outfit(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
@@ -349,13 +376,18 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
                   color: Color(0xFFD97706),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  'Never enter your UPI PIN to receive money',
-                  style: GoogleFonts.outfit(
-                    fontSize: 12,
-                    color: isDark
-                        ? Colors.grey.shade400
-                        : const Color(0xFF6B7280),
+                Expanded(
+                  child: Text(
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('pin.never_share_pin') ??
+                        'Never enter your UPI PIN to receive money',
+                    style: GoogleFonts.outfit(
+                      fontSize: 12,
+                      color: isDark
+                          ? Colors.grey.shade400
+                          : const Color(0xFF6B7280),
+                    ),
                   ),
                 ),
               ],
@@ -422,9 +454,12 @@ class _BalanceCheckScreenState extends State<BalanceCheckScreen> {
                               color: const Color(0xFF2563EB),
                               borderRadius: BorderRadius.circular(30),
                             ),
-                            child: const Text(
-                              'Check',
-                              style: TextStyle(
+                            child: Text(
+                              AppLocalizations.of(
+                                    context,
+                                  )?.translate('pin.check') ??
+                                  'Check',
+                              style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.white,

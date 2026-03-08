@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'services/app_localizations.dart';
 import 'api_service.dart';
 import 'mcc_helper.dart';
 import 'main.dart';
@@ -326,7 +328,11 @@ class _PayScreenState extends State<PayScreen> {
 
   void _onInvite() {
     SharePlus.instance.share(
-      ShareParams(text: 'Hey! Join me on 2Way app for secure payments.'),
+      ShareParams(
+        text:
+            AppLocalizations.of(context)?.translate('pay.invite_msg') ??
+            'Hey! Join me on ZaferPay app for secure payments.',
+      ),
     );
   }
 
@@ -561,7 +567,8 @@ class _PayScreenState extends State<PayScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "Pay anyone",
+              AppLocalizations.of(context)?.translate('pay.title') ??
+                  "Pay anyone",
               style: TextStyle(
                 color: Theme.of(context).textTheme.titleLarge?.color,
                 fontSize: 18,
@@ -569,7 +576,8 @@ class _PayScreenState extends State<PayScreen> {
               ),
             ),
             Text(
-              "Pay any UPI app using name, number or UPI ID",
+              AppLocalizations.of(context)?.translate('pay.subtitle') ??
+                  "Pay any UPI app using name, number or UPI ID",
               style: TextStyle(
                 color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                 fontSize: 12,
@@ -603,7 +611,11 @@ class _PayScreenState extends State<PayScreen> {
                       color: Theme.of(context).textTheme.bodyLarge?.color,
                     ),
                     decoration: InputDecoration(
-                      hintText: "Enter name, mobile number or UPI ID",
+                      hintText:
+                          AppLocalizations.of(
+                            context,
+                          )?.translate('pay.search_hint') ??
+                          "Enter name, mobile number or UPI ID",
                       hintStyle: TextStyle(
                         color: isDark
                             ? Colors.grey.shade500
@@ -668,7 +680,10 @@ class _PayScreenState extends State<PayScreen> {
 
                   if (_filteredContacts.isNotEmpty) ...[
                     Text(
-                      "Contacts",
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('contacts.select_contact') ??
+                          "Contacts",
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -730,7 +745,10 @@ class _PayScreenState extends State<PayScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            "No matching users found",
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('pay.no_matches') ??
+                                "No matching users found",
                             style: TextStyle(color: Colors.grey.shade600),
                           ),
                         ],
@@ -740,7 +758,10 @@ class _PayScreenState extends State<PayScreen> {
                   // Recents
                   if (_recentPeople.isNotEmpty) ...[
                     Text(
-                      "Recent People",
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('pay.recent_people') ??
+                          "Recent People",
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -754,11 +775,12 @@ class _PayScreenState extends State<PayScreen> {
 
                   // All Contacts
                   Text(
-                    "All people on UPI",
-                    style: TextStyle(
-                      fontSize: 18,
+                    AppLocalizations.of(context)?.translate('home.pay') ??
+                        'Pay',
+                    style: GoogleFonts.outfit(
+                      fontSize: 28,
                       fontWeight: FontWeight.bold,
-                      color: Theme.of(context).textTheme.bodyLarge?.color,
+                      color: isDark ? Colors.white : Colors.black87,
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -768,7 +790,10 @@ class _PayScreenState extends State<PayScreen> {
                         ? Padding(
                             padding: const EdgeInsets.symmetric(vertical: 20),
                             child: Text(
-                              "No contacts found",
+                              AppLocalizations.of(
+                                    context,
+                                  )?.translate('pay.no_contacts') ??
+                                  "No contacts found",
                               style: TextStyle(color: Colors.grey.shade500),
                             ),
                           )

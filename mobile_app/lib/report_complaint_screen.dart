@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'services/app_localizations.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'contact_service.dart';
 import 'api_service.dart';
@@ -23,12 +24,16 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
   String? _selectedReason;
   final TextEditingController _otherReasonController = TextEditingController();
 
-  final List<String> _complaintReasons = [
-    'Fraudulent Transaction',
-    'Service not received',
-    'Sent to wrong person',
-    'Unauthorized Transaction',
-    'Other',
+  List<String> get _complaintReasons => [
+    AppLocalizations.of(context)?.translate('details.fraud_txn') ??
+        'Fraudulent Transaction',
+    AppLocalizations.of(context)?.translate('details.service_not_received') ??
+        'Service not received',
+    AppLocalizations.of(context)?.translate('details.wrongly_sent') ??
+        'Sent to wrong person',
+    AppLocalizations.of(context)?.translate('details.unauthorized_txn') ??
+        'Unauthorized Transaction',
+    AppLocalizations.of(context)?.translate('details.other') ?? 'Other',
   ];
 
   @override
@@ -53,7 +58,10 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Please select a reason for the complaint.',
+            AppLocalizations.of(
+                  context,
+                )?.translate('details.select_reason_error') ??
+                'Please select a reason for the complaint.',
             style: GoogleFonts.outfit(color: Colors.white),
           ),
           backgroundColor: Colors.red.shade600,
@@ -62,12 +70,17 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
       return;
     }
 
-    if (_selectedReason == 'Other' &&
+    if (_selectedReason ==
+            (AppLocalizations.of(context)?.translate('details.other') ??
+                'Other') &&
         _otherReasonController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Please provide a description when selecting "Other".',
+            AppLocalizations.of(
+                  context,
+                )?.translate('details.other_reason_error') ??
+                'Please provide a description when selecting "Other".',
             style: GoogleFonts.outfit(color: Colors.white),
           ),
           backgroundColor: Colors.red.shade600,
@@ -83,7 +96,10 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Unable to identify the reported account.',
+            AppLocalizations.of(
+                  context,
+                )?.translate('details.identify_account_error') ??
+                'Unable to identify the reported account.',
             style: GoogleFonts.outfit(color: Colors.white),
           ),
           backgroundColor: Colors.red.shade600,
@@ -127,7 +143,10 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
           SnackBar(
             content: Text(
               result['message'] ??
-                  'Failed to submit complaint. Please try again.',
+                  (AppLocalizations.of(
+                        context,
+                      )?.translate('details.error_generic') ??
+                      'Failed to submit complaint. Please try again.'),
               style: GoogleFonts.outfit(color: Colors.white),
             ),
             backgroundColor: Colors.red.shade600,
@@ -163,7 +182,10 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  'Complaint Submitted\nSuccessfully!',
+                  AppLocalizations.of(
+                        context,
+                      )?.translate('details.complaint_success') ??
+                      'Complaint Submitted\nSuccessfully!',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.outfit(
                     fontSize: 20,
@@ -173,7 +195,10 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Your complaint has been submitted to ZaferPay. You will now be redirected to the Cyber Crime portal to file an official report.',
+                  AppLocalizations.of(
+                        context,
+                      )?.translate('details.complaint_success_msg') ??
+                      'Your complaint has been submitted to ZaferPay. You will now be redirected to the Cyber Crime portal to file an official report.',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.outfit(
                     fontSize: 14,
@@ -207,7 +232,10 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
                       elevation: 0,
                     ),
                     child: Text(
-                      'Continue to Cyber Crime Portal',
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('details.continue_portal') ??
+                          'Continue to Cyber Crime Portal',
                       style: GoogleFonts.outfit(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -224,7 +252,10 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
                     ).pop(); // Go back to transaction details
                   },
                   child: Text(
-                    'Go Back',
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('details.go_back') ??
+                        'Go Back',
                     style: GoogleFonts.outfit(
                       fontSize: 14,
                       color: Colors.grey.shade500,
@@ -243,7 +274,8 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'An error occurred. Please try again.',
+            AppLocalizations.of(context)?.translate('details.error_generic') ??
+                'An error occurred. Please try again.',
             style: GoogleFonts.outfit(color: Colors.white),
           ),
           backgroundColor: Colors.red.shade600,
@@ -297,7 +329,8 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
         : (transaction['sender_full_name'] ??
               transaction['sender_name'] ??
               transaction['sender_upi_id'] ??
-              'Unknown');
+              (AppLocalizations.of(context)?.translate('amount.unknown') ??
+                  'Unknown'));
     final senderName = formatName(senderNameRaw);
 
     final senderUpiId = transaction['sender_upi_id'] ?? 'Unknown';
@@ -309,25 +342,37 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
               transaction['receiver_upi_id'] ??
               'Unknown');
     final receiverName = formatName(receiverNameRaw);
-    final receiverUpiId = transaction['receiver_upi_id'] ?? 'Unknown';
+    final receiverUpiId =
+        transaction['receiver_upi_id'] ??
+        (AppLocalizations.of(context)?.translate('amount.unknown') ??
+            'Unknown');
 
     // Helper function to extract bank name from UPI ID
-    String getBankFromUpi(String upiId) {
-      if (upiId == 'Unknown' || !upiId.contains('@')) return 'Unknown Bank';
+    String getLocalizedBankFromUpi(BuildContext context, String upiId) {
+      final loc = AppLocalizations.of(context);
+      if (upiId == 'Unknown' || !upiId.contains('@')) {
+        return loc?.translate('profile.bank_unknown') ?? 'Unknown Bank';
+      }
       final suffix = upiId.split('@').last.toLowerCase();
-      if (suffix.contains('sbi')) return 'State Bank of India';
-      if (suffix.contains('hdfc')) return 'HDFC Bank';
-      if (suffix.contains('icici')) return 'ICICI Bank';
-      if (suffix.contains('axis')) return 'Axis Bank';
-      if (suffix.contains('okhdfc')) return 'HDFC Bank';
-      if (suffix.contains('okaxis')) return 'Axis Bank';
-      if (suffix.contains('oksbi')) return 'State Bank of India';
-      if (suffix.contains('okicici')) return 'ICICI Bank';
+      if (suffix.contains('sbi')) {
+        return loc?.translate('profile.bank_sbi') ?? 'State Bank of India';
+      }
+      if (suffix.contains('hdfc') || suffix.contains('okhdfc')) {
+        return loc?.translate('profile.bank_hdfc') ?? 'HDFC Bank';
+      }
+      if (suffix.contains('icici') ||
+          suffix.contains('okicici') ||
+          suffix.contains('ibl')) {
+        return loc?.translate('profile.bank_icici') ?? 'ICICI Bank';
+      }
+      if (suffix.contains('axis') ||
+          suffix.contains('okaxis') ||
+          suffix.contains('axl')) {
+        return loc?.translate('profile.bank_axis') ?? 'Axis Bank';
+      }
       if (suffix.contains('ybl')) return 'Yes Bank';
       if (suffix.contains('ikwik')) return 'Kwik (MobiKwik)';
       if (suffix.contains('paytm')) return 'Paytm Payments Bank';
-      if (suffix.contains('axl')) return 'Axis Bank';
-      if (suffix.contains('ibl')) return 'ICICI Bank';
       if (suffix.contains('sib')) return 'South Indian Bank';
       return suffix.toUpperCase(); // Fallback to just showing the suffix
     }
@@ -336,13 +381,13 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
         (transaction['sender_bank_name'] != null &&
             transaction['sender_bank_name'] != 'Unknown')
         ? transaction['sender_bank_name']
-        : getBankFromUpi(senderUpiId);
+        : getLocalizedBankFromUpi(context, senderUpiId);
 
     final receiverBank =
         (transaction['receiver_bank_name'] != null &&
             transaction['receiver_bank_name'] != 'Unknown')
         ? transaction['receiver_bank_name']
-        : getBankFromUpi(receiverUpiId);
+        : getLocalizedBankFromUpi(context, receiverUpiId);
     final transactionId = (transaction['transaction_id'] ?? '-')
         .toString()
         .replaceAll('TXN', '');
@@ -393,7 +438,8 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Report Complaint',
+          AppLocalizations.of(context)?.translate('details.submit_complaint') ??
+              'Report Complaint',
           style: GoogleFonts.outfit(
             color: isDark ? Colors.white : Colors.black87,
             fontWeight: FontWeight.w600,
@@ -431,7 +477,10 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
                 PopupMenuItem<String>(
                   value: 'get_help',
                   child: Text(
-                    'Get help',
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('details.get_help') ??
+                        'Get help',
                     style: GoogleFonts.outfit(
                       color: isDark ? Colors.white : Colors.black87,
                       fontSize: 15,
@@ -453,23 +502,78 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildDetailRow('Sender Name', senderName, isDark),
-                    _buildDetailRow('Sender UPI ID', senderUpiId, isDark),
-                    _buildDetailRow('Receiver Name', receiverName, isDark),
-                    _buildDetailRow('Receiver UPI ID', receiverUpiId, isDark),
-                    _buildDetailRow('Transaction ID', transactionId, isDark),
                     _buildDetailRow(
-                      'Transaction Date',
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('details.sender_name') ??
+                          'Sender Name',
+                      senderName,
+                      isDark,
+                    ),
+                    _buildDetailRow(
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('details.sender_upi') ??
+                          'Sender UPI ID',
+                      senderUpiId,
+                      isDark,
+                    ),
+                    _buildDetailRow(
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('details.receiver_name') ??
+                          'Receiver Name',
+                      receiverName,
+                      isDark,
+                    ),
+                    _buildDetailRow(
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('details.receiver_upi') ??
+                          'Receiver UPI ID',
+                      receiverUpiId,
+                      isDark,
+                    ),
+                    _buildDetailRow(
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('details.txn_id_label') ??
+                          'Transaction ID',
+                      transactionId,
+                      isDark,
+                    ),
+                    _buildDetailRow(
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('details.txn_date') ??
+                          'Transaction Date',
                       transactionDate,
                       isDark,
                     ),
                     _buildDetailRow(
-                      'Transaction Time',
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('details.txn_time') ??
+                          'Transaction Time',
                       transactionTime,
                       isDark,
                     ),
-                    _buildDetailRow('Sender Bank name', senderBank, isDark),
-                    _buildDetailRow('Receiver Bank name', receiverBank, isDark),
+                    _buildDetailRow(
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('details.sender_bank') ??
+                          'Sender Bank name',
+                      senderBank,
+                      isDark,
+                    ),
+                    _buildDetailRow(
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('details.receiver_bank') ??
+                          'Receiver Bank name',
+                      receiverBank,
+                      isDark,
+                    ),
 
                     // Pay Through (UPI Circle or Self)
                     Builder(
@@ -477,10 +581,20 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
                         final initiatedByName =
                             transaction['initiated_by_name'];
                         final payThrough = initiatedByName != null
-                            ? 'UPI Circle by $initiatedByName'
-                            : 'Self';
+                            ? (AppLocalizations.of(context)?.translate(
+                                    'details.upi_circle_by',
+                                    arguments: {'name': initiatedByName},
+                                  ) ??
+                                  'UPI Circle by $initiatedByName')
+                            : (AppLocalizations.of(
+                                    context,
+                                  )?.translate('details.self') ??
+                                  'Self');
                         return _buildDetailRow(
-                          'Pay Through',
+                          AppLocalizations.of(
+                                context,
+                              )?.translate('details.pay_through') ??
+                              'Pay Through',
                           payThrough,
                           isDark,
                         );
@@ -490,7 +604,10 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
                     const SizedBox(height: 24),
 
                     _buildFormRow(
-                      'Reason for complaint',
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('details.reason_label') ??
+                          'Reason for complaint',
                       Container(
                         height: 48,
                         padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -507,7 +624,10 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
                           child: DropdownButton<String>(
                             value: _selectedReason,
                             hint: Text(
-                              'Select a reason',
+                              AppLocalizations.of(
+                                    context,
+                                  )?.translate('details.select_reason') ??
+                                  'Select a reason',
                               style: GoogleFonts.outfit(
                                 color: isDark
                                     ? Colors.grey.shade500
@@ -551,7 +671,10 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
                     ),
 
                     _buildFormRow(
-                      'Description',
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('details.description') ??
+                          'Description',
                       TextField(
                         controller: _otherReasonController,
                         maxLines: 4,
@@ -560,9 +683,20 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
                           fontSize: 14,
                         ),
                         decoration: InputDecoration(
-                          hintText: _selectedReason == 'Other'
-                              ? 'Required'
-                              : 'Optional',
+                          hintText:
+                              _selectedReason ==
+                                  (AppLocalizations.of(
+                                        context,
+                                      )?.translate('details.other') ??
+                                      'Other')
+                              ? (AppLocalizations.of(
+                                      context,
+                                    )?.translate('details.required') ??
+                                    'Required')
+                              : (AppLocalizations.of(
+                                      context,
+                                    )?.translate('details.optional') ??
+                                    'Optional'),
                           hintStyle: GoogleFonts.outfit(
                             color: isDark
                                 ? Colors.grey.shade600
@@ -620,7 +754,10 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'If you fill this, it will not be filed as a complaint in cyber crime. You must file manually in the cyber crime website after clicking the Submit Complaint button.',
+                              AppLocalizations.of(
+                                    context,
+                                  )?.translate('details.complaint_warning') ??
+                                  'If you fill this, it will not be filed as a complaint in cyber crime. You must file manually in the cyber crime website after clicking the Submit Complaint button.',
                               style: GoogleFonts.outfit(
                                 color: isDark
                                     ? Colors.red.shade200
@@ -672,7 +809,10 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
                             ),
                           ),
                           child: Text(
-                            'Cancel',
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('common.cancel') ??
+                                'Cancel',
                             style: GoogleFonts.outfit(
                               color: isDark ? Colors.white : Colors.black87,
                               fontWeight: FontWeight.w600,
@@ -710,7 +850,10 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
                             ),
                           ),
                           child: Text(
-                            'Submit Complaint',
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('details.submit_complaint') ??
+                                'Submit Complaint',
                             style: GoogleFonts.outfit(
                               fontWeight: FontWeight.w600,
                               fontSize: 16,
@@ -722,11 +865,14 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Powered by ZaferPay',
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('common.powered_by') ??
+                        'Powered by ZaferPay',
                     style: GoogleFonts.outfit(
-                      color: Colors.grey.shade500,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                      color: Colors.grey.shade400,
+                      fontWeight: FontWeight.w500,
+                      fontSize: 13,
                     ),
                   ),
                 ],
@@ -742,10 +888,11 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
     return Padding(
       padding: EdgeInsets.only(top: alignTop ? 12.0 : 0.0),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 150,
+          Container(
+            constraints: const BoxConstraints(maxWidth: 180),
             child: Text(
               label,
               style: GoogleFonts.outfit(
@@ -753,6 +900,7 @@ class _ReportComplaintScreenState extends State<ReportComplaintScreen> {
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
+              overflow: TextOverflow.visible,
             ),
           ),
           Text(

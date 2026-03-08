@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'api_service.dart';
 import 'utils.dart';
+import 'services/app_localizations.dart';
 
 /// A full-screen PIN entry screen used when inviting a member to a UPI Circle, updating limits, or removing members.
 class UPICircleSetupPinScreen extends StatefulWidget {
@@ -91,7 +92,15 @@ class _UPICircleSetupPinScreenState extends State<UPICircleSetupPinScreen> {
         if (!mounted) return;
         Navigator.pop(context, {
           'success': success,
-          'message': success ? "Member Removed!" : "Failed to remove member",
+          'message': success
+              ? (AppLocalizations.of(
+                      context,
+                    )?.translate('circle.member_removed') ??
+                    "Member Removed!")
+              : (AppLocalizations.of(
+                      context,
+                    )?.translate('circle.fail_remove') ??
+                    "Failed to remove member"),
         });
       } else if (widget.isUpdate) {
         final bool success = await _api.updateCircleMember(
@@ -103,7 +112,15 @@ class _UPICircleSetupPinScreenState extends State<UPICircleSetupPinScreen> {
         if (!mounted) return;
         Navigator.pop(context, {
           'success': success,
-          'message': success ? "Limit Updated!" : "Failed to update limit",
+          'message': success
+              ? (AppLocalizations.of(
+                      context,
+                    )?.translate('circle.limit_updated') ??
+                    "Limit Updated!")
+              : (AppLocalizations.of(
+                      context,
+                    )?.translate('circle.fail_update') ??
+                    "Failed to update limit"),
         });
       } else {
         // Send the invitation
@@ -118,7 +135,15 @@ class _UPICircleSetupPinScreenState extends State<UPICircleSetupPinScreen> {
         final bool success = result['success'] ?? false;
         final String message =
             result['message'] ??
-            (success ? "Invitation Sent!" : "Failed to send invitation");
+            (success
+                ? (AppLocalizations.of(
+                        context,
+                      )?.translate('circle.invitation_sent_short') ??
+                      "Invitation Sent!")
+                : (AppLocalizations.of(
+                        context,
+                      )?.translate('circle.fail_send') ??
+                      "Failed to send invitation"));
 
         // Pop with result
         Navigator.pop(context, {'success': success, 'message': message});
@@ -135,9 +160,13 @@ class _UPICircleSetupPinScreenState extends State<UPICircleSetupPinScreen> {
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('PIN Expired'),
-          content: const Text(
-            'Your UPI PIN has expired. Please update it to continue.',
+          title: Text(
+            AppLocalizations.of(context)?.translate('pin.expired') ??
+                'PIN Expired',
+          ),
+          content: Text(
+            AppLocalizations.of(context)?.translate('pin.expired_desc') ??
+                'Your UPI PIN has expired. Please update it to continue.',
           ),
           actions: [
             TextButton(
@@ -145,7 +174,10 @@ class _UPICircleSetupPinScreenState extends State<UPICircleSetupPinScreen> {
                 Navigator.pop(context);
                 Navigator.pushNamed(context, '/change-upi-pin');
               },
-              child: const Text('Update PIN'),
+              child: Text(
+                AppLocalizations.of(context)?.translate('pin.update') ??
+                    'Update PIN',
+              ),
             ),
           ],
         ),
@@ -157,7 +189,11 @@ class _UPICircleSetupPinScreenState extends State<UPICircleSetupPinScreen> {
         _enteredPin = '';
         _isVerifying = false;
         _errorMessage =
-            'Incorrect PIN. $remaining attempt${remaining == 1 ? '' : 's'} remaining.';
+            (AppLocalizations.of(
+                      context,
+                    )?.translate('pin.incorrect_with_count') ??
+                    'Incorrect PIN. {count} attempts remaining.')
+                .replaceAll('{count}', remaining.toString());
       });
     }
   }
@@ -209,10 +245,25 @@ class _UPICircleSetupPinScreenState extends State<UPICircleSetupPinScreen> {
                                 children: [
                                   Text(
                                     widget.isRemove
-                                        ? 'Remove from Circle'
+                                        ? (AppLocalizations.of(
+                                                context,
+                                              )?.translate(
+                                                'circle.remove_title',
+                                              ) ??
+                                              'Remove from Circle')
                                         : widget.isUpdate
-                                        ? 'Update Circle Limit'
-                                        : 'Invite to UPI Circle',
+                                        ? (AppLocalizations.of(
+                                                context,
+                                              )?.translate(
+                                                'circle.update_title',
+                                              ) ??
+                                              'Update Circle Limit')
+                                        : (AppLocalizations.of(
+                                                context,
+                                              )?.translate(
+                                                'circle.invite_title',
+                                              ) ??
+                                              'Invite to UPI Circle'),
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w600,
@@ -235,7 +286,7 @@ class _UPICircleSetupPinScreenState extends State<UPICircleSetupPinScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Limit: ₹${formatAmount(widget.limit)} / month',
+                                    '${AppLocalizations.of(context)?.translate('circle.limit') ?? 'Limit'}: ₹${formatAmount(widget.limit)} / ${AppLocalizations.of(context)?.translate('circle.month') ?? 'month'}',
                                     style: const TextStyle(
                                       fontSize: 13,
                                       color: Colors.grey,
@@ -274,7 +325,10 @@ class _UPICircleSetupPinScreenState extends State<UPICircleSetupPinScreen> {
 
                       // ── PIN prompt ────────────────────────────────────────
                       Text(
-                        'Enter your UPI PIN',
+                        AppLocalizations.of(
+                              context,
+                            )?.translate('pin.enter_pin') ??
+                            'Enter your UPI PIN',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w600,
@@ -284,10 +338,19 @@ class _UPICircleSetupPinScreenState extends State<UPICircleSetupPinScreen> {
                       const SizedBox(height: 8),
                       Text(
                         widget.isRemove
-                            ? 'Confirm to remove member from circle'
+                            ? (AppLocalizations.of(
+                                    context,
+                                  )?.translate('circle.confirm_remove') ??
+                                  'Confirm to remove member from circle')
                             : widget.isUpdate
-                            ? 'Confirm to update your circle limit'
-                            : 'Confirm to invite to your UPI Circle',
+                            ? (AppLocalizations.of(
+                                    context,
+                                  )?.translate('circle.confirm_update') ??
+                                  'Confirm to update your circle limit')
+                            : (AppLocalizations.of(
+                                    context,
+                                  )?.translate('circle.confirm_invite') ??
+                                  'Confirm to invite to your UPI Circle'),
                         style: TextStyle(
                           fontSize: 13,
                           color: isDark
@@ -358,11 +421,16 @@ class _UPICircleSetupPinScreenState extends State<UPICircleSetupPinScreen> {
                               color: Color(0xFFD97706),
                             ),
                             const SizedBox(width: 8),
-                            Text(
-                              'Never share your UPI PIN with anyone',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
+                            Expanded(
+                              child: Text(
+                                AppLocalizations.of(
+                                      context,
+                                    )?.translate('pin.never_share') ??
+                                    'Never share your UPI PIN with anyone',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
                               ),
                             ),
                           ],
@@ -454,10 +522,13 @@ class _UPICircleSetupPinScreenState extends State<UPICircleSetupPinScreen> {
                                             : Colors.grey.shade400,
                                         borderRadius: BorderRadius.circular(24),
                                       ),
-                                      child: const Center(
+                                      child: Center(
                                         child: Text(
-                                          'Confirm',
-                                          style: TextStyle(
+                                          AppLocalizations.of(
+                                                context,
+                                              )?.translate('pin.confirm') ??
+                                              'Confirm',
+                                          style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 15,
                                             fontWeight: FontWeight.bold,

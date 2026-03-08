@@ -1,6 +1,9 @@
 import 'dart:ui' as ui;
 import 'dart:typed_data';
 import 'dart:io';
+import 'package:google_fonts/google_fonts.dart';
+import 'services/app_localizations.dart';
+import 'main.dart';
 import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
@@ -8,7 +11,6 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:mobile_app/main.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_mlkit_barcode_scanning/google_mlkit_barcode_scanning.dart'
     as mlkit;
@@ -131,7 +133,12 @@ class _ScanScreenState extends State<ScanScreen> {
       MyApp.lastShareTime = DateTime.now();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to share QR code')),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context)?.translate('scan.share_failed') ??
+                  'Failed to share QR code',
+            ),
+          ),
         );
       }
     }
@@ -164,21 +171,26 @@ class _ScanScreenState extends State<ScanScreen> {
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Text(
-                'No Valid QR code found. Please ensure the image contains a clear QR code.',
+                AppLocalizations.of(context)?.translate('scan.no_qr_found') ??
+                    'No Valid QR code found. Please ensure the image contains a clear QR code.',
               ),
               backgroundColor: Colors.red,
-              duration: Duration(seconds: 4),
+              duration: const Duration(seconds: 4),
             ),
           );
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error reading image: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${AppLocalizations.of(context)?.translate('scan.read_error') ?? 'Error reading image'}: $e',
+            ),
+          ),
+        );
       }
     }
   }
@@ -240,14 +252,22 @@ class _ScanScreenState extends State<ScanScreen> {
             children: [
               const Icon(Icons.videocam_off, size: 60, color: Colors.grey),
               const SizedBox(height: 16),
-              const Text(
-                "Camera permission denied",
-                style: TextStyle(color: Colors.white),
+              Text(
+                AppLocalizations.of(
+                      context,
+                    )?.translate('scan.permission_denied') ??
+                    "Camera permission denied",
+                style: const TextStyle(color: Colors.white),
               ),
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: _checkPermission,
-                child: const Text("Grant Permission"),
+                child: Text(
+                  AppLocalizations.of(
+                        context,
+                      )?.translate('scan.grant_permission') ??
+                      "Grant Permission",
+                ),
               ),
             ],
           ),
@@ -300,12 +320,15 @@ class _ScanScreenState extends State<ScanScreen> {
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
-                  children: const [
+                  children: [
                     Icon(Icons.flash_on, color: Colors.yellow, size: 20),
                     SizedBox(width: 8),
                     Text(
-                      "Low light detected. Try using flashlight.",
-                      style: TextStyle(
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('scan.low_light') ??
+                          "Low light detected. Try using flashlight.",
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -332,11 +355,14 @@ class _ScanScreenState extends State<ScanScreen> {
                     icon: const Icon(Icons.close, color: Colors.white),
                     onPressed: () => Navigator.pop(context),
                   ),
-                  const Text(
-                    'Scan QR Code',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
+                  Text(
+                    AppLocalizations.of(context)?.translate('home.scan') ??
+                        'Scan QR code',
+                    style: GoogleFonts.outfit(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white
+                          : Colors.black87,
+                      fontSize: 20,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -401,21 +427,32 @@ class _ScanScreenState extends State<ScanScreen> {
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.qr_code, color: Colors.white),
-                        SizedBox(width: 8),
-                        Text("My QR", style: TextStyle(color: Colors.white)),
+                      children: [
+                        const Icon(Icons.qr_code, color: Colors.white),
+                        const SizedBox(width: 8),
+                        Text(
+                          AppLocalizations.of(
+                                context,
+                              )?.translate('common.my_qr') ??
+                              "My QR",
+                          style: const TextStyle(color: Colors.white),
+                        ),
                       ],
                     ),
                   ),
                 ),
 
-                const SizedBox(height: 24),
+                SizedBox(height: 24),
 
                 ElevatedButton.icon(
                   onPressed: _pickImageFromGallery,
                   icon: const Icon(Icons.photo_library),
-                  label: const Text('Upload from gallery'),
+                  label: Text(
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('scan.upload_gallery') ??
+                        'Upload from gallery',
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: Colors.black,
@@ -429,18 +466,22 @@ class _ScanScreenState extends State<ScanScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  'Scan any QR code to pay',
-                  style: TextStyle(
+                Text(
+                  AppLocalizations.of(context)?.translate('scan.any_qr') ??
+                      'Scan any QR code to pay',
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  'Google Pay • PhonePe • PayTM • UPI',
-                  style: TextStyle(color: Colors.white60, fontSize: 12),
+                Text(
+                  AppLocalizations.of(
+                        context,
+                      )?.translate('scan.supported_apps') ??
+                      'Google Pay • PhonePe • PayTM • UPI',
+                  style: const TextStyle(color: Colors.white60, fontSize: 12),
                 ),
               ],
             ),
@@ -506,7 +547,11 @@ class _ScanScreenState extends State<ScanScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'UPI ID: $upiId',
+                AppLocalizations.of(context)?.translate(
+                      'common.upi_id_label',
+                      arguments: {'upiId': upiId},
+                    ) ??
+                    'UPI ID: $upiId',
                 style: TextStyle(
                   fontSize: 14,
                   color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
@@ -515,7 +560,11 @@ class _ScanScreenState extends State<ScanScreen> {
               if (mobile.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Text(
-                  'Mobile: $mobile',
+                  AppLocalizations.of(context)?.translate(
+                        'common.mobile_label',
+                        arguments: {'mobile': mobile},
+                      ) ??
+                      'Mobile: $mobile',
                   style: TextStyle(
                     fontSize: 14,
                     color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
@@ -537,12 +586,18 @@ class _ScanScreenState extends State<ScanScreen> {
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      Icon(Icons.store, color: Colors.white, size: 16),
-                      SizedBox(width: 8),
+                    children: [
+                      const Icon(Icons.store, color: Colors.white, size: 16),
+                      const SizedBox(width: 8),
                       Text(
-                        'Merchant Account',
-                        style: TextStyle(color: Colors.white, fontSize: 12),
+                        AppLocalizations.of(
+                              context,
+                            )?.translate('common.merchant_account') ??
+                            'Merchant Account',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ),
@@ -581,7 +636,12 @@ class _ScanScreenState extends State<ScanScreen> {
                         setState(() => _isScanning = true);
                       },
                       icon: const Icon(Icons.qr_code_scanner),
-                      label: const Text('Open scanner'),
+                      label: Text(
+                        AppLocalizations.of(
+                              context,
+                            )?.translate('scan.open_scanner_btn') ??
+                            'Open scanner',
+                      ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: isDark ? Colors.white : Colors.black,
                         side: BorderSide(
@@ -604,7 +664,12 @@ class _ScanScreenState extends State<ScanScreen> {
                         _shareQrCode(upiId, upiUri);
                       },
                       icon: const Icon(Icons.share),
-                      label: const Text('Share QR code'),
+                      label: Text(
+                        AppLocalizations.of(
+                              context,
+                            )?.translate('scan.share_qr_btn') ??
+                            'Share QR code',
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: isDark
                             ? const Color(0xFF00B9F1).withValues(alpha: 0.5)

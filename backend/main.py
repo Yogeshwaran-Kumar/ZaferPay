@@ -15,6 +15,7 @@ import traceback
 from sqlalchemy.orm import joinedload
 import os
 import google.generativeai as genai
+from i18n import get_text
 
 # AI Auto-Learning Scheduler
 import daily_summary
@@ -322,6 +323,7 @@ def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(), 
     db: Session = Depends(get_db),
     x_device_id: str = Header(None),
+    accept_language: str = Header("en", alias="Accept-Language"),
     force_logout: bool = False
 ):
     # Authenticate by Mobile Number OR Email (passed in form_data.username)
@@ -367,7 +369,7 @@ def login_for_access_token(
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail={
-                        "message": "already_logged_in",
+                        "message": get_text("already_logged_in", accept_language),
                         "info": "You are currently logged in on another device. To continue on this device, you must logout from the other device."
                     },
                 )
@@ -1483,6 +1485,7 @@ def analyze_transaction_risk(
     """
     
     # 1. Validate Receiver exists
+    lang = request.headers.get("accept-language", "en")
     receiver = db.query(models.User).filter(models.User.upi_id == tx.receiver_upi_id).first()
     receiver_name = receiver.username if receiver else "Unknown"
     receiver_exists = receiver is not None
@@ -1495,7 +1498,7 @@ def analyze_transaction_risk(
             is_blocked=False,
             receiver_name="New Receiver",
             receiver_exists=False,
-            detail={"message": "First time sending to this receiver", "risk": "WARN"}
+            detail={"message": get_text("first_time_receiver", lang), "risk": "WARN"}
         )
 
     # 1.5. Block if on call (v5.0 Scam Protection)
@@ -1507,7 +1510,7 @@ def analyze_transaction_risk(
             receiver_name=receiver_name,
             receiver_exists=True,
             is_bypassable=False,
-            detail={"message": "Transaction blocked for security. You cannot perform risky actions while on an active phone call.", "risk": "FRAUD_BLOCKED"}
+            detail={"message": get_text("fraud_blocked_call", lang), "risk": "FRAUD_BLOCKED"}
         )
         
     if receiver.is_fraud:
@@ -1518,7 +1521,7 @@ def analyze_transaction_risk(
             receiver_name=receiver_name,
             receiver_exists=True,
             is_bypassable=False,
-            detail={"message": "Transaction blocked. This account has been flagged for fraudulent activity.", "risk": "FRAUD_BLOCKED"}
+            detail={"message": get_text("fraud_blocked_flagged", lang), "risk": "FRAUD_BLOCKED"}
         )
     
     if receiver.id == current_user.id:
@@ -1528,7 +1531,7 @@ def analyze_transaction_risk(
             is_blocked=True,
             receiver_name=receiver_name,
             receiver_exists=True,
-            detail={"message": "Cannot send money to yourself", "risk": "HIGH"}
+            detail={"message": get_text("send_to_self", lang), "risk": "HIGH"}
         )
 
     # Restriction check in analysis phase
@@ -1541,7 +1544,7 @@ def analyze_transaction_risk(
             receiver_name=receiver_name,
             receiver_exists=True,
             is_bypassable=False,
-            detail={"message": "Cannot send money directly to a child account. Please pay the parent instead.", "risk": "FRAUD_BLOCKED"}
+            detail={"message": get_text("send_to_child", lang), "risk": "FRAUD_BLOCKED"}
         )
     
     # 2. Run Fraud Engine Analysis (without creating transaction)
@@ -1719,7 +1722,7 @@ def create_transaction(
             raise HTTPException(
                 status_code=202, # Accepted for processing (but not complete)
                 detail={
-                    "message": "Approval request sent to primary account holder",
+                    "message": get_text("approval_sent", request.headers.get("accept-language", "en")),
                     "status": "PENDING_APPROVAL",
                     "request_id": new_request.id
                 }
@@ -1947,7 +1950,7 @@ def create_transaction(
             raise HTTPException(
                 status_code=403,
                 detail={
-                    "message": f"Transaction Failed. You cannot send more than {limit_str} to this person in one day.",
+                    "message": get_text("limit_exceeded", request.headers.get("accept-language", "en"), limit=limit_str),
                     "reason": risk_reason,
                     "risk": risk_label,
                     "transaction_id": failed_tx_id,
@@ -1959,7 +1962,7 @@ def create_transaction(
         raise HTTPException(
              status_code=403, 
              detail={
-                 "message": "Transaction Blocked for Security",
+                 "message": get_text("transaction_blocked_security", request.headers.get("accept-language", "en")),
                  "reason": risk_reason,
                  "risk": risk_label,
                  "transaction_id": failed_tx_id,
@@ -3414,7 +3417,8 @@ def reveal_transaction_audit(
 def sync_contacts(
     req: schemas.ContactSyncRequest,
     current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    accept_language: str = Header("en", alias="Accept-Language")
 ):
     """
     Sync mobile contacts to the Trust Graph.
@@ -3449,7 +3453,7 @@ def sync_contacts(
         return {
             "synced_count": 0,
             "new_trust_links": 0,
-            "message": "No valid phone numbers found in contacts"
+            "message": get_text("no_contacts", accept_language)
         }
         
     # 2. Find all registered users matching these phone numbers
@@ -3489,7 +3493,7 @@ def sync_contacts(
     return {
         "synced_count": synced_count,
         "new_trust_links": new_links,
-        "message": f"Successfully synced {synced_count} contacts. Created {new_links} new trust relationships."
+        "message": get_text("contacts_synced", accept_language, count=synced_count, links=new_links)
     }
 
 
@@ -3501,7 +3505,8 @@ def sync_contacts(
 def submit_complaint(
     complaint: schemas.ComplaintCreate,
     current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    accept_language: str = Header("en", alias="Accept-Language")
 ):
     try:
         # 1. Deduplication check — reject duplicates with friendly message
@@ -3513,7 +3518,7 @@ def submit_complaint(
         if existing:
             raise HTTPException(
                 status_code=409,
-                detail="You have already submitted a complaint for this transaction."
+                detail=get_text("complaint_duplicate", accept_language)
             )
 
         # 2. Get reported user from UPI
@@ -3548,7 +3553,7 @@ def submit_complaint(
         return {
             "success": True,
             "id": new_report.id,
-            "message": "Complaint submitted successfully"
+            "message": get_text("complaint_success", accept_language)
         }
     except HTTPException:
         raise
@@ -3563,7 +3568,8 @@ def submit_complaint(
 def check_complaint(
     transaction_id: str,
     current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    accept_language: str = Header("en", alias="Accept-Language")
 ):
     """Check if the user has already reported this transaction"""
     existing = db.query(models.UserFraudReport).filter(
@@ -3575,13 +3581,13 @@ def check_complaint(
         return {
             "exists": True,
             "status": existing.status,
-            "message": "A complaint has already been filed for this transaction."
+            "message": get_text("complaint_duplicate", accept_language)
         }
     
     return {
         "exists": False,
         "status": None,
-        "message": "No existing complaint found."
+        "message": get_text("complaint_not_found", accept_language)
     }
 
 def get_current_admin(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):

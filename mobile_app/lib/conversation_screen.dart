@@ -8,6 +8,7 @@ import 'services/auth_service.dart';
 import 'services/transaction_service.dart';
 import 'services/user_service.dart';
 import 'utils.dart';
+import 'services/app_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class ConversationScreen extends StatefulWidget {
@@ -128,8 +129,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Failed to load conversation"),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(
+                    context,
+                  )?.translate('conversation.load_failed') ??
+                  "Failed to load conversation",
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -810,7 +816,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       ),
                     ),
                     child: Text(
-                      "Pay",
+                      AppLocalizations.of(context)?.translate('pin.pay') ??
+                          "Pay",
                       style: GoogleFonts.outfit(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
@@ -1001,8 +1008,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
           }
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Failed to send message"),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(
+                    context,
+                  )?.translate('conversation.send_failed') ??
+                  "Failed to send message",
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -1219,27 +1231,47 @@ class _ConversationScreenState extends State<ConversationScreen> {
     if (requestId == null) return;
 
     final isRequester = req['requester_upi_id'] == _myUpi;
-    final actionLabel = isRequester ? 'withdraw' : 'decline';
+
+    final requestTitle = isRequester
+        ? (AppLocalizations.of(context)?.translate('requests.withdraw_title') ??
+              'Withdraw Request')
+        : (AppLocalizations.of(context)?.translate('requests.decline_title') ??
+              'Decline Request');
+
+    final requestContent = isRequester
+        ? (AppLocalizations.of(
+                context,
+              )?.translate('requests.withdraw_confirm') ??
+              'Are you sure you want to withdraw this payment request?')
+        : (AppLocalizations.of(
+                context,
+              )?.translate('requests.decline_confirm') ??
+              'Are you sure you want to decline this payment request?');
+
+    final yesLabel = isRequester
+        ? (AppLocalizations.of(context)?.translate('requests.yes_withdraw') ??
+              'Yes, Withdraw')
+        : (AppLocalizations.of(context)?.translate('requests.yes_decline') ??
+              'Yes, Decline');
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(
-          '${isRequester ? 'Withdraw' : 'Decline'} Request',
+          requestTitle,
           style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
         ),
-        content: Text(
-          'Are you sure you want to $actionLabel this payment request?',
-          style: GoogleFonts.outfit(),
-        ),
+        content: Text(requestContent, style: GoogleFonts.outfit()),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('No'),
+            child: Text(
+              AppLocalizations.of(context)?.translate('common.no') ?? 'No',
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Yes, ${isRequester ? 'Withdraw' : 'Decline'}'),
+            child: Text(yesLabel),
           ),
         ],
       ),
@@ -1254,14 +1286,27 @@ class _ConversationScreenState extends State<ConversationScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              isRequester ? 'Request withdrawn' : 'Request declined',
+              isRequester
+                  ? (AppLocalizations.of(
+                          context,
+                        )?.translate('requests.withdrawn_success') ??
+                        'Request withdrawn')
+                  : (AppLocalizations.of(
+                          context,
+                        )?.translate('requests.declined_success') ??
+                        'Request declined'),
             ),
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to process request'),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(
+                    context,
+                  )?.translate('requests.process_failed') ??
+                  'Failed to process request',
+            ),
             backgroundColor: Colors.red,
           ),
         );
