@@ -8,6 +8,7 @@ import 'api_service.dart';
 import 'mcc_helper.dart';
 import 'services/call_state_service.dart';
 import 'utils.dart';
+import 'services/app_localizations.dart';
 
 class PaymentPinScreen extends StatefulWidget {
   final String receiverUpi;
@@ -145,9 +146,13 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
         context: context,
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
-          title: const Text("PIN Expired"),
-          content: const Text(
-            "Security requirement: Your UPI PIN has expired (6 months old). Please update it to continue.",
+          title: Text(
+            AppLocalizations.of(context)?.translate('pin.pin_expired') ??
+                "PIN Expired",
+          ),
+          content: Text(
+            AppLocalizations.of(context)?.translate('pin.pin_expired_desc') ??
+                "Security requirement: Your UPI PIN has expired (6 months old). Please update it to continue.",
           ),
           actions: [
             TextButton(
@@ -155,7 +160,10 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
                 Navigator.pop(ctx);
                 Navigator.pushNamed(context, '/change-upi-pin');
               },
-              child: const Text("Update PIN"),
+              child: Text(
+                AppLocalizations.of(context)?.translate('pin.update_pin') ??
+                    "Update PIN",
+              ),
             ),
           ],
         ),
@@ -244,8 +252,11 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
               ),
               const SizedBox(height: 20),
               Text(
-                'Security Block',
-                style: GoogleFonts.outfit(
+                AppLocalizations.of(
+                      context,
+                    )?.translate('security_alerts.on_call_title') ??
+                    'Security Block',
+                style: GoogleFonts.notoSans(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                   color: isDark ? Colors.white : const Color(0xFF1A1A2E),
@@ -253,9 +264,12 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                'For your safety, payments are disabled while you are on an active phone call to prevent potential scams.',
+                AppLocalizations.of(
+                      context,
+                    )?.translate('security_alerts.on_call_desc') ??
+                    'For your safety, payments are disabled while you are on an active phone call to prevent potential scams.',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.outfit(
+                style: GoogleFonts.notoSans(
                   fontSize: 15,
                   color: isDark ? Colors.white70 : Colors.black54,
                   height: 1.5,
@@ -276,8 +290,11 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
                     elevation: 0,
                   ),
                   child: Text(
-                    'Got it',
-                    style: GoogleFonts.outfit(
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('security_alerts.got_it') ??
+                        'Got it',
+                    style: GoogleFonts.notoSans(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
@@ -318,7 +335,10 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
               ),
               const SizedBox(height: 20),
               Text(
-                'Security Permission Required',
+                AppLocalizations.of(
+                      context,
+                    )?.translate('security_alerts.permission_required') ??
+                    'Security Permission Required',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 18,
@@ -328,7 +348,10 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                'To protect you from fraudulent calls, Safe Pay needs permission to detect if you are on a call during payments.\n\nPlease grant the Phone permission to proceed.',
+                AppLocalizations.of(
+                      context,
+                    )?.translate('security_alerts.permission_desc') ??
+                    'To protect you from fraudulent calls, Safe Pay needs permission to detect if you are on a call during payments.\n\nPlease grant the Phone permission to proceed.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,
@@ -353,9 +376,15 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
                     Navigator.pop(ctx);
                     openAppSettings();
                   },
-                  child: const Text(
-                    'Open Settings',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  child: Text(
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('security_alerts.open_settings') ??
+                        'Open Settings',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
                   ),
                 ),
               ),
@@ -374,8 +403,11 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
 
     if (_api.failedAttempts == 1) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Incorrect PIN. Please try again.'),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context)?.translate('pin.incorrect_pin') ??
+                'Incorrect PIN. Please try again.',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -384,14 +416,21 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
         context: context,
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
-          title: const Text("Security Warning"),
-          content: const Text(
-            "Warning: You have tried too many times. One more failed attempt will log you out.",
+          title: Text(
+            AppLocalizations.of(context)?.translate('pin.security_warning') ??
+                "Security Warning",
+          ),
+          content: Text(
+            AppLocalizations.of(context)?.translate('pin.too_many_attempts') ??
+                "Warning: You have tried too many times. One more failed attempt will log you out.",
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text("I Understand"),
+              child: Text(
+                AppLocalizations.of(context)?.translate('pin.i_understand') ??
+                    "I Understand",
+              ),
             ),
           ],
         ),
@@ -406,10 +445,14 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
     showDialog(
       context: context,
       barrierDismissible: false, // User cannot close this
-      builder: (ctx) => const AlertDialog(
-        title: Text("Account Locked"),
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          AppLocalizations.of(context)?.translate('pin.account_locked') ??
+              "Account Locked",
+        ),
         content: Text(
-          "Too many incorrect attempts so your account has been logged out.",
+          AppLocalizations.of(context)?.translate('pin.account_locked_desc') ??
+              "Too many incorrect attempts so your account has been logged out.",
         ),
       ),
     );
@@ -469,7 +512,7 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
                         textBaseline: TextBaseline.alphabetic,
                         children: [
                           Text(
-                            "Pay ",
+                            "${AppLocalizations.of(context)?.translate('pin.pay') ?? "Pay"} ",
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
@@ -489,8 +532,8 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          const Text(
-                            "To ",
+                          Text(
+                            "${AppLocalizations.of(context)?.translate('pin.to') ?? "To"} ",
                             style: TextStyle(
                               fontSize: 14,
                               color: Colors.grey,
@@ -556,7 +599,13 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
 
             // PIN Entry Section
             Text(
-              widget.isCirclePayment ? 'Enter App mPIN' : 'Enter your PIN',
+              widget.isCirclePayment
+                  ? (AppLocalizations.of(
+                          context,
+                        )?.translate('pin.enter_app_mpin') ??
+                        'Enter App mPIN')
+                  : (AppLocalizations.of(context)?.translate('pin.enter_pin') ??
+                        'Enter your PIN'),
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -593,19 +642,36 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
 
             // Warning Message
             Padding(
-              padding: const EdgeInsets.only(bottom: 24.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24.0,
+                vertical: 16.0,
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
-                    Icons.info_outline,
-                    size: 16,
-                    color: Color(0xFFD97706),
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Icon(
+                      Icons.info_outline,
+                      size: 16,
+                      color: Color(0xFFD97706),
+                    ),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    'Never enter your UPI PIN to receive money',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  Expanded(
+                    child: Text(
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('pin.never_enter') ??
+                          'Never enter your UPI PIN to receive money',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                        height: 1.3,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -682,18 +748,38 @@ class _PaymentPinScreenState extends State<PaymentPinScreen> {
                           child: Container(
                             height: 56,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF1A237E), // Dark Blue
+                              color: _enteredPin.length == 4
+                                  ? const Color(0xFF1A237E)
+                                  : (isDark
+                                        ? Colors.grey.shade800
+                                        : Colors.grey.shade300),
                               borderRadius: BorderRadius.circular(24),
                             ),
-                            child: Center(
-                              child: const Text(
-                                "Pay",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    AppLocalizations.of(
+                                          context,
+                                        )?.translate('pin.pay') ??
+                                        "Pay",
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(width: 4),
+                                const Icon(
+                                  Icons.check_circle_outline,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                              ],
                             ),
                           ),
                         ),

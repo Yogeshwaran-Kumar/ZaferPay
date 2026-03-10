@@ -106,7 +106,7 @@ class _SwipeToProceedState extends State<SwipeToProceed>
               Center(
                 child: Text(
                   widget.label,
-                  style: GoogleFonts.outfit(
+                  style: GoogleFonts.notoSans(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: isDark ? Colors.grey[400] : Colors.grey[600],

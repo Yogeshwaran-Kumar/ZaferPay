@@ -52,23 +52,51 @@ class TransactionService {
     };
 
     try {
+      if (kDebugMode) {
+        print('🔍 ANALYZE REQUEST:');
+        print('   Receiver: $receiverUpi');
+        print('   Amount: ₹$amount');
+        print('   MCC: $mcc');
+        print('   Note: $note');
+        print('   Payment Source: $paymentSource');
+      }
+
       final response = await _apiClient.post(
         '/transactions/analyze',
         body: body,
       );
-      if (response.statusCode == 200) {
-        return json.decode(response.body);
+
+      if (kDebugMode) {
+        print('📡 ANALYZE RESPONSE:');
+        print('   Status Code: ${response.statusCode}');
+        print('   Body: ${response.body}');
       }
-      return {
-        'risk_score': 'SAFE',
-        'detail': {'risk': 'SAFE', 'message': 'Analysis Unavailable'},
-      };
+
+      if (response.statusCode == 200) {
+        final result = json.decode(response.body);
+        if (kDebugMode) {
+          print('✅ ANALYZE SUCCESS:');
+          print('   Risk Score: ${result['risk_score']}');
+          print('   Risk Reason: ${result['risk_reason']}');
+          print('   Is Bypassable: ${result['is_bypassable']}');
+        }
+        return result;
+      }
+
+      if (kDebugMode) {
+        print('⚠️ ANALYZE FAILED: Status ${response.statusCode}');
+      }
+
+      // CRITICAL: Don't default to SAFE on error - throw exception
+      throw Exception('Risk analysis failed with status ${response.statusCode}');
     } catch (e) {
-      if (kDebugMode) print("Risk Analysis Error: $e");
-      return {
-        'risk_score': 'SAFE',
-        'detail': {'risk': 'SAFE', 'message': 'Analysis Offline'},
-      };
+      if (kDebugMode) {
+        print("❌ Risk Analysis Error: $e");
+        print("   Stack trace:");
+        print(StackTrace.current);
+      }
+      // CRITICAL: Rethrow the error so the UI can handle it properly
+      rethrow;
     }
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:share_plus/share_plus.dart';
 import 'contact_service.dart';
+import 'services/app_localizations.dart';
 
 class ContactsScreen extends StatefulWidget {
   const ContactsScreen({super.key});
@@ -103,7 +104,11 @@ class _ContactsScreenState extends State<ContactsScreen> {
 
   void _onInvite() {
     SharePlus.instance.share(
-      ShareParams(text: 'Hey! Join me on 2Way app for secure payments.'),
+      ShareParams(
+        text:
+            AppLocalizations.of(context)?.translate('contacts.share_body') ??
+            'Hey! Join me on ZaferPay app for secure payments.',
+      ),
     );
   }
 
@@ -114,7 +119,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
-          'Select Contact',
+          AppLocalizations.of(context)?.translate('contacts.select_contact') ??
+              'Select Contact',
           style: TextStyle(
             color: Theme.of(context).textTheme.titleLarge?.color,
           ),
@@ -129,7 +135,11 @@ class _ContactsScreenState extends State<ContactsScreen> {
               controller: _searchController,
               style: TextStyle(color: isDark ? Colors.white : Colors.black),
               decoration: InputDecoration(
-                hintText: 'Search contacts',
+                hintText:
+                    AppLocalizations.of(
+                      context,
+                    )?.translate('contacts.search_hint') ??
+                    'Search contacts',
                 hintStyle: TextStyle(
                   color: isDark ? Colors.grey.shade400 : Colors.grey,
                 ),
@@ -172,16 +182,27 @@ class _ContactsScreenState extends State<ContactsScreen> {
               color: Colors.grey.shade400,
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Contact Permission Required',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Text(
+              AppLocalizations.of(
+                    context,
+                  )?.translate('contacts.perm_required') ??
+                  'Contact Permission Required',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            const Text('Please grant permission to view contacts'),
+            Text(
+              AppLocalizations.of(context)?.translate('contacts.perm_desc') ??
+                  'Please grant permission to view contacts',
+            ),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: _initService,
-              child: const Text('Grant Permission'),
+              child: Text(
+                AppLocalizations.of(
+                      context,
+                    )?.translate('contacts.grant_permission_btn') ??
+                    'Grant Permission',
+              ),
             ),
           ],
         ),
@@ -189,7 +210,12 @@ class _ContactsScreenState extends State<ContactsScreen> {
     }
 
     if (_filteredContacts.isEmpty) {
-      return const Center(child: Text("No contacts found"));
+      return Center(
+        child: Text(
+          AppLocalizations.of(context)?.translate('contacts.no_contacts') ??
+              "No contacts found",
+        ),
+      );
     }
 
     return ListView.builder(
@@ -229,7 +255,12 @@ class _ContactsScreenState extends State<ContactsScreen> {
                     color: isDark ? Colors.grey.shade400 : Colors.black54,
                   ),
                 )
-              : const Text("No phone"),
+              : Text(
+                  AppLocalizations.of(
+                        context,
+                      )?.translate('contacts.no_phone') ??
+                      "No phone",
+                ),
 
           trailing: hasPhone
               ? (isChecked
@@ -249,7 +280,12 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                 ),
                                 elevation: 0,
                               ),
-                              child: const Text("Pay"),
+                              child: Text(
+                                AppLocalizations.of(
+                                      context,
+                                    )?.translate('contacts.pay_btn') ??
+                                    "Pay",
+                              ),
                             )
                           : OutlinedButton(
                               onPressed: _onInvite,
@@ -269,7 +305,12 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                               ),
-                              child: const Text("Invite"),
+                              child: Text(
+                                AppLocalizations.of(
+                                      context,
+                                    )?.translate('contacts.invite_btn') ??
+                                    "Invite",
+                              ),
                             ))
                     : const SizedBox(
                         width: 24,

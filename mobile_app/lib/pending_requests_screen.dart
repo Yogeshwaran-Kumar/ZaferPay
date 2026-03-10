@@ -61,7 +61,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
       appBar: AppBar(
         title: Text(
           "Pending Requests",
-          style: GoogleFonts.outfit(
+          style: GoogleFonts.notoSans(
             fontWeight: FontWeight.w600,
             color: isDark ? Colors.white : Colors.black87,
           ),
@@ -86,7 +86,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                   const SizedBox(height: 16),
                   Text(
                     "No pending requests",
-                    style: GoogleFonts.outfit(
+                    style: GoogleFonts.notoSans(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
                       color: Colors.grey.shade600,
@@ -158,7 +158,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                     child: Center(
                       child: Text(
                         name[0].toUpperCase(),
-                        style: GoogleFonts.outfit(
+                        style: GoogleFonts.notoSans(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
                           fontSize: 20,
@@ -173,7 +173,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                       children: [
                         Text(
                           name,
-                          style: GoogleFonts.outfit(
+                          style: GoogleFonts.notoSans(
                             fontWeight: FontWeight.bold,
                             fontSize: 15,
                             color: isDark ? Colors.white : Colors.black87,
@@ -185,7 +185,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                             children: [
                               TextSpan(
                                 text: 'Requested ₹${formatAmount(amount)}',
-                                style: GoogleFonts.outfit(
+                                style: GoogleFonts.notoSans(
                                   color: isDark
                                       ? Colors.white70
                                       : Colors.grey.shade600,
@@ -195,7 +195,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                               if (reason.isNotEmpty)
                                 TextSpan(
                                   text: ' ($reason)',
-                                  style: GoogleFonts.outfit(
+                                  style: GoogleFonts.notoSans(
                                     color: isDark
                                         ? Colors.white54
                                         : Colors.grey.shade500,
@@ -233,7 +233,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                       ),
                       child: Text(
                         'Decline',
-                        style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+                        style: GoogleFonts.notoSans(fontWeight: FontWeight.w600),
                       ),
                     ),
                   ),
@@ -265,7 +265,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                       ),
                       child: Text(
                         'Pay Now',
-                        style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+                        style: GoogleFonts.notoSans(fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),

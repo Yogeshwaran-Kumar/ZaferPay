@@ -4,6 +4,7 @@ import 'api_service.dart';
 import 'mcc_helper.dart';
 import 'transaction_details_screen.dart';
 import 'utils.dart';
+import 'services/app_localizations.dart';
 
 class TransactionHistoryScreen extends StatefulWidget {
   final DateTime? initialMonth;
@@ -11,6 +12,8 @@ class TransactionHistoryScreen extends StatefulWidget {
   initialDateFrom; // For date-range filtering (e.g. spending limit period)
   final String? initialCategory;
   final String? initialType; // 'Money sent' or 'Money received'
+  final String?
+  initialSource; // 'Personal', 'UPI Circle', or specific child name
   final bool showFilters;
 
   const TransactionHistoryScreen({
@@ -19,6 +22,7 @@ class TransactionHistoryScreen extends StatefulWidget {
     this.initialDateFrom,
     this.initialCategory,
     this.initialType,
+    this.initialSource,
     this.showFilters = true,
   });
 
@@ -44,10 +48,10 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
   List<int> _selectedAmountRangeIndices = [];
 
   final List<Map<String, dynamic>> _amountRanges = [
-    {'label': 'Up to ₹200', 'min': 0, 'max': 200},
-    {'label': '₹200 - ₹500', 'min': 200, 'max': 500},
-    {'label': '₹500 - ₹2,000', 'min': 500, 'max': 2000},
-    {'label': 'Above ₹2,000', 'min': 2000, 'max': null},
+    {'label_key': 'history.up_to', 'amount': 200, 'min': 0, 'max': 200},
+    {'label_key': 'range', 'min': 200, 'max': 500}, // Fixed range logic below
+    {'label_key': 'range', 'min': 500, 'max': 2000},
+    {'label_key': 'history.above', 'amount': 2000, 'min': 2000, 'max': null},
   ];
 
   @override
@@ -153,8 +157,18 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
         final isDebit =
             tx['sender_upi_id'] == _user!['upi_id'] ||
             tx['initiated_by_upi'] == _user!['upi_id'];
-        if (_selectedPaymentType == 'Money sent') return isDebit;
-        if (_selectedPaymentType == 'Money received') return !isDebit;
+        if (_selectedPaymentType ==
+            (AppLocalizations.of(context)?.translate('history.money_sent') ??
+                "Money sent")) {
+          return isDebit;
+        }
+        if (_selectedPaymentType ==
+            (AppLocalizations.of(
+                  context,
+                )?.translate('history.money_received') ??
+                "Money received")) {
+          return !isDebit;
+        }
         return true;
       }).toList();
     }
@@ -210,15 +224,70 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
       temp = temp.where((tx) {
         final note = tx['note'] ?? tx['remark'];
         final categoryFromNote = MccHelper.getCategoryFromNote(note);
-        if (categoryFromNote == widget.initialCategory) return true;
+
+        // Harmonize P2P names
+        final targetCategory =
+            (widget.initialCategory == 'P2P / Friends' ||
+                widget.initialCategory == 'People')
+            ? 'People'
+            : widget.initialCategory;
+
+        if (categoryFromNote == targetCategory) return true;
 
         final mcc = tx['receiver_mcc'] ?? tx['sender_mcc'];
-        if (widget.initialCategory == 'People') {
+        if (targetCategory == 'People') {
           return MccHelper.isPersonal(mcc);
         }
         final domain = MccHelper.getDomain(mcc?.toString());
         final category = MccHelper.getGroupedCategory(domain);
-        return category == widget.initialCategory;
+        return category == targetCategory;
+      }).toList();
+    }
+
+    // 6b. Source Filter (from Spend Analysis summary cards)
+    if (widget.initialSource != null) {
+      temp = temp.where((tx) {
+        final myUpi = _user?['upi_id'];
+        final isCircleInitiated =
+            tx['initiated_by_upi'] != null && tx['initiated_by_upi'] != myUpi;
+        final initiatorName = tx['initiated_by_name'];
+
+        if (widget.initialSource == 'Personal') {
+          if (isCircleInitiated) return false;
+
+          // Also exclude transfers to child accounts
+          final mcc = tx['receiver_mcc'] ?? tx['mcc'];
+          final note = tx['note'] ?? tx['remark'];
+          final mccCategory = MccHelper.getGroupedCategory(
+            MccHelper.getDomain(mcc?.toString()),
+          );
+          final noteCategory = MccHelper.getCategoryFromNote(note);
+          if (mccCategory == 'UPI Circle' ||
+              noteCategory == 'UPI Circle' ||
+              tx['is_circle_payment'] == true) {
+            return false;
+          }
+          return true;
+        }
+
+        if (widget.initialSource == 'UPI Circle') {
+          // This should include anything initiated by others OR transfers to child
+          final mcc = tx['receiver_mcc'] ?? tx['mcc'];
+          final note = tx['note'] ?? tx['remark'];
+          final mccCategory = MccHelper.getGroupedCategory(
+            MccHelper.getDomain(mcc?.toString()),
+          );
+          final noteCategory = MccHelper.getCategoryFromNote(note);
+          final isCircleTransfer =
+              mccCategory == 'UPI Circle' ||
+              noteCategory == 'UPI Circle' ||
+              tx['is_circle_payment'] == true;
+
+          return isCircleInitiated || isCircleTransfer;
+        }
+
+        // Specific child name
+        return initiatorName == widget.initialSource;
       }).toList();
     }
 
@@ -233,7 +302,13 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
     for (var tx in transactions) {
       try {
         final dt = DateTime.parse(tx['timestamp']).toLocal();
-        final key = DateFormat('MMMM yyyy').format(dt); // e.g., "January 2026"
+        final monthKey = DateFormat('MMMM').format(dt);
+        final yearStr = DateFormat('yyyy').format(dt);
+        // We don't have a translation for every month+year combo,
+        // but we can translate the month name if we had keys for them.
+        // For now, let's just use the month name from intl as is,
+        // or check if we have localized month names.
+        final key = "$monthKey $yearStr";
         if (!grouped.containsKey(key)) {
           grouped[key] = [];
         }
@@ -297,7 +372,10 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          "Status",
+                          AppLocalizations.of(
+                                context,
+                              )?.translate('history.status_filter') ??
+                              "Status",
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -319,21 +397,30 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       children: [
                         _buildStatusOption(
-                          "Completed",
+                          AppLocalizations.of(
+                                context,
+                              )?.translate('transaction.completed') ??
+                              "Completed",
                           Icons.check_circle,
                           Colors.green,
                           tempSelected,
                           setModalState,
                         ),
                         _buildStatusOption(
-                          "Failed",
+                          AppLocalizations.of(
+                                context,
+                              )?.translate('transaction.failed') ??
+                              "Failed",
                           Icons.cancel,
                           Colors.red,
                           tempSelected,
                           setModalState,
                         ),
                         _buildStatusOption(
-                          "Processing",
+                          AppLocalizations.of(
+                                context,
+                              )?.translate('history.processing') ??
+                              "Processing",
                           Icons.access_time_filled,
                           Colors.orange,
                           tempSelected,
@@ -453,7 +540,10 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          "Payment type",
+                          AppLocalizations.of(
+                                context,
+                              )?.translate('history.payment_type_filter') ??
+                              "Payment type",
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -478,7 +568,10 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                         children: [
                           Expanded(
                             child: _buildTypeGridOption(
-                              "Money sent",
+                              AppLocalizations.of(
+                                    context,
+                                  )?.translate('history.money_sent') ??
+                                  "Money sent",
                               Icons.arrow_outward,
                               tempSelected == "Money sent",
                               () {
@@ -495,7 +588,10 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                           const SizedBox(width: 16),
                           Expanded(
                             child: _buildTypeGridOption(
-                              "Money received",
+                              AppLocalizations.of(
+                                    context,
+                                  )?.translate('history.money_received') ??
+                                  "Money received",
                               Icons.call_received,
                               tempSelected == "Money received",
                               () {
@@ -624,7 +720,10 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          "Amount",
+                          AppLocalizations.of(
+                                context,
+                              )?.translate('history.amount_filter') ??
+                              "Amount",
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -664,7 +763,18 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
-                                  item['label'],
+                                  item['label_key'] == 'range'
+                                      ? '₹${item['min']} - ₹${item['max']}'
+                                      : (AppLocalizations.of(
+                                                  context,
+                                                )?.translate(
+                                                  item['label_key'],
+                                                ) ??
+                                                '')
+                                            .replaceAll(
+                                              '{amount}',
+                                              item['amount'].toString(),
+                                            ),
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w500,
@@ -751,9 +861,10 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                 ),
               ),
               onPressed: onApply,
-              child: const Text(
-                "Apply",
-                style: TextStyle(fontWeight: FontWeight.bold),
+              child: Text(
+                AppLocalizations.of(context)?.translate('history.apply') ??
+                    "Apply",
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
           ),
@@ -772,7 +883,8 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
               ),
               onPressed: onSame,
               child: Text(
-                "Clear all",
+                AppLocalizations.of(context)?.translate('history.clear_all') ??
+                    "Clear all",
                 style: TextStyle(
                   color: isDark ? Colors.white : Colors.black,
                   fontWeight: FontWeight.bold,
@@ -825,14 +937,18 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                             style: TextStyle(
                               color: isDark ? Colors.white : Colors.black,
                             ),
-                            decoration: const InputDecoration(
-                              hintText: "Search transactions",
+                            decoration: InputDecoration(
+                              hintText:
+                                  AppLocalizations.of(
+                                    context,
+                                  )?.translate('history.search_transactions') ??
+                                  "Search transactions",
                               border: InputBorder.none,
-                              prefixIcon: Icon(
+                              prefixIcon: const Icon(
                                 Icons.search,
                                 color: Colors.grey,
                               ),
-                              contentPadding: EdgeInsets.symmetric(
+                              contentPadding: const EdgeInsets.symmetric(
                                 vertical: 12,
                               ),
                             ),
@@ -848,21 +964,52 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                       child: Row(
                         children: [
                           _buildFilterChip(
-                            "Status",
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('history.status_filter') ??
+                                "Status",
                             _selectedStatuses.isNotEmpty
-                                ? "${_selectedStatuses.length} selected"
+                                ? (AppLocalizations.of(context)?.translate(
+                                            'history.selected_status',
+                                          ) ??
+                                          "${_selectedStatuses.length} selected")
+                                      .replaceAll(
+                                        '{count}',
+                                        _selectedStatuses.length.toString(),
+                                      )
                                 : null,
                             _showStatusFilter,
                           ),
                           _buildFilterChip(
-                            "Payment type",
-                            _selectedPaymentType,
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('history.payment_type_filter') ??
+                                "Payment type",
+                            _selectedPaymentType != null
+                                ? (AppLocalizations.of(context)?.translate(
+                                        _selectedPaymentType == 'Money sent'
+                                            ? 'history.money_sent'
+                                            : 'history.money_received',
+                                      ) ??
+                                      _selectedPaymentType)
+                                : null,
                             _showPaymentTypeFilter,
                           ),
                           _buildFilterChip(
-                            "Amount",
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('history.amount_filter') ??
+                                "Amount",
                             _selectedAmountRangeIndices.isNotEmpty
-                                ? "${_selectedAmountRangeIndices.length} ranges"
+                                ? (AppLocalizations.of(context)?.translate(
+                                            'history.selected_ranges',
+                                          ) ??
+                                          "${_selectedAmountRangeIndices.length} ranges")
+                                      .replaceAll(
+                                        '{count}',
+                                        _selectedAmountRangeIndices.length
+                                            .toString(),
+                                      )
                                 : null,
                             _showAmountFilter,
                           ),
@@ -889,7 +1036,10 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            "No transactions found",
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('history.no_transactions') ??
+                                "No transactions found",
                             style: TextStyle(
                               color: Colors.grey.shade600,
                               fontSize: 16,
@@ -926,9 +1076,16 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          monthKey.split(" ").length > 1
-                                              ? monthKey.split(" ")[1]
-                                              : "", // Year
+                                          DateFormat(
+                                            'yyyy',
+                                            AppLocalizations.of(
+                                              context,
+                                            )?.locale.languageCode,
+                                          ).format(
+                                            DateTime.parse(
+                                              monthTxs[0]['timestamp'],
+                                            ),
+                                          ),
                                           style: TextStyle(
                                             fontSize: 14,
                                             color: Colors.grey.shade600,
@@ -936,7 +1093,16 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                                           ),
                                         ),
                                         Text(
-                                          monthKey.split(" ")[0], // Month
+                                          DateFormat(
+                                            'MMMM',
+                                            AppLocalizations.of(
+                                              context,
+                                            )?.locale.languageCode,
+                                          ).format(
+                                            DateTime.parse(
+                                              monthTxs[0]['timestamp'],
+                                            ),
+                                          ),
                                           style: const TextStyle(
                                             fontSize: 24,
                                             fontWeight: FontWeight.bold,
@@ -1118,6 +1284,8 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                 children: [
                   Text(
                     displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
@@ -1136,21 +1304,32 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                       ),
                       if (tx['initiated_by_name'] != null) ...[
                         const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            "UPI Circle by ${tx['initiated_by_name']}",
-                            style: const TextStyle(
-                              color: Colors.blue,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
+                        Flexible(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              (AppLocalizations.of(
+                                        context,
+                                      )?.translate('details.upi_circle_by') ??
+                                      "UPI Circle by {name}")
+                                  .replaceAll(
+                                    '{name}',
+                                    tx['initiated_by_name'] ?? '',
+                                  ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.blue,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ),

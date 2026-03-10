@@ -5,6 +5,7 @@ import 'home_screen.dart';
 import 'money_screen.dart';
 import 'spending_limit_tab_screen.dart';
 import 'profile_screen.dart';
+import 'services/app_localizations.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -77,29 +78,49 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildNavItem(
-                    icon: Icons.home_outlined,
-                    activeIcon: Icons.home_rounded,
-                    label: 'Home',
-                    index: 0,
+                  Expanded(
+                    child: _buildNavItem(
+                      icon: Icons.home_outlined,
+                      activeIcon: Icons.home_rounded,
+                      label:
+                          AppLocalizations.of(context)?.translate('nav.home') ??
+                          'Home',
+                      index: 0,
+                    ),
                   ),
-                  _buildNavItem(
-                    icon: Icons.account_balance_wallet_outlined,
-                    activeIcon: Icons.account_balance_wallet_rounded,
-                    label: 'Money',
-                    index: 1,
+                  Expanded(
+                    child: _buildNavItem(
+                      icon: Icons.account_balance_wallet_outlined,
+                      activeIcon: Icons.account_balance_wallet_rounded,
+                      label:
+                          AppLocalizations.of(context)?.translate('nav.money') ??
+                          'Money',
+                      index: 1,
+                    ),
                   ),
-                  _buildNavItem(
-                    icon: Icons.donut_large_outlined,
-                    activeIcon: Icons.donut_large_rounded,
-                    label: 'Analytics',
-                    index: 2,
+                  Expanded(
+                    child: _buildNavItem(
+                      icon: Icons.donut_large_outlined,
+                      activeIcon: Icons.donut_large_rounded,
+                      label:
+                          AppLocalizations.of(
+                            context,
+                          )?.translate('nav.analytics') ??
+                          'Analytics',
+                      index: 2,
+                    ),
                   ),
-                  _buildNavItem(
-                    icon: Icons.person_outline_rounded,
-                    activeIcon: Icons.person_rounded,
-                    label: 'You',
-                    index: 3,
+                  Expanded(
+                    child: _buildNavItem(
+                      icon: Icons.person_outline_rounded,
+                      activeIcon: Icons.person_rounded,
+                      label:
+                          AppLocalizations.of(
+                            context,
+                          )?.translate('nav.profile') ??
+                          'You',
+                      index: 3,
+                    ),
                   ),
                 ],
               ),
@@ -138,28 +159,28 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
           color: isActive ? activeBgColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: Icon(
-                isActive ? activeIcon : icon,
-                key: ValueKey('${index}_$isActive'),
-                color: isActive ? activeIconColor : inactiveIconColor,
-                size: 24,
-              ),
+            Icon(
+              isActive ? activeIcon : icon,
+              color: isActive ? activeIconColor : inactiveIconColor,
+              size: 22,
             ),
-            const SizedBox(height: 3),
+            const SizedBox(height: 2),
             Text(
               label,
-              style: GoogleFonts.outfit(
-                fontSize: 11,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.notoSans(
+                fontSize: 10,
                 color: isActive ? activeIconColor : inactiveIconColor,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
               ),

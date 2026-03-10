@@ -166,7 +166,7 @@ def train_model():
         logger.info("Fetching transaction history...")
         
         txs = db.query(models.Transaction).filter(
-            models.Transaction.status == "SUCCESS"
+            models.Transaction.status.in_(["SUCCESS", "FAILED", "BLOCKED"])
         ).all()
         if len(txs) < MIN_TRANSACTIONS_FOR_TRAINING:
             logger.info(f"Need {MIN_TRANSACTIONS_FOR_TRAINING} transactions, have {len(txs)}. Skipping.")
@@ -187,9 +187,9 @@ def train_model():
         labels = []  # 1 = fraud/blocked, 0 = normal
         
         for tx in txs:
-            # Use the REAL feature extraction logic
+            # Use the OPTIMIZED feature extraction logic (with valid SQL syntax)
             # This ensures training data matches inference data exactly
-            features = fraud_engine.extract_features(db, tx.sender, tx.receiver, tx.amount, tx.timestamp)
+            features = fraud_engine.extract_features_optimized(db, tx.sender, tx.receiver, tx.amount, tx.timestamp)
             row = fraud_engine.get_feature_array(features)
             
             data.append(row)

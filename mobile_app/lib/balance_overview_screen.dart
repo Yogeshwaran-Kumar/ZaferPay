@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'utils.dart';
 import 'spend_analysis_screen.dart';
+import 'services/app_localizations.dart';
+import 'mcc_helper.dart';
 
 class BalanceOverviewScreen extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -44,44 +46,85 @@ class _BalanceOverviewScreenState extends State<BalanceOverviewScreen> {
     final now = DateTime.now();
     final currentMonthStr = DateFormat('yyyy-MM').format(now);
     final myUpi = widget.user['upi_id'];
-    final isChild = widget.user['bank_name'] == null;
 
     Map<String, double> categorySpends = {};
+    bool hasCircleSpends = false;
 
+    // First pass: Check if there are any circle spends
     for (var tx in widget.history) {
       if (tx['status'] != 'SUCCESS') continue;
-
-      final isDebit =
-          tx['sender_upi_id'] == myUpi || tx['initiated_by_upi'] == myUpi;
-      if (!isDebit) continue; // Only count outward spends
+      final txDateStr = tx['timestamp'];
+      if (txDateStr == null) continue;
 
       try {
-        final txDate = DateTime.parse(tx['timestamp']).toLocal();
+        final txDate = DateTime.parse(txDateStr).toLocal();
         final txMonthStr = DateFormat('yyyy-MM').format(txDate);
+        if (txMonthStr != currentMonthStr) continue;
 
-        if (txMonthStr == currentMonthStr) {
-          final initiatorName = tx['initiated_by_name'];
-          final initiatorUpi = tx['initiated_by_upi'];
+        final isDebit =
+            tx['sender_upi_id'] == myUpi || tx['initiated_by_upi'] == myUpi;
+        if (!isDebit) continue;
 
-          String category = 'Personal';
-          if (initiatorUpi != null) {
-            if (isChild) {
-              category = 'UPI Circle';
-            } else {
-              category = initiatorName ?? 'UPI Circle';
-            }
-          }
-
-          final amount = (tx['amount'] ?? 0).toDouble();
-          categorySpends[category] = (categorySpends[category] ?? 0) + amount;
+        if (tx['initiated_by_upi'] != null) {
+          hasCircleSpends = true;
+          break;
         }
       } catch (e) {
-        // Skip invalid dates
+        /**/
+      }
+    }
+
+    // Second pass: Aggregate based on strategy
+    for (var tx in widget.history) {
+      if (tx['status'] != 'SUCCESS') continue;
+      final txDateStr = tx['timestamp'];
+      if (txDateStr == null) continue;
+
+      try {
+        final txDate = DateTime.parse(txDateStr).toLocal();
+        final txMonthStr = DateFormat('yyyy-MM').format(txDate);
+        if (txMonthStr != currentMonthStr) continue;
+
+        final isDebit =
+            tx['sender_upi_id'] == myUpi || tx['initiated_by_upi'] == myUpi;
+        if (!isDebit) continue;
+
+        final amount = (tx['amount'] ?? 0).toDouble();
+        String category = 'Others';
+
+        if (hasCircleSpends) {
+          // Rule: Show UPI Circle and Personal only
+          if (tx['initiated_by_upi'] != null) {
+            category = 'UPI Circle';
+          } else {
+            category = 'Personal';
+          }
+        } else {
+          // Rule: Show functional categories (Food, Shopping, etc)
+          final mcc = tx['mcc'];
+          final note = tx['remark'] ?? tx['note'];
+
+          String? categoryFromNote = MccHelper.getCategoryFromNote(note);
+          if (categoryFromNote != null) {
+            category = categoryFromNote;
+          } else {
+            category = MccHelper.getGroupedCategory(MccHelper.getDomain(mcc));
+          }
+
+          // If it's a P2P transfer (Personal), we can label it explicitly
+          if (category == 'People') {
+            category = 'P2P / Friends';
+          }
+        }
+
+        categorySpends[category] = (categorySpends[category] ?? 0) + amount;
+      } catch (e) {
+        /**/
       }
     }
 
     var sortedCategories = categorySpends.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value)); // Descending order
+      ..sort((a, b) => b.value.compareTo(a.value));
 
     _topCategories = sortedCategories.map((e) {
       return {'name': e.key, 'amount': e.value};
@@ -89,18 +132,36 @@ class _BalanceOverviewScreenState extends State<BalanceOverviewScreen> {
   }
 
   Color _getCategoryColor(String category) {
-    if (category == 'Personal') {
-      return const Color(0xFF00B9F1); // Signature Blue
+    switch (category) {
+      case 'Personal':
+      case 'P2P / Friends':
+        return const Color(0xFF00B9F1);
+      case 'UPI Circle':
+        return const Color(0xFF4CAF50);
+      case 'Food & Drinks':
+        return const Color(0xFFFF9800);
+      case 'Shopping':
+        return const Color(0xFFE91E63);
+      case 'Transport':
+        return const Color(0xFF9C27B0);
+      case 'Bills & Utilities':
+        return const Color(0xFF3F51B5);
+      case 'Entertainment':
+        return const Color(0xFFF44336);
+      case 'Health':
+        return const Color(0xFF009688);
+      case 'Education':
+        return const Color(0xFF795548);
+      case 'Investments':
+        return const Color(0xFF607D8B);
+      default:
+        return Colors.grey.shade400;
     }
-    // Deterministic color for child names/Circle
-    return getAvatarColor(category);
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    // Background: Clean look matching home screen
     final bgColor = isDark ? const Color(0xFF0F1115) : const Color(0xFFF8F9FA);
 
     return Scaffold(
@@ -124,51 +185,99 @@ class _BalanceOverviewScreenState extends State<BalanceOverviewScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // --- Balance Header ---
-                    Text(
-                      'Available balance',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: isDark
-                            ? Colors.grey.shade400
-                            : Colors.grey.shade600,
+                    // --- Redesigned Balance Card ---
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: isDark
+                              ? [
+                                  const Color(0xFF1E2630),
+                                  const Color(0xFF161C24),
+                                ]
+                              : [Colors.white, const Color(0xFFF1F5F9)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: isDark
+                            ? []
+                            : [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.05),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                        border: Border.all(
+                          color: isDark ? Colors.white10 : Colors.white,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Flexible(
-                          child: FittedBox(
-                            alignment: Alignment.centerLeft,
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              '₹${formatAmount(_balance)}',
-                              style: GoogleFonts.outfit(
-                                fontSize: 40,
-                                fontWeight: FontWeight.bold,
-                                color: isDark ? Colors.white : Colors.black,
-                              ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('analysis.available_balance') ??
+                                'Available balance',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: isDark
+                                  ? Colors.grey.shade400
+                                  : Colors.grey.shade600,
+                              letterSpacing: 0.5,
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        GestureDetector(
-                          onTap: () {
-                            // Refresh logic could go here if needed
-                          },
-                          child: Icon(
-                            Icons.sync,
-                            size: 24,
-                            color: isDark
-                                ? Colors.grey.shade400
-                                : Colors.grey.shade600,
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: FittedBox(
+                                  alignment: Alignment.centerLeft,
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    '₹${formatAmount(_balance)}',
+                                    style: GoogleFonts.notoSans(
+                                      fontSize: 48, // Increased size
+                                      fontWeight: FontWeight.bold,
+                                      color: isDark
+                                          ? Colors.white
+                                          : Colors.black,
+                                      height: 1.1,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? Colors.white10
+                                      : Colors.blue.shade50,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: IconButton(
+                                  icon: Icon(
+                                    Icons.sync,
+                                    size: 22,
+                                    color: isDark
+                                        ? Colors.blue.shade300
+                                        : Colors.blue.shade600,
+                                  ),
+                                  onPressed: () {},
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 24),
 
+                    // --- User Card ---
                     TweenAnimationBuilder<double>(
                       tween: Tween<double>(begin: 0, end: 1),
                       duration: const Duration(milliseconds: 600),
@@ -194,15 +303,6 @@ class _BalanceOverviewScreenState extends State<BalanceOverviewScreen> {
                                 ? Colors.white10
                                 : Colors.grey.shade200,
                           ),
-                          boxShadow: isDark
-                              ? []
-                              : [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.04),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
                         ),
                         child: Row(
                           children: [
@@ -221,7 +321,7 @@ class _BalanceOverviewScreenState extends State<BalanceOverviewScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    widget.user['username'] ?? 'User',
+                                    widget.user['username'] ?? "User",
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w600,
                                       fontSize: 14,
@@ -243,26 +343,12 @@ class _BalanceOverviewScreenState extends State<BalanceOverviewScreen> {
                                 ],
                               ),
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isDark
-                                    ? Colors.white.withAlpha(25)
-                                    : Colors.blue.shade50,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                "ZaferPay Bank", // Mocked Bank Name as requested or could pull from DB if available
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w500,
-                                  color: isDark
-                                      ? Colors.grey.shade300
-                                      : Colors.grey.shade700,
-                                ),
+                            Text(
+                              "ZaferPay Bank",
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue.shade400,
                               ),
                             ),
                           ],
@@ -270,26 +356,30 @@ class _BalanceOverviewScreenState extends State<BalanceOverviewScreen> {
                       ),
                     ),
 
-                    const SizedBox(height: 48),
+                    const SizedBox(height: 40),
 
                     // --- Spend Analysis Header ---
                     Text(
-                      'Your spend analysis for $_currentMonth',
+                      (AppLocalizations.of(context)?.translate(
+                                'analysis.spend_analysis_for_month',
+                              ) ??
+                              'Your spend analysis for {month}')
+                          .replaceAll('{month}', _currentMonth),
                       style: TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.bold,
                         color: isDark
-                            ? Colors.grey.shade400
-                            : Colors.grey.shade600,
+                            ? Colors.grey.shade300
+                            : Colors.grey.shade800,
                       ),
                     ),
                     const SizedBox(height: 24),
 
-                    // --- Top Categories Chart ---
+                    // --- Top Categories Content ---
                     if (_topCategories.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 24.0),
-                        child: Center(
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 40),
                           child: Text(
                             "No spends this month yet.",
                             style: TextStyle(color: Colors.grey.shade500),
@@ -297,11 +387,10 @@ class _BalanceOverviewScreenState extends State<BalanceOverviewScreen> {
                         ),
                       )
                     else ...[
-                      // Donut pie chart
                       Center(
                         child: SizedBox(
-                          width: 200,
-                          height: 200,
+                          width: 220,
+                          height: 220,
                           child: TweenAnimationBuilder<double>(
                             tween: Tween<double>(begin: 0, end: 1),
                             duration: const Duration(milliseconds: 900),
@@ -324,26 +413,24 @@ class _BalanceOverviewScreenState extends State<BalanceOverviewScreen> {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
-                                        'Top Spends',
+                                        'Total Spends',
                                         style: TextStyle(
                                           fontSize: 12,
-                                          color: isDark
-                                              ? Colors.grey.shade500
-                                              : Colors.grey.shade500,
+                                          color: Colors.grey.shade500,
                                           fontWeight: FontWeight.w500,
                                         ),
                                       ),
-                                      const SizedBox(height: 2),
+                                      const SizedBox(height: 4),
                                       FittedBox(
                                         fit: BoxFit.scaleDown,
                                         child: Text(
                                           '₹${formatAmount(_topCategories.fold(0.0, (sum, cat) => sum + (cat['amount'] as double)))}',
-                                          style: GoogleFonts.outfit(
-                                            fontSize: 16,
+                                          style: GoogleFonts.notoSans(
+                                            fontSize: 20,
                                             fontWeight: FontWeight.bold,
                                             color: isDark
                                                 ? Colors.white
-                                                : Colors.black87,
+                                                : Colors.black,
                                           ),
                                         ),
                                       ),
@@ -355,55 +442,66 @@ class _BalanceOverviewScreenState extends State<BalanceOverviewScreen> {
                           ),
                         ),
                       ),
-
-                      const SizedBox(height: 24),
-
-                      // Color-dot legend
-                      Center(
-                        child: Wrap(
-                          spacing: 16,
-                          runSpacing: 8,
-                          alignment: WrapAlignment.center,
-                          children: _topCategories.map((cat) {
-                            final total = _topCategories.fold(
-                              0.0,
-                              (sum, c) => sum + (c['amount'] as double),
-                            );
-                            final pct = total > 0
-                                ? (cat['amount'] as double) / total * 100
-                                : 0.0;
-                            return Row(
+                      const SizedBox(height: 32),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: _topCategories.map((cat) {
+                          final total = _topCategories.fold(
+                            0.0,
+                            (sum, c) => sum + (c['amount'] as double),
+                          );
+                          final pct = total > 0
+                              ? (cat['amount'] as double) / total * 100
+                              : 0.0;
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? Colors.white.withAlpha(15)
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isDark
+                                    ? Colors.white10
+                                    : Colors.grey.shade100,
+                              ),
+                            ),
+                            child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Container(
-                                  width: 10,
-                                  height: 10,
+                                  width: 8,
+                                  height: 8,
                                   decoration: BoxDecoration(
                                     color: _getCategoryColor(cat['name']),
                                     shape: BoxShape.circle,
                                   ),
                                 ),
-                                const SizedBox(width: 6),
+                                const SizedBox(width: 8),
                                 Text(
                                   '${cat['name']} ${pct.toStringAsFixed(1)}%',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: isDark
-                                        ? Colors.grey.shade400
-                                        : Colors.grey.shade600,
                                     fontWeight: FontWeight.w500,
+                                    color: isDark
+                                        ? Colors.grey.shade300
+                                        : Colors.grey.shade700,
                                   ),
                                 ),
                               ],
-                            );
-                          }).toList(),
-                        ),
+                            ),
+                          );
+                        }).toList(),
                       ),
                     ],
 
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 40),
 
-                    // --- Check Spend Analysis Button ---
+                    // --- Action Button ---
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
@@ -419,34 +517,28 @@ class _BalanceOverviewScreenState extends State<BalanceOverviewScreen> {
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: isDark
-                              ? const Color(0xFF1E2630)
-                              : const Color(0xFFF0F0F0),
-                          foregroundColor: isDark
-                              ? Colors.white
-                              : Colors.black87,
+                          backgroundColor: Colors.blue.shade600,
+                          foregroundColor: Colors.white,
                           elevation: 0,
-                          side: isDark
-                              ? const BorderSide(color: Colors.white10)
-                              : BorderSide.none,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          padding: const EdgeInsets.symmetric(vertical: 18),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(16),
                           ),
                         ),
-                        child: const Text(
-                          'Check spend analysis',
-                          style: TextStyle(
+                        child: Text(
+                          AppLocalizations.of(
+                                context,
+                              )?.translate('analysis.check_spend_analysis') ??
+                              'Check detailed analysis',
+                          style: const TextStyle(
                             fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
                     ),
 
-                    const SizedBox(height: 32),
-
-                    // --- Powered by ZaferPay ---
+                    const SizedBox(height: 40),
                     Center(
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -458,14 +550,13 @@ class _BalanceOverviewScreenState extends State<BalanceOverviewScreen> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            'Powered by ZaferPay',
-                            style: GoogleFonts.outfit(
+                            'Powered by ZaferPay Secure',
+                            style: GoogleFonts.notoSans(
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
                               color: isDark
-                                  ? Colors.grey.shade400
-                                  : Colors.grey.shade600,
-                              letterSpacing: 0.5,
+                                  ? Colors.grey.shade500
+                                  : Colors.grey.shade500,
                             ),
                           ),
                         ],
@@ -502,14 +593,13 @@ class _PieChartPainter extends CustomPainter {
 
     final center = Offset(size.width / 2, size.height / 2);
     final outerRadius = size.width / 2;
-    final strokeWidth = size.width * 0.18; // donut ring width
-    final innerRadius = outerRadius - strokeWidth;
+    final strokeWidth = size.width * 0.16;
     final rect = Rect.fromCircle(
       center: center,
       radius: outerRadius - strokeWidth / 2,
     );
-    const startAngle = -math.pi / 2; // start from 12 o'clock
-    const gapAngle = 0.025; // radians gap between slices
+    const startAngle = -math.pi / 2;
+    const gapAngle = 0.04;
 
     double currentAngle = startAngle;
 
@@ -517,13 +607,16 @@ class _PieChartPainter extends CustomPainter {
       final cat = categories[i];
       final fraction = (cat['amount'] as double) / total;
       final sweepAngle = fraction * 2 * math.pi * progress - gapAngle;
-      if (sweepAngle <= 0) continue;
+      if (sweepAngle <= 0) {
+        currentAngle += fraction * 2 * math.pi * progress;
+        continue;
+      }
 
       final paint = Paint()
         ..color = getColor(cat['name'] as String)
         ..style = PaintingStyle.stroke
         ..strokeWidth = strokeWidth
-        ..strokeCap = StrokeCap.butt;
+        ..strokeCap = StrokeCap.round;
 
       canvas.drawArc(
         rect,
@@ -535,12 +628,11 @@ class _PieChartPainter extends CustomPainter {
       currentAngle += fraction * 2 * math.pi * progress;
     }
 
-    // Draw inner shadow ring (subtle)
     final shadowPaint = Paint()
-      ..color = (isDark ? Colors.white : Colors.black).withValues(alpha: 0.04)
+      ..color = (isDark ? Colors.white : Colors.black).withAlpha(10)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    canvas.drawCircle(center, innerRadius, shadowPaint);
+      ..strokeWidth = 1.0;
+    canvas.drawCircle(center, outerRadius - strokeWidth, shadowPaint);
   }
 
   @override

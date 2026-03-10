@@ -9,6 +9,7 @@ import 'balance_check_screen.dart';
 import 'balance_overview_screen.dart';
 import 'mcc_helper.dart';
 import 'utils.dart';
+import 'services/app_localizations.dart';
 
 class MoneyScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -158,7 +159,14 @@ class MoneyScreenState extends State<MoneyScreen> with RouteAware {
     }
 
     if (_user == null) {
-      return const Scaffold(body: Center(child: Text('Failed to load data')));
+      return Scaffold(
+        body: Center(
+          child: Text(
+            AppLocalizations.of(context)?.translate('money.load_failed') ??
+                'Failed to load data',
+          ),
+        ),
+      );
     }
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -167,7 +175,7 @@ class MoneyScreenState extends State<MoneyScreen> with RouteAware {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
-          'Money',
+          AppLocalizations.of(context)?.translate('money.title') ?? 'Money',
           style: TextStyle(
             color: Theme.of(context).appBarTheme.titleTextStyle?.color,
           ),
@@ -223,12 +231,18 @@ class MoneyScreenState extends State<MoneyScreen> with RouteAware {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'Available Balance',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.9),
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
+                          Flexible(
+                            child: Text(
+                              AppLocalizations.of(
+                                    context,
+                                  )?.translate('money.available_balance') ??
+                                  'Available Balance',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.9),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           Icon(
@@ -241,7 +255,7 @@ class MoneyScreenState extends State<MoneyScreen> with RouteAware {
                       const SizedBox(height: 12),
                       Text(
                         '₹ ••••••',
-                        style: GoogleFonts.outfit(
+                        style: GoogleFonts.notoSans(
                           fontSize: 36,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
@@ -249,11 +263,15 @@ class MoneyScreenState extends State<MoneyScreen> with RouteAware {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'Tap to view balance & spend analysis',
+                        AppLocalizations.of(
+                              context,
+                            )?.translate('money.tap_view_balance') ??
+                            'Tap to view balance & spend analysis',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.8),
                           fontSize: 12,
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 16),
                       Container(
@@ -299,11 +317,17 @@ class MoneyScreenState extends State<MoneyScreen> with RouteAware {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Transaction History',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).textTheme.titleLarge?.color,
+                  Flexible(
+                    child: Text(
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('history.title') ??
+                          'Transaction History',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).textTheme.titleLarge?.color,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   TextButton(
@@ -316,7 +340,12 @@ class MoneyScreenState extends State<MoneyScreen> with RouteAware {
                         ),
                       );
                     },
-                    child: const Text('Show More'),
+                    child: Text(
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('history.show_more') ??
+                          'Show More',
+                    ),
                   ),
                 ],
               ),
@@ -327,7 +356,10 @@ class MoneyScreenState extends State<MoneyScreen> with RouteAware {
                   child: Padding(
                     padding: const EdgeInsets.all(32.0),
                     child: Text(
-                      'No transactions yet',
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('history.no_transactions') ??
+                          'No transactions yet',
                       style: TextStyle(
                         color: isDark
                             ? Colors.grey.shade400
@@ -359,10 +391,16 @@ class MoneyScreenState extends State<MoneyScreen> with RouteAware {
                     final String displayName = isDebit
                         ? (tx['receiver_name'] as String? ??
                               tx['receiver_upi_id'] as String? ??
-                              'Unknown')
+                              (AppLocalizations.of(
+                                    context,
+                                  )?.translate('amount.unknown') ??
+                                  'Unknown'))
                         : (tx['sender_name'] as String? ??
                               tx['sender_upi_id'] as String? ??
-                              'Unknown');
+                              (AppLocalizations.of(
+                                    context,
+                                  )?.translate('amount.unknown') ??
+                                  'Unknown'));
 
                     String formattedDate;
                     try {
@@ -474,7 +512,14 @@ class MoneyScreenState extends State<MoneyScreen> with RouteAware {
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
-                                    '${tx['risk_score']} Risk',
+                                    (AppLocalizations.of(
+                                              context,
+                                            )?.translate('details.risk') ??
+                                            '{level} Risk')
+                                        .replaceAll(
+                                          '{level}',
+                                          tx['risk_score'].toString(),
+                                        ),
                                     style: TextStyle(
                                       fontSize: 10,
                                       color: tx['risk_score'] == 'HIGH'

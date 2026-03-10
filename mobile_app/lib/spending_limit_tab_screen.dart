@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'api_service.dart';
 import 'spending_limit_screen.dart';
+import 'services/app_localizations.dart';
 
 /// A self-contained tab screen that LIVE-polls user + history data
 /// and passes fresh data into SpendAnalysisScreen so the spending
@@ -107,8 +108,11 @@ class _SpendingLimitTabScreenState extends State<SpendingLimitTabScreen>
               ),
               const SizedBox(height: 16),
               Text(
-                'Could not load spending data',
-                style: GoogleFonts.outfit(
+                AppLocalizations.of(
+                      context,
+                    )?.translate('spending_limit.error_load') ??
+                    'Could not load spending data',
+                style: GoogleFonts.notoSans(
                   color: Colors.grey.shade500,
                   fontSize: 15,
                 ),
@@ -126,7 +130,10 @@ class _SpendingLimitTabScreenState extends State<SpendingLimitTabScreen>
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text('Retry'),
+                child: Text(
+                  AppLocalizations.of(context)?.translate('common.retry') ??
+                      'Retry',
+                ),
               ),
             ],
           ),

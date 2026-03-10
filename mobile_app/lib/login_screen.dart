@@ -2,8 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'main.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'services/app_localizations.dart';
 import 'api_service.dart';
+import 'main.dart';
 import 'services/notification_service.dart';
 import 'services/biometric_service.dart';
 import 'services/sim_service.dart';
@@ -49,15 +51,21 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // Status text for the PIN screen title
   String get _pinTitle {
-    if (widget.isUnlockMode) return 'Unlock App';
+    if (widget.isUnlockMode) {
+      return AppLocalizations.of(context)?.translate('login.unlock_app') ??
+          'Unlock App';
+    }
     switch (_currentStep) {
       case 1:
-        return 'Set New PIN';
+        return AppLocalizations.of(context)?.translate('login.set_pin') ??
+            'Set New PIN';
       case 2:
-        return 'Confirm PIN';
+        return AppLocalizations.of(context)?.translate('login.confirm_pin') ??
+            'Confirm PIN';
       case 3:
         // Unified title to match "Unlock App" experience (Standardizing UI)
-        return 'Unlock App';
+        return AppLocalizations.of(context)?.translate('login.unlock_app') ??
+            'Unlock App';
       default:
         return '';
     }
@@ -148,7 +156,9 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
 
     final success = await _biometric.authenticate(
-      reason: 'Step 1 of 2: Verify your biometric to proceed',
+      reason:
+          AppLocalizations.of(context)?.translate('login.biometric_reason') ??
+          'Step 1 of 2: Verify your biometric to proceed',
     );
 
     if (!mounted) return;
@@ -291,8 +301,13 @@ class _LoginScreenState extends State<LoginScreen> {
     final mobile = _mobileController.text.trim();
     if (mobile.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a valid Mobile Number or Email'),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(
+                  context,
+                )?.translate('login.enter_mobile_error') ??
+                'Please enter a valid Mobile Number or Email',
+          ),
         ),
       );
       return;
@@ -356,12 +371,15 @@ class _LoginScreenState extends State<LoginScreen> {
         // User does not exist - Show error message (NO permission check here)
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Text(
-                'User does not exist in our app. Please create an account.',
+                AppLocalizations.of(
+                      context,
+                    )?.translate('login.user_not_found') ??
+                    'User does not exist in our app. Please create an account.',
               ),
               backgroundColor: Colors.red,
-              duration: Duration(seconds: 4),
+              duration: const Duration(seconds: 4),
             ),
           );
         }
@@ -393,15 +411,23 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _validateAndProceedSignup() async {
     if (_nameController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Name is required')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context)?.translate('login.name_required') ??
+                'Name is required',
+          ),
+        ),
+      );
       return;
     }
     if (_mobileController.text.trim().length != 10) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a valid 10-digit phone number'),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context)?.translate('login.invalid_phone') ??
+                'Please enter a valid 10-digit phone number',
+          ),
         ),
       );
       return;
@@ -508,8 +534,14 @@ class _LoginScreenState extends State<LoginScreen> {
               SnackBar(
                 content: Text(
                   _isNewUserSignup
-                      ? 'Account Created! Logging you in.'
-                      : 'PIN Set Successfully! Login now.',
+                      ? (AppLocalizations.of(
+                              context,
+                            )?.translate('login.signup_success') ??
+                            'Account Created! Logging you in.')
+                      : (AppLocalizations.of(
+                              context,
+                            )?.translate('login.pin_set_success') ??
+                            'PIN Set Successfully! Login now.'),
                 ),
               ),
             );
@@ -528,8 +560,14 @@ class _LoginScreenState extends State<LoginScreen> {
               SnackBar(
                 content: Text(
                   _isNewUserSignup
-                      ? 'Failed to create account. Try again.'
-                      : 'Failed to set PIN. Try again.',
+                      ? (AppLocalizations.of(
+                              context,
+                            )?.translate('login.signup_failed') ??
+                            'Failed to create account. Try again.')
+                      : (AppLocalizations.of(
+                              context,
+                            )?.translate('login.pin_set_failed') ??
+                            'Failed to set PIN. Try again.'),
                 ),
               ),
             );
@@ -544,8 +582,11 @@ class _LoginScreenState extends State<LoginScreen> {
       } else {
         // Mismatch
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('PIN mismatch'),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context)?.translate('login.pin_mismatch') ??
+                  'PIN mismatch',
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -574,14 +615,27 @@ class _LoginScreenState extends State<LoginScreen> {
         context: context,
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
-          title: const Text("Security Warning"),
-          content: const Text(
-            "Warning: You have tried too many times. One more failed attempt will log you out.",
+          title: Text(
+            AppLocalizations.of(
+                  context,
+                )?.translate('login.pin_security_warning') ??
+                "Security Warning",
+          ),
+          content: Text(
+            AppLocalizations.of(
+                  context,
+                )?.translate('login.pin_failed_attempts') ??
+                "Warning: You have tried too many times. One more failed attempt will log you out.",
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text("I Understand"),
+              child: Text(
+                AppLocalizations.of(
+                      context,
+                    )?.translate('login.pin_i_understand') ??
+                    "I Understand",
+              ),
             ),
           ],
         ),
@@ -596,10 +650,14 @@ class _LoginScreenState extends State<LoginScreen> {
     showDialog(
       context: context,
       barrierDismissible: false, // User cannot close this
-      builder: (ctx) => const AlertDialog(
-        title: Text("Account Locked"),
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          AppLocalizations.of(context)?.translate('login.pin_locked_out') ??
+              "Account Locked",
+        ),
         content: Text(
-          "Too many incorrect attempts so your account has been logged out.",
+          AppLocalizations.of(context)?.translate('login.pin_locked_out_msg') ??
+              "Too many incorrect attempts so your account has been logged out.",
         ),
       ),
     );
@@ -698,8 +756,13 @@ class _LoginScreenState extends State<LoginScreen> {
       // Connection error
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Connection error'),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(
+                    context,
+                  )?.translate('login.connection_error') ??
+                  'Connection error',
+            ),
             backgroundColor: Colors.red,
             duration: Duration(seconds: 2),
           ),
@@ -714,10 +777,15 @@ class _LoginScreenState extends State<LoginScreen> {
       // Any other error
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Connection error'),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(
+                    context,
+                  )?.translate('login.connection_error') ??
+                  'Connection error',
+            ),
             backgroundColor: Colors.red,
-            duration: Duration(seconds: 2),
+            duration: const Duration(seconds: 2),
           ),
         );
       }
@@ -735,7 +803,8 @@ class _LoginScreenState extends State<LoginScreen> {
         backgroundColor: const Color(0xFF1E2032), // Dark card bg
         icon: const Icon(Icons.devices, color: Color(0xFF00B9F1), size: 48),
         title: Text(
-          'Already Logged In',
+          AppLocalizations.of(context)?.translate('login.already_logged_in') ??
+              'Already Logged In',
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.bold,
             fontSize: 20,
@@ -747,7 +816,10 @@ class _LoginScreenState extends State<LoginScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'This account is login in another device. For login in this device click logout button.',
+              AppLocalizations.of(
+                    context,
+                  )?.translate('login.logged_in_elsewhere_msg') ??
+                  'This account is login in another device. For login in this device click logout button.',
               style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
             ),
           ],
@@ -768,7 +840,10 @@ class _LoginScreenState extends State<LoginScreen> {
               side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
-            child: const Text('Cancel'),
+            child: Text(
+              AppLocalizations.of(context)?.translate('details.cancel') ??
+                  'Cancel',
+            ),
           ),
           ElevatedButton(
             onPressed: () {
@@ -782,7 +857,10 @@ class _LoginScreenState extends State<LoginScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               elevation: 4,
             ),
-            child: const Text('Logout'),
+            child: Text(
+              AppLocalizations.of(context)?.translate('settings.logout') ??
+                  'Logout',
+            ),
           ),
         ],
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -798,10 +876,13 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_biometricAvailable && !_biometricVerified && _currentStep == 3) {
       ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please verify using Biometric first'),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context)?.translate('login.verify_biometric') ??
+                'Please verify using Biometric first',
+          ),
           backgroundColor: Colors.orange,
-          duration: Duration(seconds: 2),
+          duration: const Duration(seconds: 2),
         ),
       );
       // Auto-trigger biometric again for convenience
@@ -846,9 +927,10 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 20),
 
               // Welcome Text
-              const Text(
-                'Welcome Back',
-                style: TextStyle(
+              Text(
+                AppLocalizations.of(context)?.translate('login.welcome_back') ??
+                    'Welcome Back',
+                style: const TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                   color: Colors.black87,
@@ -857,8 +939,9 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Enter your phone number to continue',
-                style: TextStyle(color: Colors.black54, fontSize: 16),
+                AppLocalizations.of(context)?.translate('login.enter_phone') ??
+                    'Enter your phone number to continue',
+                style: const TextStyle(color: Colors.black54, fontSize: 16),
               ),
 
               const SizedBox(height: 40),
@@ -912,8 +995,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         decoration: InputDecoration(
                           border: InputBorder.none,
-                          hintText: 'Phone Number',
-                          hintStyle: TextStyle(color: Colors.black38),
+                          hintText:
+                              AppLocalizations.of(
+                                context,
+                              )?.translate('login.phone_number') ??
+                              'Phone Number',
+                          hintStyle: const TextStyle(color: Colors.black38),
                           counterText: '',
                         ),
                       ),
@@ -962,9 +1049,12 @@ class _LoginScreenState extends State<LoginScreen> {
                             strokeWidth: 2.5,
                           ),
                         )
-                      : const Text(
-                          'Continue',
-                          style: TextStyle(
+                      : Text(
+                          AppLocalizations.of(
+                                context,
+                              )?.translate('login.continue') ??
+                              'Continue',
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
@@ -988,13 +1078,21 @@ class _LoginScreenState extends State<LoginScreen> {
                   });
                 },
                 child: RichText(
-                  text: const TextSpan(
-                    text: "Don't have an account? ",
-                    style: TextStyle(color: Colors.black54, fontSize: 14),
+                  text: TextSpan(
+                    text:
+                        AppLocalizations.of(
+                          context,
+                        )?.translate('login.no_account') ??
+                        "Don't have an account? ",
+                    style: const TextStyle(color: Colors.black54, fontSize: 14),
                     children: [
                       TextSpan(
-                        text: "Create account",
-                        style: TextStyle(
+                        text:
+                            AppLocalizations.of(
+                              context,
+                            )?.translate('login.create_account') ??
+                            "Create account",
+                        style: const TextStyle(
                           color: Color(0xFF00B9F1),
                           fontWeight: FontWeight.bold,
                         ),
@@ -1143,14 +1241,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     const SizedBox(height: 8),
                     if (_currentStep == 1)
-                      const Text(
-                        "Create a 4-digit PIN",
-                        style: TextStyle(color: Colors.black54),
+                      Text(
+                        AppLocalizations.of(
+                              context,
+                            )?.translate('login.create_pin_msg') ??
+                            "Create a 4-digit PIN",
+                        style: const TextStyle(color: Colors.black54),
                       )
                     else if (_currentStep == 2)
-                      const Text(
-                        "Re-enter PIN to confirm",
-                        style: TextStyle(color: Colors.black54),
+                      Text(
+                        AppLocalizations.of(
+                              context,
+                            )?.translate('login.confirm_pin_msg') ??
+                            "Re-enter PIN to confirm",
+                        style: const TextStyle(color: Colors.black54),
                       )
                     else if (_upiId.isNotEmpty && !_isUnlocking)
                       Text(
@@ -1242,14 +1346,23 @@ class _LoginScreenState extends State<LoginScreen> {
                 ? Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text(
-                        "App Lock is disabled.",
-                        style: TextStyle(color: Colors.black54, fontSize: 16),
+                      Text(
+                        AppLocalizations.of(
+                              context,
+                            )?.translate('login.app_lock_disabled') ??
+                            "App Lock is disabled.",
+                        style: const TextStyle(
+                          color: Colors.black54,
+                          fontSize: 16,
+                        ),
                       ),
                       const SizedBox(height: 8),
-                      const Text(
-                        "Verify Biometric to Continue",
-                        style: TextStyle(
+                      Text(
+                        AppLocalizations.of(
+                              context,
+                            )?.translate('login.verify_biometric') ??
+                            "Verify Biometric to Continue",
+                        style: const TextStyle(
                           color: Colors.black87,
                           fontSize: 18,
                           fontWeight: FontWeight.w600,
@@ -1284,9 +1397,12 @@ class _LoginScreenState extends State<LoginScreen> {
                             _mobileController.clear();
                           });
                         },
-                        child: const Text(
-                          "Not you? Change Number",
-                          style: TextStyle(color: Colors.black54),
+                        child: Text(
+                          AppLocalizations.of(
+                                context,
+                              )?.translate('login.change_number') ??
+                              "Not you? Change Number",
+                          style: const TextStyle(color: Colors.black54),
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -1337,9 +1453,12 @@ class _LoginScreenState extends State<LoginScreen> {
                               _mobileController.clear();
                             });
                           },
-                          child: const Text(
-                            "Not you? Change Number",
-                            style: TextStyle(color: Colors.black54),
+                          child: Text(
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('login.change_number') ??
+                                "Not you? Change Number",
+                            style: const TextStyle(color: Colors.black54),
                           ),
                         ),
                       const SizedBox(height: 10),
@@ -1360,164 +1479,210 @@ class _LoginScreenState extends State<LoginScreen> {
             child: SingleChildScrollView(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    _buildZaferPayLogo(),
-                    const SizedBox(height: 20),
+                child: Builder(
+                  builder: (context) {
+                    final isDark =
+                        Theme.of(context).brightness == Brightness.dark;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        _buildZaferPayLogo(),
+                        const SizedBox(height: 20),
 
-                    const Text(
-                      'Create Account',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Enter your details to register',
-                      style: TextStyle(color: Colors.black54, fontSize: 16),
-                    ),
-                    const SizedBox(height: 40),
-
-                    TextField(
-                      controller: _nameController,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
-                      decoration: InputDecoration(
-                        labelText: 'User Name',
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(color: Colors.black12),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(color: Colors.black12),
-                        ),
-                        prefixIcon: const Icon(Icons.person_outline),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    TextField(
-                      controller: _mobileController,
-                      keyboardType: TextInputType.phone,
-                      maxLength: 10,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
-                      decoration: InputDecoration(
-                        labelText: 'Phone Number',
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(color: Colors.black12),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(color: Colors.black12),
-                        ),
-                        prefixIcon: const Icon(Icons.phone_android),
-                        counterText: '',
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    TextField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
-                      decoration: InputDecoration(
-                        labelText: 'Gmail (Optional)',
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(color: Colors.black12),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(color: Colors.black12),
-                        ),
-                        prefixIcon: const Icon(Icons.email_outlined),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.black12),
-                      ),
-                      child: SwitchListTile(
-                        title: const Text('Do you have a bank account?'),
-                        subtitle: Text(
-                          _hasBankAccount ? 'Parent User' : 'Child User',
-                          style: TextStyle(
-                            color: _hasBankAccount
-                                ? Colors.blue
-                                : Colors.orange,
+                        Text(
+                          AppLocalizations.of(
+                                context,
+                              )?.translate('login.welcome') ??
+                              'Welcome to Safe Pay',
+                          style: GoogleFonts.notoSans(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : Colors.black87,
                           ),
                         ),
-                        value: _hasBankAccount,
-                        onChanged: (val) {
-                          setState(() => _hasBankAccount = val);
-                        },
-                        activeTrackColor: const Color(
-                          0xFF00B9F1,
-                        ).withValues(alpha: 0.5),
-                        activeThumbColor: const Color(0xFF00B9F1),
-                      ),
-                    ),
-                    const SizedBox(height: 40),
-
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: ElevatedButton(
-                        onPressed: _isLoading
-                            ? null
-                            : _validateAndProceedSignup,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00B9F1),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          elevation: 4,
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Enter your details to register',
+                          style: TextStyle(color: Colors.black54, fontSize: 16),
                         ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 24,
-                                width: 24,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text(
-                                'Next',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  letterSpacing: 1.0,
-                                ),
+                        const SizedBox(height: 40),
+
+                        TextField(
+                          controller: _nameController,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                          decoration: InputDecoration(
+                            labelText:
+                                AppLocalizations.of(
+                                  context,
+                                )?.translate('login.user_name') ??
+                                'User Name',
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: const BorderSide(
+                                color: Colors.black12,
                               ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: const BorderSide(
+                                color: Colors.black12,
+                              ),
+                            ),
+                            prefixIcon: const Icon(Icons.person_outline),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        TextField(
+                          controller: _mobileController,
+                          keyboardType: TextInputType.phone,
+                          maxLength: 10,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                          decoration: InputDecoration(
+                            labelText:
+                                AppLocalizations.of(
+                                  context,
+                                )?.translate('login.phone_number') ??
+                                'Phone Number',
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: const BorderSide(
+                                color: Colors.black12,
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: const BorderSide(
+                                color: Colors.black12,
+                              ),
+                            ),
+                            prefixIcon: const Icon(Icons.phone_android),
+                            counterText: '',
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        TextField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                          decoration: InputDecoration(
+                            labelText:
+                                AppLocalizations.of(
+                                  context,
+                                )?.translate('login.email_optional') ??
+                                'Gmail (Optional)',
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: const BorderSide(
+                                color: Colors.black12,
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: const BorderSide(
+                                color: Colors.black12,
+                              ),
+                            ),
+                            prefixIcon: const Icon(Icons.email_outlined),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.black12),
+                          ),
+                          child: SwitchListTile(
+                            title: Text(
+                              AppLocalizations.of(
+                                    context,
+                                  )?.translate('login.has_bank_account') ??
+                                  'Do you have a bank account?',
+                            ),
+                            subtitle: Text(
+                              _hasBankAccount
+                                  ? (AppLocalizations.of(
+                                          context,
+                                        )?.translate('login.parent_user') ??
+                                        'Parent User')
+                                  : (AppLocalizations.of(
+                                          context,
+                                        )?.translate('login.child_user') ??
+                                        'Child User'),
+                              style: TextStyle(
+                                color: _hasBankAccount
+                                    ? Colors.blue
+                                    : Colors.orange,
+                              ),
+                            ),
+                            value: _hasBankAccount,
+                            onChanged: (val) {
+                              setState(() => _hasBankAccount = val);
+                            },
+                            activeTrackColor: const Color(
+                              0xFF00B9F1,
+                            ).withValues(alpha: 0.5),
+                            activeThumbColor: const Color(0xFF00B9F1),
+                          ),
+                        ),
+                        const SizedBox(height: 40),
+
+                        SizedBox(
+                          width: double.infinity,
+                          height: 56,
+                          child: ElevatedButton(
+                            onPressed: _isLoading
+                                ? null
+                                : _validateAndProceedSignup,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00B9F1),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 4,
+                            ),
+                            child: _isLoading
+                                ? const SizedBox(
+                                    height: 24,
+                                    width: 24,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Next',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                      letterSpacing: 1.0,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),

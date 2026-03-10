@@ -7,6 +7,8 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart' as fp;
+import 'package:gal/gal.dart';
+import 'services/app_localizations.dart';
 import 'api_service.dart';
 import 'mcc_helper.dart';
 import 'main.dart';
@@ -68,17 +70,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final shouldLogout = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('Are you sure you want to logout?'),
+        title: Text(
+          AppLocalizations.of(context)?.translate('settings.logout') ??
+              'Logout',
+        ),
+        content: Text(
+          AppLocalizations.of(context)?.translate('profile.logout_confirm') ??
+              'Are you sure you want to logout?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(
+              AppLocalizations.of(context)?.translate('details.cancel') ??
+                  'Cancel',
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Logout'),
+            child: Text(
+              AppLocalizations.of(context)?.translate('settings.logout') ??
+                  'Logout',
+            ),
           ),
         ],
       ),
@@ -101,8 +115,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     if (_user == null) {
-      return const Scaffold(
-        body: Center(child: Text('Failed to load profile')),
+      return Scaffold(
+        body: Center(
+          child: Text(
+            AppLocalizations.of(context)?.translate('profile.load_failed') ??
+                'Failed to load profile',
+          ),
+        ),
       );
     }
 
@@ -144,7 +163,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _user!['username']?.toUpperCase() ?? 'USER',
+                          _user!['username']?.toUpperCase() ??
+                              (AppLocalizations.of(context)
+                                      ?.translate('profile.user_placeholder')
+                                      ?.toUpperCase() ??
+                                  'USER'),
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -164,11 +187,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           },
                           child: Row(
                             children: [
-                              Text(
-                                'UPI ID: ${_user!['upi_id'] ?? ""}',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: secondaryTextColor,
+                              Flexible(
+                                child: Text(
+                                  '${AppLocalizations.of(context)?.translate('profile.upi_id') ?? "UPI ID"}: ${_user!['upi_id'] ?? ""}',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: secondaryTextColor,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               const SizedBox(width: 4),
@@ -217,8 +244,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           radius: 40,
                           backgroundColor: getAvatarColor(_user!['username']),
                           child: Text(
-                            (_user!['username']?[0] ?? 'U').toUpperCase(),
-                            style: GoogleFonts.outfit(
+                            (_user!['username']?[0] ??
+                                    (AppLocalizations.of(context)?.translate(
+                                          'profile.avatar_placeholder',
+                                        ) ??
+                                        'U'))
+                                .toUpperCase(),
+                            style: GoogleFonts.notoSans(
                               fontSize: 32,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
@@ -265,11 +297,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             const SizedBox(height: 32),
 
-            // Payment Methods Section
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Text(
-                'Set up payment methods',
+                AppLocalizations.of(
+                      context,
+                    )?.translate('profile.payment_methods') ??
+                    'Set up payment methods',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -280,15 +314,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 16),
             _buildOptionItem(
               icon: Icons.account_balance_outlined,
-              title: 'Bank account',
-              subtitle: '1 account',
+              title:
+                  AppLocalizations.of(
+                    context,
+                  )?.translate('profile.bank_account') ??
+                  'Bank account',
+              subtitle:
+                  AppLocalizations.of(
+                    context,
+                  )?.translate('profile.one_account') ??
+                  '1 account',
               onTap: () {
                 // Future: Navigate to bank accounts
               },
             ),
             _buildOptionItem(
               icon: Icons.group_outlined,
-              title: 'UPI Circle',
+              title:
+                  AppLocalizations.of(
+                    context,
+                  )?.translate('profile.upi_circle') ??
+                  'UPI Circle',
+              subtitle:
+                  AppLocalizations.of(
+                    context,
+                  )?.translate('profile.upi_circle_subtitle') ??
+                  'Manage shared limits & circle payments',
               onTap: () {
                 Navigator.push(
                   context,
@@ -302,19 +353,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
             // Menu Options List
             _buildOptionItem(
               icon: Icons.qr_code_rounded,
-              title: 'Your QR code',
+              title:
+                  AppLocalizations.of(context)?.translate('profile.qr_code') ??
+                  'Your QR code',
               onTap: () => _showQrOverlay(context),
             ),
             _buildOptionItem(
               icon: Icons.settings_outlined,
-              title: 'Settings',
+              title:
+                  AppLocalizations.of(context)?.translate('settings.title') ??
+                  'Settings',
               onTap: () {
                 Navigator.pushNamed(context, '/settings');
               },
             ),
             _buildOptionItem(
               icon: Icons.help_outline,
-              title: 'Get help',
+              title:
+                  AppLocalizations.of(context)?.translate('profile.get_help') ??
+                  'Get help',
               onTap: () {
                 Navigator.push(
                   context,
@@ -326,7 +383,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             _buildOptionItem(
               icon: Icons.language,
-              title: 'Language',
+              title:
+                  AppLocalizations.of(context)?.translate('profile.language') ??
+                  'Language',
               onTap: () {
                 Navigator.push(
                   context,
@@ -349,9 +408,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 color: Colors.red,
                 size: 28,
               ),
-              title: const Text(
-                'Logout',
-                style: TextStyle(
+              title: Text(
+                AppLocalizations.of(context)?.translate('settings.logout') ??
+                    'Logout',
+                style: const TextStyle(
                   color: Colors.red,
                   fontWeight: FontWeight.w500,
                   fontSize: 16,
@@ -375,8 +435,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    "Powered by ZaferPay",
-                    style: GoogleFonts.outfit(
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('common.powered_by') ??
+                        "Powered by ZaferPay",
+                    style: GoogleFonts.notoSans(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                       color: isDark ? Colors.white54 : Colors.grey,
@@ -466,17 +529,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String _getFullBankName(String bankName) {
     final lower = bankName.toLowerCase();
+    final loc = AppLocalizations.of(context);
     if (lower.contains('sbi')) {
-      return 'State Bank of India';
+      return loc?.translate('profile.bank_sbi') ?? 'State Bank of India';
     }
     if (lower.contains('axis')) {
-      return 'Axis Bank';
+      return loc?.translate('profile.bank_axis') ?? 'Axis Bank';
     }
     if (lower.contains('icici')) {
-      return 'ICICI Bank';
+      return loc?.translate('profile.bank_icici') ?? 'ICICI Bank';
     }
     if (lower.contains('hdfc')) {
-      return 'HDFC Bank';
+      return loc?.translate('profile.bank_hdfc') ?? 'HDFC Bank';
     }
     return bankName;
   }
@@ -509,7 +573,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (myUpi != null && myUpi == scannedUpi) {
         if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cannot send money to self')),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(
+                    context,
+                  )?.translate('profile.cannot_pay_self') ??
+                  'Cannot send money to self',
+            ),
+          ),
         );
         return;
       }
@@ -649,8 +720,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                                             .start,
                                                     children: [
                                                       Text(
-                                                        'Enter amount',
-                                                        style: GoogleFonts.outfit(
+                                                        AppLocalizations.of(
+                                                              context,
+                                                            )?.translate(
+                                                              'profile.enter_amount',
+                                                            ) ??
+                                                            'Enter amount',
+                                                        style: GoogleFonts.notoSans(
                                                           color:
                                                               primaryTextColor,
                                                           fontSize: 20,
@@ -673,7 +749,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                                             autofocus: true,
                                                             textAlign: TextAlign
                                                                 .center,
-                                                            style: GoogleFonts.outfit(
+                                                            style: GoogleFonts.notoSans(
                                                               color:
                                                                   primaryTextColor,
                                                               fontSize: 48,
@@ -687,7 +763,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                                                       .none,
                                                               prefixText: '₹ ',
                                                               prefixStyle:
-                                                                  GoogleFonts.outfit(
+                                                                  GoogleFonts.notoSans(
                                                                     color:
                                                                         primaryTextColor,
                                                                     fontSize:
@@ -698,7 +774,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                                                   ),
                                                               hintText: '0',
                                                               hintStyle:
-                                                                  GoogleFonts.outfit(
+                                                                  GoogleFonts.notoSans(
                                                                     color: Colors
                                                                         .grey,
                                                                     fontSize:
@@ -728,8 +804,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                                                   context,
                                                                 ),
                                                             child: Text(
-                                                              'Cancel',
-                                                              style: GoogleFonts.outfit(
+                                                              AppLocalizations.of(
+                                                                    context,
+                                                                  )?.translate(
+                                                                    'details.cancel',
+                                                                  ) ??
+                                                                  'Cancel',
+                                                              style: GoogleFonts.notoSans(
                                                                 color: isDark
                                                                     ? const Color(
                                                                         0xFFA8C7FA,
@@ -756,8 +837,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                                                       .trim(),
                                                                 ),
                                                             child: Text(
-                                                              'OK',
-                                                              style: GoogleFonts.outfit(
+                                                              AppLocalizations.of(
+                                                                    context,
+                                                                  )?.translate(
+                                                                    'details.ok',
+                                                                  ) ??
+                                                                  'OK',
+                                                              style: GoogleFonts.notoSans(
                                                                 color: isDark
                                                                     ? const Color(
                                                                         0xFFA8C7FA,
@@ -806,8 +892,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   PopupMenuItem<String>(
                                     value: 'set_amount',
                                     child: Text(
-                                      'Set Amount',
-                                      style: GoogleFonts.outfit(
+                                      AppLocalizations.of(
+                                            context,
+                                          )?.translate('profile.set_amount') ??
+                                          'Set Amount',
+                                      style: GoogleFonts.notoSans(
                                         color: primaryTextColor,
                                         fontSize: 15,
                                         fontWeight: FontWeight.w500,
@@ -817,8 +906,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   PopupMenuItem<String>(
                                     value: 'get_help',
                                     child: Text(
-                                      'Get help',
-                                      style: GoogleFonts.outfit(
+                                      AppLocalizations.of(
+                                            context,
+                                          )?.translate('profile.get_help') ??
+                                          'Get help',
+                                      style: GoogleFonts.notoSans(
                                         color: primaryTextColor,
                                         fontSize: 15,
                                         fontWeight: FontWeight.w500,
@@ -888,7 +980,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                                 _user!['username']?[0]
                                                         .toUpperCase() ??
                                                     '?',
-                                                style: GoogleFonts.outfit(
+                                                style: GoogleFonts.notoSans(
                                                   color: Colors.white,
                                                   fontSize: 20,
                                                   fontWeight: FontWeight.bold,
@@ -902,7 +994,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                               _user!['username']
                                                       ?.toUpperCase() ??
                                                   'USER',
-                                              style: GoogleFonts.outfit(
+                                              style: GoogleFonts.notoSans(
                                                 fontSize: 20,
                                                 fontWeight: FontWeight.w600,
                                                 color: const Color(0xFF1F1F1F),
@@ -951,9 +1043,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                                 const SizedBox(width: 8),
                                                 Text(
                                                   isPersonal
-                                                      ? 'Personal Account'
-                                                      : 'Merchant Account',
-                                                  style: GoogleFonts.outfit(
+                                                      ? (AppLocalizations.of(
+                                                              context,
+                                                            )?.translate(
+                                                              'profile.personal_account',
+                                                            ) ??
+                                                            'Personal Account')
+                                                      : (AppLocalizations.of(
+                                                              context,
+                                                            )?.translate(
+                                                              'profile.merchant_account',
+                                                            ) ??
+                                                            'Merchant Account'),
+                                                  style: GoogleFonts.notoSans(
                                                     color: Colors.white,
                                                     fontSize: 14,
                                                     fontWeight: FontWeight.w600,
@@ -1026,8 +1128,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                                       // Scan text
                                       Text(
-                                        "Scan to pay with any UPI app",
-                                        style: GoogleFonts.outfit(
+                                        AppLocalizations.of(context)?.translate(
+                                              'profile.scan_to_pay_msg',
+                                            ) ??
+                                            "Scan to pay with any UPI app",
+                                        style: GoogleFonts.notoSans(
                                           fontSize: 13,
                                           color: Colors.grey.shade600,
                                           fontWeight: FontWeight.lerp(
@@ -1103,17 +1208,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                                 ),
                                               ),
                                               const SizedBox(width: 8),
-                                              Text(
-                                                _getFullBankName(
-                                                  _user!['bank_name']
-                                                      .toString(),
-                                                ),
-                                                style: GoogleFonts.outfit(
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.w500,
-                                                  color: const Color(
-                                                    0xFF1F1F1F,
+                                              Expanded(
+                                                child: Text(
+                                                  _getFullBankName(
+                                                    _user!['bank_name']
+                                                        .toString(),
                                                   ),
+                                                  style: GoogleFonts.notoSans(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w500,
+                                                    color: const Color(
+                                                      0xFF1F1F1F,
+                                                    ),
+                                                  ),
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                 ),
                                               ),
                                             ],
@@ -1124,8 +1233,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         Column(
                                           children: [
                                             Text(
-                                              'UPI ID: ${_user!['upi_id'] ?? ""}',
-                                              style: GoogleFonts.outfit(
+                                              '${AppLocalizations.of(context)?.translate('profile.upi_id') ?? "UPI ID"}: ${_user!['upi_id'] ?? ""}',
+                                              style: GoogleFonts.notoSans(
                                                 fontSize: 14,
                                                 color: const Color(0xFF1F1F1F),
                                                 fontWeight: FontWeight.w500,
@@ -1135,8 +1244,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                                 qrAmount!.isNotEmpty) ...[
                                               const SizedBox(height: 8),
                                               Text(
-                                                'Amount: ₹${double.tryParse(qrAmount!)?.toStringAsFixed(2) ?? qrAmount}',
-                                                style: GoogleFonts.outfit(
+                                                '${AppLocalizations.of(context)?.translate('details.amount') ?? "Amount"}: ₹${double.tryParse(qrAmount!)?.toStringAsFixed(2) ?? qrAmount}',
+                                                style: GoogleFonts.notoSans(
                                                   fontSize: 14,
                                                   color: Colors.grey.shade600,
                                                   fontWeight: FontWeight.w500,
@@ -1181,8 +1290,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                                 children: [
                                                   Flexible(
                                                     child: Text(
-                                                      'UPI ID: ${_user!['upi_id'] ?? ""}${qrAmount != null && qrAmount!.isNotEmpty ? ' | ₹ $qrAmount' : ''}',
-                                                      style: GoogleFonts.outfit(
+                                                      '${AppLocalizations.of(context)?.translate('profile.upi_id') ?? "UPI ID"}: ${_user!['upi_id'] ?? ""}${qrAmount != null && qrAmount!.isNotEmpty ? ' | ₹ $qrAmount' : ''}',
+                                                      style: GoogleFonts.notoSans(
                                                         fontSize: 14,
                                                         color: const Color(
                                                           0xFF1F1F1F,
@@ -1239,7 +1348,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   Icons.qr_code_scanner_rounded,
                                   size: 20,
                                 ),
-                                label: const Text('Open scanner'),
+                                label: Text(
+                                  AppLocalizations.of(
+                                        context,
+                                      )?.translate('profile.open_scanner') ??
+                                      'Open scanner',
+                                ),
                                 style: OutlinedButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 16,
@@ -1253,7 +1367,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(30),
                                   ),
-                                  textStyle: GoogleFonts.outfit(
+                                  textStyle: GoogleFonts.notoSans(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -1266,7 +1380,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 onPressed: () =>
                                     _shareQrCodeWithCapture(setModalState),
                                 icon: const Icon(Icons.share_rounded, size: 20),
-                                label: const Text('Share QR code'),
+                                label: Text(
+                                  AppLocalizations.of(
+                                        context,
+                                      )?.translate('profile.share_qr') ??
+                                      'Share QR code',
+                                ),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(
                                     0xFF6C2BD9,
@@ -1279,7 +1398,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(30),
                                   ),
-                                  textStyle: GoogleFonts.outfit(
+                                  textStyle: GoogleFonts.notoSans(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -1303,8 +1422,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              "Powered by ZaferPay",
-                              style: GoogleFonts.outfit(
+                              AppLocalizations.of(
+                                    context,
+                                  )?.translate('details.powered_by') ??
+                                  "Powered by ZaferPay",
+                              style: GoogleFonts.notoSans(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500,
                                 color: Colors.grey,
@@ -1394,27 +1516,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _downloadQrCodeWithCapture(StateSetter setModalState) async {
-    await _captureQrAndPerformAction(setModalState, (byteData) async {
-      Directory? directory;
-      if (Platform.isAndroid) {
-        final dirs = await getExternalStorageDirectories(
-          type: StorageDirectory.downloads,
-        );
-        if (dirs != null && dirs.isNotEmpty) {
-          directory = dirs.first;
-        }
-      }
-      directory ??= await getApplicationDocumentsDirectory();
-
-      final filePath =
-          '${directory.path}/zaferpay_qr_${DateTime.now().millisecondsSinceEpoch}.png';
-      final file = File(filePath);
-      await file.writeAsBytes(byteData);
-
-      if (mounted) {
+    final hasAccess = await Gal.hasAccess();
+    if (!hasAccess) {
+      final granted = await Gal.requestAccess();
+      if (!granted && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('QR Code saved to Downloads')),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(
+                    context,
+                  )?.translate('scan.permission_denied') ??
+                  'Permission denied to save to gallery',
+            ),
+          ),
         );
+        return;
+      }
+    }
+
+    await _captureQrAndPerformAction(setModalState, (byteData) async {
+      try {
+        await Gal.putImageBytes(byteData, album: 'ZaferPay');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                AppLocalizations.of(context)?.translate('profile.qr_saved') ??
+                    'QR Code saved to Gallery',
+              ),
+            ),
+          );
+        }
+      } catch (e) {
+        debugPrint("Error saving QR: $e");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                AppLocalizations.of(context)?.translate('common.save_failed') ??
+                    'Failed to save QR code',
+              ),
+            ),
+          );
+        }
       }
     });
   }

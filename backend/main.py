@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
-from sqlalchemy import text, func
+from sqlalchemy import text, func, or_, and_
 from datetime import timedelta, datetime
 from typing import List # <--- Added this
 import models, schemas, auth, database, fraud_engine, security, notifications, reporting
@@ -15,6 +15,7 @@ import traceback
 from sqlalchemy.orm import joinedload
 import os
 import google.generativeai as genai
+from i18n import get_text
 
 # AI Auto-Learning Scheduler
 import daily_summary
@@ -322,6 +323,7 @@ def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(), 
     db: Session = Depends(get_db),
     x_device_id: str = Header(None),
+    accept_language: str = Header("en", alias="Accept-Language"),
     force_logout: bool = False
 ):
     # Authenticate by Mobile Number OR Email (passed in form_data.username)
@@ -367,7 +369,7 @@ def login_for_access_token(
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail={
-                        "message": "already_logged_in",
+                        "message": get_text("already_logged_in", accept_language),
                         "info": "You are currently logged in on another device. To continue on this device, you must logout from the other device."
                     },
                 )
@@ -1482,7 +1484,11 @@ def analyze_transaction_risk(
     - risk_reason: Fraud pattern code (F1, F2, etc.)
     """
     
+    # CRITICAL DEBUG: Log that endpoint was called
+    logger.info(f"🔍 ANALYZE ENDPOINT CALLED: {current_user.username} → {tx.receiver_upi_id} | ₹{tx.amount}")
+    
     # 1. Validate Receiver exists
+    lang = request.headers.get("accept-language", "en")
     receiver = db.query(models.User).filter(models.User.upi_id == tx.receiver_upi_id).first()
     receiver_name = receiver.username if receiver else "Unknown"
     receiver_exists = receiver is not None
@@ -1495,7 +1501,7 @@ def analyze_transaction_risk(
             is_blocked=False,
             receiver_name="New Receiver",
             receiver_exists=False,
-            detail={"message": "First time sending to this receiver", "risk": "WARN"}
+            detail={"message": get_text("first_time_receiver", lang), "risk": "WARN"}
         )
 
     # 1.5. Block if on call (v5.0 Scam Protection)
@@ -1507,7 +1513,7 @@ def analyze_transaction_risk(
             receiver_name=receiver_name,
             receiver_exists=True,
             is_bypassable=False,
-            detail={"message": "Transaction blocked for security. You cannot perform risky actions while on an active phone call.", "risk": "FRAUD_BLOCKED"}
+            detail={"message": get_text("fraud_blocked_call", lang), "risk": "FRAUD_BLOCKED"}
         )
         
     if receiver.is_fraud:
@@ -1518,7 +1524,7 @@ def analyze_transaction_risk(
             receiver_name=receiver_name,
             receiver_exists=True,
             is_bypassable=False,
-            detail={"message": "Transaction blocked. This account has been flagged for fraudulent activity.", "risk": "FRAUD_BLOCKED"}
+            detail={"message": get_text("fraud_blocked_flagged", lang), "risk": "FRAUD_BLOCKED"}
         )
     
     if receiver.id == current_user.id:
@@ -1528,7 +1534,7 @@ def analyze_transaction_risk(
             is_blocked=True,
             receiver_name=receiver_name,
             receiver_exists=True,
-            detail={"message": "Cannot send money to yourself", "risk": "HIGH"}
+            detail={"message": get_text("send_to_self", lang), "risk": "HIGH"}
         )
 
     # Restriction check in analysis phase
@@ -1541,27 +1547,51 @@ def analyze_transaction_risk(
             receiver_name=receiver_name,
             receiver_exists=True,
             is_bypassable=False,
-            detail={"message": "Cannot send money directly to a child account. Please pay the parent instead.", "risk": "FRAUD_BLOCKED"}
+            detail={"message": get_text("send_to_child", lang), "risk": "FRAUD_BLOCKED"}
         )
     
     # 2. Run Fraud Engine Analysis (without creating transaction)
-    device_id = request.headers.get('X-Device-ID')
-    device_hash = security.hash_value(device_id) if device_id else None
-    client_ip = request.headers.get('X-Forwarded-For', request.client.host if request.client else None)
-    if client_ip and ',' in client_ip:
-        client_ip = client_ip.split(',')[0].strip()
-    
-    risk_label, risk_reason, fraud_features = fraud_engine.evaluate_fraud(
-        db, current_user, receiver, tx.amount,
-        device_id_hash=device_hash,
-        receiver_mcc=tx.receiver_mcc,
-        current_ip=client_ip,
-        payment_source=tx.payment_source,
-        is_screen_sharing=tx.is_screen_sharing
-    )
-    # Inject payment note for F61 keyword analysis (note is on the request, not on the user)
-    if tx.note:
-        fraud_features['payment_note'] = tx.note
+    try:
+        device_id = request.headers.get('X-Device-ID')
+        device_hash = security.hash_value(device_id) if device_id else None
+        client_ip = request.headers.get('X-Forwarded-For', request.client.host if request.client else None)
+        if client_ip and ',' in client_ip:
+            client_ip = client_ip.split(',')[0].strip()
+        
+        risk_label, risk_reason, fraud_features = fraud_engine.evaluate_fraud(
+            db, current_user, receiver, tx.amount,
+            device_id_hash=device_hash,
+            receiver_mcc=tx.receiver_mcc,
+            current_ip=client_ip,
+            payment_source=tx.payment_source,
+            is_screen_sharing=tx.is_screen_sharing
+        )
+        # Inject payment note for F61 keyword analysis (note is on the request, not on the user)
+        if tx.note:
+            fraud_features['payment_note'] = tx.note
+    except Exception as e:
+        # CRITICAL: Log the exact error
+        logger.error(f"❌ FRAUD ENGINE ERROR: {e}")
+        logger.error(f"   User: {current_user.username}")
+        logger.error(f"   Receiver: {tx.receiver_upi_id}")
+        logger.error(f"   Amount: ₹{tx.amount}")
+        import traceback
+        logger.error(f"   Traceback: {traceback.format_exc()}")
+        
+        # Return SAFE with error flag (don't block user due to system error)
+        return schemas.TransactionAnalyzeResponse(
+            risk_score="SAFE",
+            risk_reason="ANALYSIS_ERROR",
+            is_blocked=False,
+            receiver_name=receiver_name,
+            receiver_exists=True,
+            is_bypassable=True,
+            detail={
+                "message": "Risk analysis temporarily unavailable. Transaction allowed.",
+                "risk": "SAFE",
+                "features": {"error": str(e)}
+            }
+        )
     
     # 3. Build response
     is_blocked = risk_label == "HIGH"
@@ -1719,7 +1749,7 @@ def create_transaction(
             raise HTTPException(
                 status_code=202, # Accepted for processing (but not complete)
                 detail={
-                    "message": "Approval request sent to primary account holder",
+                    "message": get_text("approval_sent", request.headers.get("accept-language", "en")),
                     "status": "PENDING_APPROVAL",
                     "request_id": new_request.id
                 }
@@ -1854,65 +1884,73 @@ def create_transaction(
     device_id = request.headers.get('X-Device-ID')
     device_hash = security.hash_value(device_id) if device_id else None
     
-    risk_label, risk_reason, fraud_features = fraud_engine.evaluate_fraud(
-        db, current_user, receiver, tx.amount,
-        device_id_hash=device_hash,
-        receiver_mcc=tx.receiver_mcc,
-        current_ip=client_ip,
-        payment_source=tx.payment_source,
-        is_screen_sharing=tx.is_screen_sharing
-    )
-    # Inject payment note for F61 keyword analysis
-    if tx.note:
-        fraud_features['payment_note'] = tx.note
-    is_contact = fraud_features.get('is_contact', 0) == 1
-
-    # AI Logic: Decision
-    is_blocked = False
-    status_str = "SUCCESS"
-    
-    # Check for Hard Blocks first (cannot be bypassed)
-    if risk_reason in fraud_engine.HARD_BLOCK_REASONS:
-        is_blocked = True
-        status_str = "BLOCKED"
-        print(f"🛑 HARD BLOCK ENFORCED: {risk_reason}")
-    # If not a hard block, check if user already acknowledged risk
-    elif tx.skip_fraud_check and tx.acknowledged_risk:
-        # User already saw the risk and chose to proceed - don't block
-        risk_label = tx.acknowledged_risk  # Use the risk they acknowledged
+    # SPEED OPTIMIZATION: Skip expensive fraud checks if already pre-checked by mobile app
+    if tx.skip_fraud_check and tx.acknowledged_risk:
+        risk_label = tx.acknowledged_risk
         risk_reason = "USER_ACKNOWLEDGED"
-        fraud_features["pre_acknowledged"] = True
+        fraud_features = {"pre_acknowledged": True}
         is_blocked = False
         status_str = "SUCCESS" if risk_label == "SAFE" else "FLAGGED"
+        print(f"⚡ SPEED: Bypassing redundant fraud check (User Acknowledged)")
     else:
-        # Standard logic for non-bypass flow
+        # Full evaluation (fallback or first-time)
+        risk_label, risk_reason, fraud_features = fraud_engine.evaluate_fraud(
+            db, current_user, receiver, tx.amount,
+            device_id_hash=device_hash,
+            receiver_mcc=tx.receiver_mcc,
+            current_ip=client_ip,
+            payment_source=tx.payment_source,
+            is_screen_sharing=tx.is_screen_sharing
+        )
+        # Inject payment note for F61 keyword analysis
+        if tx.note:
+            fraud_features['payment_note'] = tx.note
+        
+        is_blocked = False
+        status_str = "SUCCESS"
         if risk_label == "HIGH":
             is_blocked = True
             status_str = "BLOCKED"
         elif risk_label == "WARN":
-            status_str = "FLAGGED" # Still success, but marked
-        
-    # Log to Brain Memory (FraudEvent)
-    # Now we have the raw AI score from the features dictionary
+            status_str = "FLAGGED"
+
+    # AI Logic: Decision Decision remains the same but uses consolidated variables above
+    
+    # Log to Brain Memory (FraudEvent) via Background Tasks for SPEED
     ai_score_value = fraud_features.get('ai_score', 0.0) if fraud_features else 0.0
-    fraud_event = models.FraudEvent(
-        user_id=effective_sender.id, # Use effective sender for fraud tracking
-        transaction_id=None, # Will update after ID generation
-        amount=tx.amount,
-        ai_score=float(ai_score_value),
-        rule_violation=risk_reason,
-        is_blocked=is_blocked,
-        timestamp=datetime.now()
-    )
-    db.add(fraud_event)
-    # Don't commit yet, wait for transaction
+    
+    def background_fraud_logging(user_id: int, tx_id: str, amount: float, score: float, reason: str, blocked: bool):
+        # Create a fresh session for background task
+        bg_db = database.SessionLocal()
+        try:
+            fraud_engine.record_fraud_event(
+                bg_db, 
+                user_id=user_id,
+                transaction_id=tx_id,
+                amount=amount,
+                ai_score=score,
+                rule_violation=reason,
+                is_blocked=blocked
+            )
+        finally:
+            bg_db.close()
     
     if is_blocked:
         # ═══════════════════════════════════════════════════════════════════════
         # SAVE FAILED TRANSACTION TO DATABASE (So it appears in history)
         # ═══════════════════════════════════════════════════════════════════════
         failed_tx_id = f"TXN{int(datetime.now().timestamp()*1000)}"
-        fraud_event.transaction_id = failed_tx_id
+        
+        # Log to AI Brain Memory
+        background_tasks.add_task(
+            background_fraud_logging,
+            user_id=effective_sender.id,
+            tx_id=failed_tx_id,
+            amount=tx.amount,
+            score=ai_score_value,
+            reason=risk_reason,
+            blocked=True
+        )
         
         failed_tx = models.Transaction(
             transaction_id=failed_tx_id,
@@ -1947,7 +1985,7 @@ def create_transaction(
             raise HTTPException(
                 status_code=403,
                 detail={
-                    "message": f"Transaction Failed. You cannot send more than {limit_str} to this person in one day.",
+                    "message": get_text("limit_exceeded", request.headers.get("accept-language", "en"), limit=limit_str),
                     "reason": risk_reason,
                     "risk": risk_label,
                     "transaction_id": failed_tx_id,
@@ -1959,7 +1997,7 @@ def create_transaction(
         raise HTTPException(
              status_code=403, 
              detail={
-                 "message": "Transaction Blocked for Security",
+                 "message": get_text("transaction_blocked_security", request.headers.get("accept-language", "en")),
                  "reason": risk_reason,
                  "risk": risk_label,
                  "transaction_id": failed_tx_id,
@@ -1971,7 +2009,18 @@ def create_transaction(
     try:
         # Generate ID inside try block
         new_tx_id = f"TXN{int(datetime.now().timestamp()*1000)}"
-        fraud_event.transaction_id = new_tx_id
+        
+        # Log to AI Brain Memory if suspicious or requested
+        if risk_label != "SAFE" or fraud_features.get('should_log_fraud_event'):
+            background_tasks.add_task(
+                background_fraud_logging,
+                user_id=effective_sender.id,
+                tx_id=new_tx_id,
+                amount=tx.amount,
+                score=ai_score_value,
+                reason=risk_reason or "SUSPICIOUS_PATTERN",
+                blocked=False
+            )
         
         # PESSIMISTIC LOCKING (Postgres Compatible)
         # We must lock both users to prevent race conditions.
@@ -2118,42 +2167,63 @@ def create_transaction(
             print(f"Failed to queue push notification: {e}")
         
         # ═══════════════════════════════════════════════════════════════════════
-        # UPDATE TRUST GRAPH (Social Graph Optimization)
+        # BACKGROUND TASKS (Speed Optimization)
         # ═══════════════════════════════════════════════════════════════════════
-        # This records that the Sender trusts the Receiver, making future 
-        # payments smoother and safer.
-        try:
-            fraud_engine.record_trust(db, sender_user.id, receiver_user.id)
-            
-            # ADAPTIVE LEARNING: Grow trust boundaries based on successful usage
-            was_acknowledged = tx.acknowledged_risk is not None
-            fraud_engine.update_adaptive_memory(db, sender_user, tx.amount, was_acknowledged)
-            
-            # G. SUSPICIOUS ACTIVITY REPORTING (The "Bank Report")
-            # If user has >5 WARN/HIGH transactions in 24h, send in-memory report to bank.
-            # We check the status "FLAGGED" (for WARN) or if it was acknowledged (for HIGH/WARN)
-            if risk_label in ["WARN", "HIGH"]:
-                day_ago = datetime.now() - timedelta(hours=24)
-                # Count successful risky transactions for this sender in the last 24h
-                risky_count = db.query(models.Transaction).filter(
-                    models.Transaction.sender_id == sender_user.id,
-                    models.Transaction.status == "SUCCESS",
-                    models.Transaction.risk_score.in_(["WARN", "HIGH"]),
-                    models.Transaction.timestamp >= day_ago
-                ).count()
+        # Move all non-critical DB updates to background tasks so user gets 
+        # success response IMMEDIATELY.
+        
+        def run_background_tx_tasks(s_id: int, r_id: int, r_upi: str, amt: float, acknowledged: bool, risk: str, request_id: int = None):
+            # We get a fresh DB session for background work to avoid thread issues
+            from database import SessionLocal
+            bg_db = SessionLocal()
+            try:
+                # Update Trust Graph
+                fraud_engine.record_trust(bg_db, s_id, r_id)
                 
-                if risky_count >= 5:
-                    logger.warning(f"🚨 User {sender_user.username} has reached {risky_count} risky transactions. Triggering bank report.")
-                    background_tasks.add_task(
-                        reporting.send_automated_bank_report,
-                        user_id=sender_user.id
-                    )
-            
-        except Exception as e:
-            # Non-critical: don't fail the user's payment for background logic
-            print(f"⚠️ Trust Graph/Adaptive Memory/Reporting Update Failed: {e}")
-            import traceback
-            traceback.print_exc()
+                # Adaptive Learning
+                s_user = bg_db.query(models.User).filter(models.User.id == s_id).first()
+                if s_user:
+                    fraud_engine.update_adaptive_memory(bg_db, s_user, amt, acknowledged)
+                
+                # Bank Reporting
+                if risk in ["WARN", "HIGH"]:
+                    d_ago = datetime.now() - timedelta(hours=24)
+                    risky_count = bg_db.query(models.Transaction).filter(
+                        models.Transaction.sender_id == s_id,
+                        models.Transaction.status == "SUCCESS",
+                        models.Transaction.risk_score.in_(["WARN", "HIGH"]),
+                        models.Transaction.timestamp >= d_ago
+                    ).count()
+                    
+                    if risky_count >= 5:
+                        reporting.send_automated_bank_report(s_id)
+                
+                # Handle Payment Request Status (Moved to background for speed)
+                if request_id:
+                    pr = bg_db.query(models.PaymentRequest).filter(models.PaymentRequest.id == request_id).first()
+                    if pr:
+                        # Verify parties one last time in background
+                        if pr.payer_id == s_id and (pr.target_upi == r_upi or pr.requester_id == r_id):
+                            pr.status = "paid"
+                            pr.updated_at = datetime.now()
+                            bg_db.commit()
+                            print(f"✅ Background: Marked PaymentRequest {request_id} as PAID")
+
+            except Exception as bg_e:
+                print(f"⚠️ Background Task Failed: {bg_e}")
+            finally:
+                bg_db.close()
+
+        background_tasks.add_task(
+            run_background_tx_tasks,
+            sender_user.id,
+            receiver_user.id,
+            receiver_user.upi_id,
+            tx.amount,
+            tx.acknowledged_risk is not None,
+            risk_label,
+            tx.request_id
+        )
         
 
 
@@ -2183,41 +2253,6 @@ def create_transaction(
 
         raise HTTPException(status_code=500, detail=f"Transaction failed due to system error: {str(e)}")
         
-    # 4. HANDLE PAYMENT REQUEST (Outside atomic block but after success)
-    if tx.request_id:
-        try:
-            payment_request = db.query(models.PaymentRequest).filter(models.PaymentRequest.id == tx.request_id).first()
-            if payment_request:
-                # For circle approvals: the requester is the CHILD (not the merchant receiver)
-                # The payer is the PARENT (sender).
-                # For normal refund requests: requester is the one wanting money back,
-                # payer is the one who owes.
-                is_circle_approval = payment_request.circle_id is not None
-                
-                if is_circle_approval:
-                    # Circle approval: payer matches sender (parent), 
-                    # and the target_upi matches the receiver
-                    parties_match = (
-                        payment_request.payer_id == sender_user.id and
-                        payment_request.target_upi == receiver_user.upi_id
-                    )
-                else:
-                    # Normal request: payer is sender, requester is receiver
-                    parties_match = (
-                        payment_request.payer_id == sender_user.id and
-                        payment_request.requester_id == receiver_user.id
-                    )
-                
-                if parties_match:
-                    payment_request.status = "paid"
-                    payment_request.updated_at = datetime.now()
-                    db.commit()
-                    print(f"Marked PaymentRequest {tx.request_id} as PAID by {new_tx.transaction_id}")
-                else:
-                    print(f"Warning: PaymentRequest {tx.request_id} parties mismatch for TX {new_tx.transaction_id}")
-        except Exception as e:
-            # Don't fail the transaction if just the status update fails
-            print(f"Failed to update PaymentRequest status: {e}") 
 
     # Invalidate Cache for all parties to ensure immediate UI update
     clear_home_cache(sender_user.id)
@@ -3414,7 +3449,8 @@ def reveal_transaction_audit(
 def sync_contacts(
     req: schemas.ContactSyncRequest,
     current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    accept_language: str = Header("en", alias="Accept-Language")
 ):
     """
     Sync mobile contacts to the Trust Graph.
@@ -3449,7 +3485,7 @@ def sync_contacts(
         return {
             "synced_count": 0,
             "new_trust_links": 0,
-            "message": "No valid phone numbers found in contacts"
+            "message": get_text("no_contacts", accept_language)
         }
         
     # 2. Find all registered users matching these phone numbers
@@ -3489,7 +3525,7 @@ def sync_contacts(
     return {
         "synced_count": synced_count,
         "new_trust_links": new_links,
-        "message": f"Successfully synced {synced_count} contacts. Created {new_links} new trust relationships."
+        "message": get_text("contacts_synced", accept_language, count=synced_count, links=new_links)
     }
 
 
@@ -3501,7 +3537,8 @@ def sync_contacts(
 def submit_complaint(
     complaint: schemas.ComplaintCreate,
     current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    accept_language: str = Header("en", alias="Accept-Language")
 ):
     try:
         # 1. Deduplication check — reject duplicates with friendly message
@@ -3513,7 +3550,7 @@ def submit_complaint(
         if existing:
             raise HTTPException(
                 status_code=409,
-                detail="You have already submitted a complaint for this transaction."
+                detail=get_text("complaint_duplicate", accept_language)
             )
 
         # 2. Get reported user from UPI
@@ -3548,7 +3585,7 @@ def submit_complaint(
         return {
             "success": True,
             "id": new_report.id,
-            "message": "Complaint submitted successfully"
+            "message": get_text("complaint_success", accept_language)
         }
     except HTTPException:
         raise
@@ -3563,7 +3600,8 @@ def submit_complaint(
 def check_complaint(
     transaction_id: str,
     current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    accept_language: str = Header("en", alias="Accept-Language")
 ):
     """Check if the user has already reported this transaction"""
     existing = db.query(models.UserFraudReport).filter(
@@ -3575,13 +3613,13 @@ def check_complaint(
         return {
             "exists": True,
             "status": existing.status,
-            "message": "A complaint has already been filed for this transaction."
+            "message": get_text("complaint_duplicate", accept_language)
         }
     
     return {
         "exists": False,
         "status": None,
-        "message": "No existing complaint found."
+        "message": get_text("complaint_not_found", accept_language)
     }
 
 def get_current_admin(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):

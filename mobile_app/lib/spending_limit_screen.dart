@@ -1,9 +1,13 @@
 import 'dart:math' as math;
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'services/app_localizations.dart';
+
 import 'utils.dart';
 import 'mcc_helper.dart';
+import 'api_service.dart';
 import 'transaction_history_screen.dart';
 import 'spending_limit_pin_screen.dart';
 
@@ -24,28 +28,41 @@ class SpendingLimitScreen extends StatefulWidget {
 }
 
 class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
+  final _api = ApiService();
+  StreamSubscription? _settingsSubscription;
+
   @override
   void initState() {
     super.initState();
+    _settingsSubscription = _api.onUserSettingsChanged.listen((_) {
+      if (mounted) {
+        final freshUser = _api.getUserSync();
+        if (freshUser != null) {
+          setState(() {
+            // Apply optimistic changes to the local user map
+            freshUser.forEach((key, value) {
+              widget.user[key] = value;
+            });
+          });
+        }
+      }
+    });
   }
 
   @override
-  void didUpdateWidget(SpendingLimitScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Recalculate if history length changed OR if spending limit settings changed.
-    // This ensures the limit card updates live when a new transaction comes in.
-    final historyChanged =
-        oldWidget.history.length != widget.history.length ||
-        oldWidget.user['spending_limit'] != widget.user['spending_limit'] ||
-        oldWidget.user['spending_limit_period'] !=
-            widget.user['spending_limit_period'];
-    if (historyChanged) {
-      setState(() {});
-    }
+  void dispose() {
+    _settingsSubscription?.cancel();
+    super.dispose();
   }
 
   IconData _getCategoryIcon(String category) {
     switch (category) {
+      case 'Personal':
+      case 'P2P / Friends':
+      case 'People':
+        return Icons.people;
+      case 'UPI Circle':
+        return Icons.supervised_user_circle;
       case 'Food & Drinks':
         return Icons.restaurant;
       case 'Shopping':
@@ -58,19 +75,71 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
         return Icons.movie;
       case 'Health':
         return Icons.medical_services;
-      case 'People':
-        return Icons.people;
       case 'Education':
         return Icons.school;
       case 'Investments':
         return Icons.trending_up;
+      case 'Tea & Snacks':
+        return Icons.coffee;
+      case 'School':
+        return Icons.school;
+      case 'Hospital':
+        return Icons.local_hospital;
       default:
         return Icons.category;
     }
   }
 
+  String _getLocalizedCategoryName(String category) {
+    final loc = AppLocalizations.of(context);
+    switch (category) {
+      case 'UPI Circle':
+        return loc?.translate('common.upi_circle') ?? 'UPI Circle';
+      case 'Personal':
+        return loc?.translate('common.personal') ?? 'Personal';
+      case 'P2P / Friends':
+      case 'People':
+        return loc?.translate('spending_limit.cat_people') ?? 'P2P / Friends';
+      case 'Food & Drinks':
+        return loc?.translate('spending_limit.cat_food') ?? 'Food & Drinks';
+      case 'Shopping':
+        return loc?.translate('spending_limit.cat_shopping') ?? 'Shopping';
+      case 'Transport':
+        return loc?.translate('spending_limit.cat_transport') ?? 'Transport';
+      case 'Bills & Utilities':
+        return loc?.translate('spending_limit.cat_bills') ??
+            'Bills & Utilities';
+      case 'Entertainment':
+        return loc?.translate('spending_limit.cat_entertainment') ??
+            'Entertainment';
+      case 'Health':
+        return loc?.translate('spending_limit.cat_health') ?? 'Health';
+      case 'Education':
+        return loc?.translate('spending_limit.cat_education') ?? 'Education';
+      case 'Investments':
+        return loc?.translate('spending_limit.cat_investments') ??
+            'Investments';
+      case 'Tea & Snacks':
+        return loc?.translate('spending_limit.cat_tea_snacks') ??
+            'Tea & Snacks';
+      case 'School':
+        return loc?.translate('spending_limit.cat_school') ?? 'School';
+      case 'Hospital':
+        return loc?.translate('spending_limit.cat_hospital') ?? 'Hospital';
+      case 'Others':
+      default:
+        return loc?.translate('spending_limit.cat_others') ?? 'Others';
+    }
+  }
+
   Color _getCategoryColor(String category) {
     switch (category) {
+      case 'Personal':
+      case 'P2P / Friends':
+      case 'People':
+        return const Color(0xFF00B9F1);
+      case 'UPI Circle':
+        return const Color(0xFF4CAF50);
       case 'Food & Drinks':
         return Colors.orange;
       case 'Shopping':
@@ -83,12 +152,16 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
         return Colors.red;
       case 'Health':
         return Colors.teal;
-      case 'People':
-        return Colors.indigo;
       case 'Education':
         return Colors.lightBlue;
       case 'Investments':
         return Colors.green;
+      case 'Tea & Snacks':
+        return Colors.brown;
+      case 'School':
+        return Colors.indigo;
+      case 'Hospital':
+        return Colors.redAccent;
       default:
         return Colors.grey.shade500;
     }
@@ -107,23 +180,28 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
         elevation: 0,
         backgroundColor: bgColor,
         automaticallyImplyLeading: false,
-        leading: widget.showBackButton
-            ? IconButton(
-                icon: Icon(
-                  Icons.arrow_back,
-                  color: Theme.of(context).iconTheme.color,
-                ),
-                onPressed: () => Navigator.pop(context),
-              )
-            : null,
+        leading: IconButton(
+          icon: Icon(
+            Icons.arrow_back,
+            color: Theme.of(context).iconTheme.color,
+          ),
+          onPressed: () {
+            // Navigate back to home page as requested
+            Navigator.pushNamedAndRemoveUntil(
+              context,
+              '/home',
+              (route) => false,
+            );
+          },
+        ),
         title: widget.showBackButton
             ? null
             : Text(
-                'Analytics',
-                style: GoogleFonts.outfit(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : Colors.black87,
+                AppLocalizations.of(context)?.translate('nav.analytics') ??
+                    'Analytics',
+                style: GoogleFonts.notoSans(
+                  color: Theme.of(context).appBarTheme.titleTextStyle?.color,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
       ),
@@ -146,11 +224,14 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
               // Footer
               Center(
                 child: Text(
-                  'Powered by ZaferPay',
-                  style: TextStyle(
-                    fontSize: 12,
+                  AppLocalizations.of(
+                        context,
+                      )?.translate('common.powered_by') ??
+                      "Powered by ZaferPay",
+                  style: GoogleFonts.notoSans(
+                    fontSize: 14,
                     fontWeight: FontWeight.w500,
-                    color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
+                    color: isDark ? Colors.white54 : Colors.grey,
                     letterSpacing: 0.5,
                   ),
                 ),
@@ -164,11 +245,31 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
   }
 
   String _getFrequencyLabel(int p) {
-    if (p == 1) return 'Daily';
-    if (p == 7) return 'Weekly';
-    if (p == 14) return 'Bi-Weekly';
-    if (p == 30) return 'Monthly';
-    return '$p days';
+    if (p == 1) {
+      return AppLocalizations.of(context)?.translate('spending_limit.daily') ??
+          'Daily';
+    }
+    if (p == 7) {
+      return AppLocalizations.of(context)?.translate('spending_limit.weekly') ??
+          'Weekly';
+    }
+    if (p == 14) {
+      return AppLocalizations.of(
+            context,
+          )?.translate('spending_limit.biweekly') ??
+          'Bi-Weekly';
+    }
+    if (p == 30) {
+      return AppLocalizations.of(
+            context,
+          )?.translate('spending_limit.monthly') ??
+          'Monthly';
+    }
+    return AppLocalizations.of(context)?.translate(
+          'spending_limit.custom_days',
+          arguments: {'days': p.toString()},
+        ) ??
+        '$p days';
   }
 
   void _showSpendingLimitDialog(bool isDark) {
@@ -191,144 +292,176 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
             return AlertDialog(
               backgroundColor: isDark ? const Color(0xFF1E2630) : Colors.white,
               title: Text(
-                'Set Spending Limit',
+                AppLocalizations.of(
+                      context,
+                    )?.translate('spending_limit.set_limit_title') ??
+                    'Set Spending Limit',
                 style: TextStyle(
                   color: isDark ? Colors.white : Colors.black87,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(
-                      'Enable Limit',
-                      style: TextStyle(
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                    value: isEnabled,
-                    onChanged: (val) {
-                      setDialogState(() => isEnabled = val);
-                    },
-                    activeThumbColor: const Color(0xFF00B9F1),
-                  ),
-                  if (isEnabled) ...[
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: amountController,
-                      keyboardType: TextInputType.number,
-                      style: TextStyle(
-                        color: isDark ? Colors.white : Colors.black,
-                      ),
-                      decoration: InputDecoration(
-                        labelText: 'Amount (₹)',
-                        labelStyle: TextStyle(
-                          color: isDark ? Colors.white70 : Colors.black54,
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        AppLocalizations.of(
+                              context,
+                            )?.translate('spending_limit.enable_limit') ??
+                            'Enable Limit',
+                        style: TextStyle(
+                          color: isDark ? Colors.white : Colors.black87,
                         ),
-                        border: const OutlineInputBorder(),
-                        prefixText: '₹ ',
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<int>(
-                      // Use -1 as sentinel for "Custom"
-                      initialValue: [1, 7, 14, 30].contains(tempPeriod)
-                          ? tempPeriod
-                          : -1,
-                      dropdownColor: isDark
-                          ? const Color(0xFF1E2630)
-                          : Colors.white,
-                      style: TextStyle(
-                        color: isDark ? Colors.white : Colors.black,
-                      ),
-                      decoration: InputDecoration(
-                        labelText: 'Period',
-                        labelStyle: TextStyle(
-                          color: isDark ? Colors.white70 : Colors.black54,
-                        ),
-                        border: const OutlineInputBorder(),
-                      ),
-                      items: [
-                        ...([1, 7, 14, 30].map((int value) {
-                          return DropdownMenuItem<int>(
-                            value: value,
-                            child: Text(_getFrequencyLabel(value)),
-                          );
-                        })),
-                        const DropdownMenuItem<int>(
-                          value: -1,
-                          child: Text('Custom…'),
-                        ),
-                      ],
+                      value: isEnabled,
                       onChanged: (val) {
-                        if (val != null) {
-                          setDialogState(() {
-                            if (val == -1) {
-                              // Keep tempPeriod as current or reset to 0
-                              // to force user to fill in the custom field
-                              tempPeriod = -1;
-                            } else {
-                              tempPeriod = val;
-                            }
-                          });
-                        }
+                        setDialogState(() => isEnabled = val);
                       },
+                      activeThumbColor: const Color(0xFF00B9F1),
                     ),
-
-                    // Custom days text field — shown only when Custom is selected
-                    if (tempPeriod == -1) ...[
-                      const SizedBox(height: 12),
-                      Builder(
-                        builder: (context) {
-                          final customController = TextEditingController(
-                            text:
-                                (![1, 7, 14, 30].contains(tempPeriod) &&
-                                    tempPeriod > 0)
-                                ? tempPeriod.toString()
-                                : '',
-                          );
-                          return TextField(
-                            controller: customController,
-                            keyboardType: TextInputType.number,
-                            style: TextStyle(
-                              color: isDark ? Colors.white : Colors.black,
+                    if (isEnabled) ...[
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: amountController,
+                        keyboardType: TextInputType.number,
+                        style: TextStyle(
+                          color: isDark ? Colors.white : Colors.black,
+                        ),
+                        decoration: InputDecoration(
+                          labelText:
+                              AppLocalizations.of(
+                                context,
+                              )?.translate('spending_limit.amount_label') ??
+                              'Amount (₹)',
+                          labelStyle: TextStyle(
+                            color: isDark ? Colors.white70 : Colors.black54,
+                          ),
+                          border: const OutlineInputBorder(),
+                          prefixText: '₹ ',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<int>(
+                        // Use -1 as sentinel for "Custom"
+                        initialValue: [1, 7, 14, 30].contains(tempPeriod)
+                            ? tempPeriod
+                            : -1,
+                        dropdownColor: isDark
+                            ? const Color(0xFF1E2630)
+                            : Colors.white,
+                        style: TextStyle(
+                          color: isDark ? Colors.white : Colors.black,
+                        ),
+                        decoration: InputDecoration(
+                          labelText:
+                              AppLocalizations.of(
+                                context,
+                              )?.translate('spending_limit.period_label') ??
+                              'Period',
+                          labelStyle: TextStyle(
+                            color: isDark ? Colors.white70 : Colors.black54,
+                          ),
+                          border: const OutlineInputBorder(),
+                        ),
+                        items: [
+                          ...([1, 7, 14, 30].map((int value) {
+                            return DropdownMenuItem<int>(
+                              value: value,
+                              child: Text(_getFrequencyLabel(value)),
+                            );
+                          })),
+                          DropdownMenuItem<int>(
+                            value: -1,
+                            child: Text(
+                              AppLocalizations.of(context)?.translate(
+                                    'spending_limit.custom_option',
+                                  ) ??
+                                  'Custom…',
                             ),
-                            decoration: InputDecoration(
-                              labelText: 'Number of days (1 – 365)',
-                              labelStyle: TextStyle(
-                                color: isDark ? Colors.white70 : Colors.black54,
-                              ),
-                              border: const OutlineInputBorder(),
-                              suffixText: 'days',
-                              suffixStyle: TextStyle(
-                                color: isDark
-                                    ? Colors.grey.shade400
-                                    : Colors.grey.shade600,
-                              ),
-                            ),
-                            onChanged: (val) {
-                              final days = int.tryParse(val);
-                              if (days != null && days >= 1 && days <= 365) {
-                                // Don't call setDialogState here — would reset
-                                // cursor. We'll read it on Next tap instead.
-                                tempPeriod = days;
+                          ),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) {
+                            setDialogState(() {
+                              if (val == -1) {
+                                // Keep tempPeriod as current or reset to 0
+                                // to force user to fill in the custom field
+                                tempPeriod = -1;
+                              } else {
+                                tempPeriod = val;
                               }
-                            },
-                          );
+                            });
+                          }
                         },
                       ),
+
+                      // Custom days text field — shown only when Custom is selected
+                      if (tempPeriod == -1) ...[
+                        const SizedBox(height: 12),
+                        Builder(
+                          builder: (context) {
+                            final customController = TextEditingController(
+                              text:
+                                  (![1, 7, 14, 30].contains(tempPeriod) &&
+                                      tempPeriod > 0)
+                                  ? tempPeriod.toString()
+                                  : '',
+                            );
+                            return TextField(
+                              controller: customController,
+                              keyboardType: TextInputType.number,
+                              style: TextStyle(
+                                color: isDark ? Colors.white : Colors.black,
+                              ),
+                              decoration: InputDecoration(
+                                labelText:
+                                    AppLocalizations.of(context)?.translate(
+                                      'spending_limit.custom_days_label',
+                                    ) ??
+                                    'Number of days (1 – 365)',
+                                labelStyle: TextStyle(
+                                  color: isDark
+                                      ? Colors.white70
+                                      : Colors.black54,
+                                ),
+                                border: const OutlineInputBorder(),
+                                suffixText:
+                                    AppLocalizations.of(context)?.translate(
+                                      'spending_limit.days_suffix',
+                                    ) ??
+                                    'days',
+                                suffixStyle: TextStyle(
+                                  color: isDark
+                                      ? Colors.grey.shade400
+                                      : Colors.grey.shade600,
+                                ),
+                              ),
+                              onChanged: (val) {
+                                final days = int.tryParse(val);
+                                if (days != null && days >= 1 && days <= 365) {
+                                  // Don't call setDialogState here — would reset
+                                  // cursor. We'll read it on Next tap instead.
+                                  tempPeriod = days;
+                                }
+                              },
+                            );
+                          },
+                        ),
+                      ],
                     ],
                   ],
-                ],
+                ),
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(color: Colors.grey),
+                  child: Text(
+                    AppLocalizations.of(context)?.translate('common.cancel') ??
+                        'Cancel',
+                    style: const TextStyle(color: Colors.grey),
                   ),
                 ),
                 ElevatedButton(
@@ -342,8 +475,13 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
                       final amt = double.tryParse(amountController.text);
                       if (amt == null || amt <= 0) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Please enter a valid amount'),
+                          SnackBar(
+                            content: Text(
+                              AppLocalizations.of(context)?.translate(
+                                    'spending_limit.invalid_amount_error',
+                                  ) ??
+                                  'Please enter a valid amount',
+                            ),
                             backgroundColor: Colors.red,
                           ),
                         );
@@ -352,9 +490,12 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
 
                       if (tempPeriod < 1 || tempPeriod > 365) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
+                          SnackBar(
                             content: Text(
-                              'Please enter a valid period between 1 and 365 days',
+                              AppLocalizations.of(context)?.translate(
+                                    'spending_limit.invalid_period_error',
+                                  ) ??
+                                  'Please enter a valid period between 1 and 365 days',
                             ),
                             backgroundColor: Colors.red,
                           ),
@@ -372,7 +513,12 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
                       period: tempPeriod,
                     );
                   },
-                  child: const Text('Next →'),
+                  child: Text(
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('common.next_button') ??
+                        'Next →',
+                  ),
                 ),
               ],
             );
@@ -425,8 +571,14 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
               const SizedBox(width: 8),
               Text(
                 wasEnabled
-                    ? 'Spending limit updated!'
-                    : 'Spending limit removed.',
+                    ? (AppLocalizations.of(
+                            context,
+                          )?.translate('spending_limit.updated_success') ??
+                          'Spending limit updated!')
+                    : (AppLocalizations.of(
+                            context,
+                          )?.translate('spending_limit.removed_success') ??
+                          'Spending limit removed.'),
               ),
             ],
           ),
@@ -468,7 +620,10 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
           ),
           const SizedBox(height: 18),
           Text(
-            'No Spending Limit Set',
+            AppLocalizations.of(
+                  context,
+                )?.translate('spending_limit.no_limit_title') ??
+                'No Spending Limit Set',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
@@ -477,7 +632,10 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
           ),
           const SizedBox(height: 10),
           Text(
-            'Set a spending limit to track your expenses and stay on budget.',
+            AppLocalizations.of(
+                  context,
+                )?.translate('spending_limit.no_limit_description') ??
+                'Set a spending limit to track your expenses and stay on budget.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 15,
@@ -497,9 +655,12 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
               elevation: 0,
             ),
-            child: const Text(
-              'Set Spending Limit',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+            child: Text(
+              AppLocalizations.of(
+                    context,
+                  )?.translate('spending_limit.set_limit_button') ??
+                  'Set Spending Limit',
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
             ),
           ),
         ],
@@ -568,7 +729,19 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
             // These don't count towards the parent's personal limit.
             if (tx['initiated_by_upi'] != null &&
                 tx['initiated_by_upi'] != widget.user['upi_id']) {
-              // We skip these for the parent's personal tracking
+              continue;
+            }
+
+            // Also exclude transfers to child accounts (Circle funding/requests)
+            final mcc = tx['receiver_mcc'] ?? tx['mcc'];
+            final note = tx['note'] ?? tx['remark'];
+            final mccCategory = MccHelper.getGroupedCategory(
+              MccHelper.getDomain(mcc?.toString()),
+            );
+            final noteCategory = MccHelper.getCategoryFromNote(note);
+            if (mccCategory == 'UPI Circle' ||
+                noteCategory == 'UPI Circle' ||
+                tx['is_circle_payment'] == true) {
               continue;
             }
 
@@ -604,22 +777,40 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
     }
 
     String periodLabel = period == 1
-        ? 'Daily'
+        ? (AppLocalizations.of(context)?.translate('spending_limit.daily') ??
+              'Daily')
         : period == 7
-        ? 'Weekly'
+        ? (AppLocalizations.of(context)?.translate('spending_limit.weekly') ??
+              'Weekly')
         : period == 14
-        ? 'Bi-Weekly'
+        ? (AppLocalizations.of(context)?.translate('spending_limit.biweekly') ??
+              'Bi-Weekly')
         : period == 30
-        ? 'Monthly'
-        : '$period-Day';
+        ? (AppLocalizations.of(context)?.translate('spending_limit.monthly') ??
+              'Monthly')
+        : (AppLocalizations.of(context)?.translate(
+                'spending_limit.custom_days',
+                arguments: {'days': period.toString()},
+              ) ??
+              '$period-Day');
 
     String statusLabel = isExceeded
-        ? 'Limit Reached'
+        ? (AppLocalizations.of(
+                context,
+              )?.translate('spending_limit.status_reached') ??
+              'Limit Reached')
         : isCritical
-        ? 'Almost Full'
+        ? (AppLocalizations.of(
+                context,
+              )?.translate('spending_limit.almost_full') ??
+              'Almost Full')
         : isWarning
-        ? 'Nearing Limit'
-        : 'On Track';
+        ? (AppLocalizations.of(
+                context,
+              )?.translate('spending_limit.nearing_limit') ??
+              'Nearing Limit')
+        : (AppLocalizations.of(context)?.translate('spending_limit.on_track') ??
+              'On Track');
 
     Color statusBg = isExceeded || isCritical
         ? Colors.red.withValues(alpha: isDark ? 0.2 : 0.08)
@@ -671,10 +862,10 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        '$periodLabel Limit',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                        periodLabel,
+                        style: GoogleFonts.notoSans(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
                           color: isDark ? Colors.white : Colors.black87,
                         ),
                         maxLines: 1,
@@ -736,7 +927,11 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
             children: [
               Expanded(
                 child: _buildStatTile(
-                  label: 'Spent',
+                  label:
+                      AppLocalizations.of(
+                        context,
+                      )?.translate('spending_limit.spent') ??
+                      'Spent',
                   amount: spent,
                   color: progressColor,
                   isDark: isDark,
@@ -750,7 +945,11 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
               ),
               Expanded(
                 child: _buildStatTile(
-                  label: 'Remaining',
+                  label:
+                      AppLocalizations.of(
+                        context,
+                      )?.translate('spending_limit.remaining') ??
+                      'Remaining',
                   amount: remaining,
                   color: isExceeded
                       ? Colors.red
@@ -765,7 +964,11 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
               ),
               Expanded(
                 child: _buildStatTile(
-                  label: 'Limit',
+                  label:
+                      AppLocalizations.of(
+                        context,
+                      )?.translate('spending_limit.limit') ??
+                      'Limit',
                   amount: limit,
                   color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                   isDark: isDark,
@@ -798,7 +1001,14 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
                   ),
                   const SizedBox(height: 5),
                   Text(
-                    '${(value * 100).toStringAsFixed(1)}% used',
+                    (AppLocalizations.of(
+                              context,
+                            )?.translate('spending_limit.used_percent') ??
+                            '{percent}% used')
+                        .replaceAll(
+                          '{percent}',
+                          (value * 100).toStringAsFixed(1),
+                        ),
                     style: TextStyle(
                       fontSize: 12,
                       color: isDark
@@ -828,7 +1038,10 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Spending limit reached. New payments will be blocked until the limit resets.',
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('spending_limit.limit_reached_desc') ??
+                          'Spending limit reached. New payments will be blocked until the limit resets.',
                       style: TextStyle(
                         color: Colors.red.shade400,
                         fontSize: 13,
@@ -858,7 +1071,11 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Almost at your limit. Spend carefully — only ₹${formatAmount(remaining)} left.',
+                      (AppLocalizations.of(
+                                context,
+                              )?.translate('spending_limit.almost_full_desc') ??
+                              'Almost at your limit. Spend carefully — only ₹{amount} left.')
+                          .replaceAll('{amount}', formatAmount(remaining)),
                       style: TextStyle(
                         color: Colors.orange.shade700,
                         fontSize: 13,
@@ -888,7 +1105,10 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Spending Breakdown',
+                  AppLocalizations.of(
+                        context,
+                      )?.translate('spending_limit.spending_breakdown') ??
+                      'Spending Breakdown',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
@@ -900,14 +1120,20 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
             ),
             const SizedBox(height: 16),
             _buildBreakdownRow(
-              'Your Direct Spending',
+              AppLocalizations.of(
+                    context,
+                  )?.translate('spending_limit.direct_spending') ??
+                  'Your Direct Spending',
               selfSpent,
               const Color(0xFF00B9F1),
               isDark,
             ),
             const SizedBox(height: 10),
             _buildBreakdownRow(
-              'UPI Circle Spending',
+              AppLocalizations.of(
+                    context,
+                  )?.translate('spending_limit.circle_spending') ??
+                  'UPI Circle Spending',
               circleSpent,
               Colors.deepPurple,
               isDark,
@@ -967,7 +1193,7 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
                           ),
                           Text(
                             '₹${formatAmount(e.value)}',
-                            style: GoogleFonts.outfit(
+                            style: GoogleFonts.notoSans(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
                               color: isDark ? Colors.white70 : Colors.black87,
@@ -1029,35 +1255,47 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
 
     double spent = 0.0;
     Map<String, double> categorySpends = {};
+
     for (var tx in widget.history) {
       if (tx['status'] != 'SUCCESS') continue;
 
-      // EXCLUDE circle payments where initiated_by_upi is NOT the user
-      if (tx['initiated_by_upi'] != null &&
-          tx['initiated_by_upi'] != widget.user['upi_id']) {
-        continue;
-      }
+      final isCircleInitiated =
+          tx['initiated_by_upi'] != null &&
+          tx['initiated_by_upi'] != widget.user['upi_id'];
+      final isOwnSent =
+          tx['sender_upi_id'] == widget.user['upi_id'] ||
+          tx['initiated_by_upi'] == widget.user['upi_id'];
 
-      if (tx['sender_upi_id'] != widget.user['upi_id'] &&
-          tx['initiated_by_upi'] != widget.user['upi_id']) {
-        continue;
-      }
+      if (!isOwnSent) continue;
+      if (isCircleInitiated) continue; // Skip child-initiated
+
       try {
         final txDate = DateTime.parse(tx['timestamp']).toLocal();
         if (txDate.isAfter(limitStart)) {
+          final mcc = tx['receiver_mcc'] ?? tx['mcc'];
+          final note = tx['note'] ?? tx['remark'];
+          String category = 'Others';
+          String? catFromNote = MccHelper.getCategoryFromNote(note);
+          if (catFromNote != null) {
+            category = catFromNote;
+          } else {
+            category = MccHelper.getGroupedCategory(
+              MccHelper.getDomain(mcc?.toString()),
+            );
+          }
+
+          // Exclude Parent-to-Child transfers
+          if (category == 'UPI Circle' || tx['is_circle_payment'] == true) {
+            continue;
+          }
+
           final amt = (tx['amount'] ?? 0).toDouble();
           spent += amt;
-          final mcc = tx['receiver_mcc'];
-          final note = tx['note'] ?? tx['remark'];
-          String category = MccHelper.getCategoryFromNote(note) ?? 'Others';
-          if (category == 'Others') {
-            if (mcc != null && MccHelper.isMerchant(mcc)) {
-              final domain = MccHelper.getDomain(mcc.toString());
-              category = MccHelper.getGroupedCategory(domain);
-            } else if (MccHelper.isPersonal(mcc)) {
-              category = 'People';
-            }
+
+          if (category == 'People') {
+            category = 'P2P / Friends';
           }
+
           categorySpends[category] = (categorySpends[category] ?? 0) + amt;
         }
       } catch (_) {}
@@ -1101,7 +1339,10 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
               ),
               const SizedBox(width: 10),
               Text(
-                'Spend Analysis',
+                AppLocalizations.of(
+                      context,
+                    )?.translate('spending_limit.spend_analysis') ??
+                    'Spend Analysis',
                 style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.bold,
@@ -1116,8 +1357,8 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
           // ── Donut pie chart ───────────────────────────────────────
           Center(
             child: SizedBox(
-              width: 200,
-              height: 200,
+              width: 180,
+              height: 180,
               child: TweenAnimationBuilder<double>(
                 tween: Tween<double>(begin: 0, end: 1),
                 duration: const Duration(milliseconds: 900),
@@ -1136,7 +1377,10 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            'Total',
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('spending_limit.total') ??
+                                'Total',
                             style: TextStyle(
                               fontSize: 12,
                               color: isDark
@@ -1148,7 +1392,7 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
                           const SizedBox(height: 2),
                           Text(
                             '₹${formatAmount(spent)}',
-                            style: GoogleFonts.outfit(
+                            style: GoogleFonts.notoSans(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                               color: isDark ? Colors.white : Colors.black87,
@@ -1185,14 +1429,17 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
                     ),
                   ),
                   const SizedBox(width: 6),
-                  Text(
-                    '${cat['name']} ${pct.toStringAsFixed(1)}%',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDark
-                          ? Colors.grey.shade400
-                          : Colors.grey.shade600,
-                      fontWeight: FontWeight.w500,
+                  Flexible(
+                    child: Text(
+                      '${_getLocalizedCategoryName(cat['name'])} ${pct.toStringAsFixed(1)}%',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark
+                            ? Colors.grey.shade400
+                            : Colors.grey.shade600,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -1222,6 +1469,7 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
                       initialDateFrom: limitStart,
                       initialCategory: cat['name'],
                       initialType: 'Money sent',
+                      initialSource: 'Personal',
                     ),
                   ),
                 );
@@ -1251,7 +1499,7 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
                     const SizedBox(width: 14),
                     Expanded(
                       child: Text(
-                        cat['name'],
+                        _getLocalizedCategoryName(cat['name']),
                         style: TextStyle(
                           color: isDark ? Colors.grey.shade300 : Colors.black87,
                           fontSize: 15,
@@ -1261,7 +1509,7 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
                     ),
                     Text(
                       '₹${formatAmount(cat['amount'])}',
-                      style: GoogleFonts.outfit(
+                      style: GoogleFonts.notoSans(
                         fontWeight: FontWeight.w600,
                         fontSize: 15,
                         color: isDark ? Colors.white : Colors.black,
@@ -1291,25 +1539,30 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
     bool isBold = false,
   }) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           label,
           style: TextStyle(
-            fontSize: 12,
+            fontSize: 11,
             color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
             fontWeight: FontWeight.w500,
             letterSpacing: 0.2,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
-        const SizedBox(height: 6),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            '₹${formatAmount(amount)}',
-            style: GoogleFonts.outfit(
-              fontSize: 17,
-              fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-              color: color,
+        const SizedBox(height: 4),
+        Flexible(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              '₹${formatAmount(amount)}',
+              style: GoogleFonts.notoSans(
+                fontSize: 16,
+                fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+                color: color,
+              ),
             ),
           ),
         ),
@@ -1349,7 +1602,7 @@ class _SpendingLimitScreenState extends State<SpendingLimitScreen> {
         ),
         Text(
           '₹${formatAmount(amount)}',
-          style: GoogleFonts.outfit(
+          style: GoogleFonts.notoSans(
             fontSize: 15,
             fontWeight: FontWeight.bold,
             color: isDark ? Colors.white : Colors.black,

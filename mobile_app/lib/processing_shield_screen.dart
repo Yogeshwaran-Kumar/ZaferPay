@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_jailbreak_detection/flutter_jailbreak_detection.dart';
 import 'api_service.dart';
 import 'utils.dart'; // Add import
+import 'services/app_localizations.dart';
 import 'package:flutter/foundation.dart';
 
 class ProcessingShieldScreen extends StatefulWidget {
@@ -57,7 +58,7 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
   // 3: Processing (Bank)
   // 4: Success / Failure
   int _stage = 0;
-  String _statusText = "Verifying Integrity...";
+  String? _statusTextOverride;
   Color _shieldColor = Colors.grey;
   IconData _shieldIcon = Icons.perm_device_information;
 
@@ -78,7 +79,9 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    _startSecurityFlow();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startSecurityFlow();
+    });
   }
 
   @override
@@ -108,7 +111,11 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
             _result = {
               'status': 'SUCCESS',
               'tx_id': req['id']?.toString() ?? 'SUCCESS',
-              'detail': 'Parent approved your payment.',
+              'detail':
+                  AppLocalizations.of(
+                    context,
+                  )?.translate('results.parent_approved') ??
+                  'Parent approved your payment.',
             };
             _handleResult();
           }
@@ -119,8 +126,14 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
             _result = {
               'status': 'FAILED',
               'detail': req['status'] == 'rejected'
-                  ? 'Parent declined the request.'
-                  : 'Request was cancelled.',
+                  ? (AppLocalizations.of(
+                          context,
+                        )?.translate('results.parent_declined') ??
+                        'Parent declined the request.')
+                  : (AppLocalizations.of(
+                          context,
+                        )?.translate('results.request_cancelled') ??
+                        'Request was cancelled.'),
             };
             _handleResult();
           }
@@ -140,7 +153,11 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
     // FAST TRACK: Combine stages to speed up payment
     setState(() {
       _stage = 3; // Jump straight to Processing visualization
-      _statusText = "Securing & Processing...";
+      _statusTextOverride =
+          AppLocalizations.of(
+            context,
+          )?.translate('processing.securing_processing') ??
+          "Securing & Processing...";
       _shieldColor = Colors.blue;
       _shieldIcon = Icons.lock_clock;
     });
@@ -148,12 +165,16 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
     // 1. Quick Integrity Check (Background)
     bool isCompromised = false;
     try {
-      // Run checks in parallel
-      final results = await Future.wait([
-        FlutterJailbreakDetection.jailbroken,
-        _api.checkTamperDetection().then((safe) => !safe),
-        _api.verifySimBinding(),
-      ]);
+      // Run checks in parallel with a tighter timeout for instant UX
+      final results =
+          await Future.wait([
+            FlutterJailbreakDetection.jailbroken,
+            _api.checkTamperDetection().then((safe) => !safe),
+            _api.verifySimBinding(),
+          ]).timeout(
+            const Duration(seconds: 1),
+            onTimeout: () => [false, false, true], // Fail-open for speed
+          );
 
       if (results[0] || results[1] || !results[2]) {
         isCompromised = true;
@@ -168,7 +189,11 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
         _stage = 4;
         _result = {
           'status': 'SECURITY_RISK',
-          'detail': 'Device Integrity Failed',
+          'detail':
+              AppLocalizations.of(
+                context,
+              )?.translate('results.device_integrity_failed') ??
+              'Device Integrity Failed',
         };
       });
       _handleResult();
@@ -194,7 +219,11 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
 
     // 3. Show "Processing" state while waiting for network
     setState(() {
-      _statusText = "Processing Payment...";
+      _statusTextOverride =
+          AppLocalizations.of(
+            context,
+          )?.translate('processing.processing_payment') ??
+          "Processing Payment...";
       _shieldColor = Colors.orange;
       _shieldIcon = Icons.sync;
     });
@@ -204,7 +233,8 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
 
       // If success, refresh home screen data
       if (_result?['status'] == 'SUCCESS') {
-        await _api.getHomeScreenData();
+        // Background refresh - don't block the UI result
+        _api.getHomeScreenData();
       }
     } catch (e) {
       _result = {'detail': 'Connection Error', 'status': 'FAILED'};
@@ -239,20 +269,32 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
 
     if (status == 'SUCCESS') {
       setState(() {
-        _statusText = "Payment Successful";
+        _statusTextOverride =
+            AppLocalizations.of(
+              context,
+            )?.translate('results.payment_successful') ??
+            "Payment Successful";
         _shieldColor = const Color(0xFF4CAF50); // Green
         _shieldIcon = Icons.check_circle;
       });
       // Auto-close after success (optional) or show Receipt button
     } else if (status == 'SECURITY_RISK') {
       setState(() {
-        _statusText = "Security Risk Detected";
+        _statusTextOverride =
+            AppLocalizations.of(
+              context,
+            )?.translate('results.security_risk_detected') ??
+            "Security Risk Detected";
         _shieldColor = const Color(0xFFD32F2F); // Dark Red
         _shieldIcon = Icons.security_rounded; // HMAC Lock
       });
     } else if (status == 'FRAUD_BLOCKED' || status == 'BLOCKED') {
       setState(() {
-        _statusText = "Transaction Blocked";
+        _statusTextOverride =
+            AppLocalizations.of(
+              context,
+            )?.translate('results.transaction_blocked') ??
+            "Transaction Blocked";
         _shieldColor = const Color(0xFFC62828); // Red
         _shieldIcon = Icons.gpp_bad_rounded; // Shield Block
       });
@@ -260,15 +302,23 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
       setState(() {
         // If parent is currently approving, show "Processing Approval..."
         // If child is waiting, show "Waiting for Parent Approval..."
-        _statusText = widget.requestId != null
-            ? "Processing Approval..."
-            : "Waiting for Parent Approval...";
+        _statusTextOverride = widget.requestId != null
+            ? (AppLocalizations.of(
+                    context,
+                  )?.translate('processing.processing_approval') ??
+                  "Processing Approval...")
+            : (AppLocalizations.of(
+                    context,
+                  )?.translate('processing.waiting_parent') ??
+                  "Waiting for Parent Approval...");
         _shieldColor = Colors.orange;
         _shieldIcon = Icons.hourglass_top_rounded;
       });
     } else {
       setState(() {
-        _statusText = "Payment Failed";
+        _statusTextOverride =
+            AppLocalizations.of(context)?.translate('results.payment_failed') ??
+            "Payment Failed";
         _shieldColor = Colors.red;
         _shieldIcon = Icons.error_outline;
       });
@@ -311,13 +361,20 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
           ),
         ),
         // STATUS TEXT
-        Text(
-          _statusText,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: isDark ? Colors.white : Colors.black87,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Text(
+            _statusTextOverride ??
+                (AppLocalizations.of(
+                      context,
+                    )?.translate('processing.verifying_integrity') ??
+                    "Verifying Integrity..."),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white : Colors.black87,
+            ),
           ),
         ),
 
@@ -325,7 +382,11 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
             _result?['status'] == 'ACCEPTED') ...[
           const SizedBox(height: 12),
           Text(
-            "Transaction will be processed once approved",
+            AppLocalizations.of(
+                  context,
+                )?.translate('processing.txn_processed_after') ??
+                "Transaction will be processed once approved",
+            textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
               color: isDark ? Colors.grey[400] : Colors.grey[600],
@@ -346,9 +407,12 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text(
-                  "Cancel Request",
-                  style: TextStyle(
+                child: Text(
+                  AppLocalizations.of(
+                        context,
+                      )?.translate('processing.cancel_request') ??
+                      "Cancel Request",
+                  style: const TextStyle(
                     color: Colors.red,
                     fontWeight: FontWeight.bold,
                   ),
@@ -380,16 +444,24 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
     }
 
     // Determine Security Label
-    String securityLabel = "Safe & Secure";
+    String securityLabel =
+        AppLocalizations.of(context)?.translate('results.safe_and_secure') ??
+        "Safe & Secure";
     Color securityColor = Colors.green;
     IconData securityIcon = Icons.verified_user;
 
     if (riskScore == 'WARN') {
-      securityLabel = "Warning: Unusual Activity";
+      securityLabel =
+          AppLocalizations.of(
+            context,
+          )?.translate('results.unusual_activity_warn') ??
+          "Warning: Unusual Activity";
       securityColor = Colors.orange;
       securityIcon = Icons.warning_amber_rounded;
     } else if (riskScore == 'HIGH' || !isSuccess) {
-      securityLabel = "Result: Unsafe";
+      securityLabel =
+          AppLocalizations.of(context)?.translate('results.result_unsafe') ??
+          "Result: Unsafe";
       securityColor = Colors.red;
       securityIcon = Icons.gpp_bad_rounded;
     }
@@ -450,8 +522,19 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
           // 2. Title & Amount
           Text(
             isSuccess
-                ? "Payment Successful"
-                : (isPending ? "Approval Required" : "Payment Failed"),
+                ? (AppLocalizations.of(
+                        context,
+                      )?.translate('results.payment_successful') ??
+                      "Payment Successful")
+                : (isPending
+                      ? (AppLocalizations.of(
+                              context,
+                            )?.translate('results.approval_required') ??
+                            "Approval Required")
+                      : (AppLocalizations.of(
+                              context,
+                            )?.translate('results.payment_failed') ??
+                            "Payment Failed")),
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
@@ -499,18 +582,30 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
             ),
             child: Column(
               children: [
-                _buildRow("To", widget.receiverName, isDark),
+                _buildRow(
+                  AppLocalizations.of(context)?.translate('details.to') ?? "To",
+                  widget.receiverName,
+                  isDark,
+                ),
                 const Divider(height: 24),
-                _buildRow("Transaction ID", txId, isDark),
+                _buildRow(
+                  AppLocalizations.of(context)?.translate('details.txn_id') ??
+                      "Transaction ID",
+                  txId,
+                  isDark,
+                ),
                 const Divider(height: 24),
 
                 // NEW: Security Check Row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      "Security Check",
-                      style: TextStyle(color: Colors.grey, fontSize: 14),
+                    Text(
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('results.security_check') ??
+                          "Security Check",
+                      style: const TextStyle(color: Colors.grey, fontSize: 14),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -570,7 +665,20 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
                 ),
               ),
               child: Text(
-                isSuccess ? "Done" : (isPending ? "OK" : "Close / Retry"),
+                isSuccess
+                    ? (AppLocalizations.of(
+                            context,
+                          )?.translate('results.done') ??
+                          "Done")
+                    : (isPending
+                          ? (AppLocalizations.of(
+                                  context,
+                                )?.translate('results.ok') ??
+                                "OK")
+                          : (AppLocalizations.of(
+                                  context,
+                                )?.translate('results.close_retry') ??
+                                "Close / Retry")),
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
@@ -589,7 +697,8 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
               ),
               const SizedBox(width: 6),
               Text(
-                "Powered by ZaferPay",
+                AppLocalizations.of(context)?.translate('common.powered_by') ??
+                    "Powered by ZaferPay",
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
@@ -608,7 +717,13 @@ class _ProcessingShieldScreenState extends State<ProcessingShieldScreen>
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 14)),
+        Flexible(
+          child: Text(
+            label,
+            style: const TextStyle(color: Colors.grey, fontSize: 14),
+          ),
+        ),
+        const SizedBox(width: 8),
         Flexible(
           child: Text(
             value,

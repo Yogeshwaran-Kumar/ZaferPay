@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'api_service.dart';
 import 'widgets/select_member_screen.dart';
+import 'services/app_localizations.dart';
 
 class UPICircleScreen extends StatefulWidget {
   const UPICircleScreen({super.key});
@@ -69,10 +70,17 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
           ),
           title: Column(
             children: [
-              const Text("Circle Settings"),
+              Text(
+                AppLocalizations.of(
+                      context,
+                    )?.translate('circle.settings_title') ??
+                    "Circle Settings",
+              ),
               const SizedBox(height: 8),
               Text(
-                "Inviting $selectedName",
+                (AppLocalizations.of(context)?.translate('circle.inviting') ??
+                        "Inviting {name}")
+                    .replaceAll('{name}', selectedName),
                 style: const TextStyle(
                   fontSize: 14,
                   color: Colors.blue,
@@ -89,7 +97,11 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                   controller: limitController,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
-                    labelText: "Monthly Limit (₹)",
+                    labelText:
+                        AppLocalizations.of(
+                          context,
+                        )?.translate('circle.monthly_limit') ??
+                        "Monthly Limit (₹)",
                     prefixText: "₹ ",
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -97,11 +109,14 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                const Align(
+                Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    "Delegation Mode",
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('circle.delegation_mode') ??
+                        "Delegation Mode",
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -116,22 +131,36 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                     child: Column(
                       children: [
                         RadioListTile<String>.adaptive(
-                          title: const Text(
-                            "Full (Auto-pay)",
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                          title: Text(
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('circle.full_auto') ??
+                                "Full (Auto-pay)",
+                            style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
-                          subtitle: const Text(
-                            "Member spends directly within limits",
+                          subtitle: Text(
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('circle.full_desc') ??
+                                "Member spends directly within limits",
                           ),
                           value: "FULL",
                         ),
                         const Divider(height: 1),
                         RadioListTile<String>.adaptive(
-                          title: const Text(
-                            "Partial (Approve)",
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                          title: Text(
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('circle.partial_approve') ??
+                                "Partial (Approve)",
+                            style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
-                          subtitle: const Text("You approve every payment"),
+                          subtitle: Text(
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('circle.partial_desc') ??
+                                "You approve every payment",
+                          ),
                           value: "PARTIAL",
                         ),
                       ],
@@ -144,7 +173,10 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel"),
+              child: Text(
+                AppLocalizations.of(context)?.translate('common.cancel') ??
+                    "Cancel",
+              ),
             ),
             ElevatedButton(
               onPressed: () async {
@@ -174,7 +206,14 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                 Navigator.pop(context); // Close invite settings dialog
 
                 if (!success && message.isNotEmpty) {
-                  _showPremiumAlert(context, "Action Restricted", message);
+                  _showPremiumAlert(
+                    context,
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('circle.action_restricted') ??
+                        "Action Restricted",
+                    message,
+                  );
                 } else if (success) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
@@ -186,7 +225,13 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                         children: [
                           const Icon(Icons.check_circle, color: Colors.white),
                           const SizedBox(width: 12),
-                          Text("Invitation Sent to $selectedName!"),
+                          Text(
+                            (AppLocalizations.of(
+                                      context,
+                                    )?.translate('circle.invitation_sent') ??
+                                    "Invitation Sent to {name}!")
+                                .replaceAll("{name}", selectedName),
+                          ),
                         ],
                       ),
                       backgroundColor: Colors.green,
@@ -204,7 +249,12 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: const Text("Send Invitation"),
+              child: Text(
+                AppLocalizations.of(
+                      context,
+                    )?.translate('circle.send_invitation') ??
+                    "Send Invitation",
+              ),
             ),
           ],
         ),
@@ -216,7 +266,10 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("UPI Circle"),
+        title: Text(
+          AppLocalizations.of(context)?.translate('circle.title') ??
+              "UPI Circle",
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -229,7 +282,10 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
           : FloatingActionButton.extended(
               onPressed: _showInviteDialog,
               icon: const Icon(Icons.person_add),
-              label: const Text("Add Member"),
+              label: Text(
+                AppLocalizations.of(context)?.translate('circle.add_member') ??
+                    "Add Member",
+              ),
             ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -240,9 +296,20 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  _buildHeader("Members in My Circle", Icons.group),
+                  _buildHeader(
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('circle.members_in_circle') ??
+                        "Members in My Circle",
+                    Icons.group,
+                  ),
                   if (_myCircles.isEmpty)
-                    _buildEmptyState("You haven't added anyone yet.")
+                    _buildEmptyState(
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('circle.added_none') ??
+                          "You haven't added anyone yet.",
+                    )
                   else
                     ..._myCircles.map(
                       (c) => _buildCircleItem(c, isPrimary: true),
@@ -250,10 +317,19 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
 
                   const SizedBox(height: 24),
 
-                  _buildHeader("Circles I've Joined", Icons.verified_user),
+                  _buildHeader(
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('circle.circles_joined') ??
+                        "Circles I've Joined",
+                    Icons.verified_user,
+                  ),
                   if (_joinedCircles.isEmpty)
                     _buildEmptyState(
-                      "You are not a member of any other circles.",
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('circle.member_of_none') ??
+                          "You are not a member of any other circles.",
                     )
                   else
                     ..._joinedCircles.map(
@@ -277,10 +353,13 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
             const SizedBox(height: 80),
             Icon(Icons.group_off, size: 64, color: Colors.grey.shade300),
             const SizedBox(height: 16),
-            const Text(
-              "You are not part of any UPI Circle yet.",
+            Text(
+              AppLocalizations.of(
+                    context,
+                  )?.translate('circle.not_part_of_any') ??
+                  "You are not part of any UPI Circle yet.",
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey, fontSize: 16),
+              style: const TextStyle(color: Colors.grey, fontSize: 16),
             ),
           ],
         ),
@@ -301,10 +380,13 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
             const SizedBox(height: 80),
             Icon(Icons.group_off, size: 64, color: Colors.grey.shade300),
             const SizedBox(height: 16),
-            const Text(
-              "You are not part of any active UPI Circle.",
+            Text(
+              AppLocalizations.of(
+                    context,
+                  )?.translate('circle.not_part_of_active') ??
+                  "You are not part of any active UPI Circle.",
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey, fontSize: 16),
+              style: const TextStyle(color: Colors.grey, fontSize: 16),
             ),
           ],
         ),
@@ -361,9 +443,12 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            "My UPI Circle",
-                            style: TextStyle(
+                          Text(
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('circle.my_upi_circle') ??
+                                "My UPI Circle",
+                            style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 12,
                               fontWeight: FontWeight.w500,
@@ -453,9 +538,15 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const Text(
-                          "Spent",
-                          style: TextStyle(color: Colors.grey, fontSize: 13),
+                        Text(
+                          AppLocalizations.of(
+                                context,
+                              )?.translate('circle.spent') ??
+                              "Spent",
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontSize: 13,
+                          ),
                         ),
                       ],
                     ),
@@ -468,20 +559,35 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
 
                 // Details rows
                 _buildChildDetailRow(
-                  "Monthly Limit",
+                  AppLocalizations.of(
+                        context,
+                      )?.translate('circle.limit_label') ??
+                      "Monthly Limit",
                   "₹${limit.toStringAsFixed(0)}",
                   Colors.black,
                 ),
                 const SizedBox(height: 14),
                 _buildChildDetailRow(
-                  "Remaining",
+                  AppLocalizations.of(context)?.translate('circle.remaining') ??
+                      "Remaining",
                   "₹${remaining.toStringAsFixed(0)}",
                   remaining > 0 ? Colors.green : Colors.red,
                 ),
                 const SizedBox(height: 14),
                 _buildChildDetailRow(
-                  "Payment Mode",
-                  delegationType == 'FULL' ? "Auto-pay" : "Requires Approval",
+                  AppLocalizations.of(
+                        context,
+                      )?.translate('circle.payment_mode') ??
+                      "Payment Mode",
+                  delegationType == 'FULL'
+                      ? (AppLocalizations.of(
+                              context,
+                            )?.translate('circle.auto_pay') ??
+                            "Auto-pay")
+                      : (AppLocalizations.of(
+                              context,
+                            )?.translate('circle.requires_approval') ??
+                            "Requires Approval"),
                   delegationType == 'FULL' ? Colors.green : Colors.orange,
                 ),
               ],
@@ -629,9 +735,14 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Circle Invitation"),
+        title: Text(
+          AppLocalizations.of(context)?.translate('circle.invitation') ??
+              "Circle Invitation",
+        ),
         content: Text(
-          "Do you want to join ${circle['primary_user_name']}'s UPI Circle?",
+          (AppLocalizations.of(context)?.translate('circle.join_confirm') ??
+                  "Do you want to join {name}'s UPI Circle?")
+              .replaceAll("{name}", circle['primary_user_name']),
         ),
         actions: [
           TextButton(
@@ -639,7 +750,11 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
               Navigator.pop(context);
               _respondToInvite(circle['id'], 'REJECT');
             },
-            child: const Text("Reject", style: TextStyle(color: Colors.red)),
+            child: Text(
+              AppLocalizations.of(context)?.translate('circle.reject') ??
+                  "Reject",
+              style: const TextStyle(color: Colors.red),
+            ),
           ),
           ElevatedButton(
             onPressed: () {
@@ -647,7 +762,10 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
               _respondToInvite(circle['id'], 'ACCEPT');
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            child: const Text("Accept"),
+            child: Text(
+              AppLocalizations.of(context)?.translate('circle.accept') ??
+                  "Accept",
+            ),
           ),
         ],
       ),
@@ -710,8 +828,18 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                                   ),
                                   Text(
                                     isPrimary
-                                        ? "Child's Spending Summary"
-                                        : "My Spending Summary",
+                                        ? (AppLocalizations.of(
+                                                context,
+                                              )?.translate(
+                                                'circle.child_summary',
+                                              ) ??
+                                              "Child's Spending Summary")
+                                        : (AppLocalizations.of(
+                                                context,
+                                              )?.translate(
+                                                'circle.my_summary',
+                                              ) ??
+                                              "My Spending Summary"),
                                     style: const TextStyle(
                                       color: Colors.grey,
                                       fontSize: 14,
@@ -729,7 +857,11 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                                 Icons.refresh,
                                 color: Colors.blue,
                               ),
-                              tooltip: "Refresh Data",
+                              tooltip:
+                                  AppLocalizations.of(
+                                    context,
+                                  )?.translate('circle.refresh_data') ??
+                                  "Refresh Data",
                             ),
                           ],
                         ),
@@ -758,9 +890,12 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                                const Text(
-                                  "Spent",
-                                  style: TextStyle(
+                                Text(
+                                  AppLocalizations.of(
+                                        context,
+                                      )?.translate('circle.spent') ??
+                                      "Spent",
+                                  style: const TextStyle(
                                     color: Colors.grey,
                                     fontSize: 14,
                                   ),
@@ -772,7 +907,10 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                         const SizedBox(height: 32),
                         if (isPrimary)
                           _buildSummaryRowWithAction(
-                            "Monthly Limit",
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('circle.limit_label') ??
+                                "Monthly Limit",
                             "₹${limit.toStringAsFixed(0)}",
                             Colors.black,
                             onEdit: () {
@@ -785,19 +923,28 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                           )
                         else
                           _buildSummaryRow(
-                            "Monthly Limit",
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('circle.limit_label') ??
+                                "Monthly Limit",
                             "₹${limit.toStringAsFixed(0)}",
                             Colors.black,
                           ),
                         const Divider(height: 24),
                         _buildSummaryRow(
-                          "Remaining",
+                          AppLocalizations.of(
+                                context,
+                              )?.translate('circle.remaining') ??
+                              "Remaining",
                           "₹${remaining.toStringAsFixed(0)}",
                           Colors.green,
                         ),
                         const Divider(height: 24),
                         _buildSummaryRow(
-                          "Status",
+                          AppLocalizations.of(
+                                context,
+                              )?.translate('circle.status') ??
+                              "Status",
                           circle['status'],
                           circle['status'] == 'ACTIVE'
                               ? Colors.green
@@ -825,9 +972,12 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                           borderRadius: BorderRadius.circular(16),
                         ),
                       ),
-                      child: const Text(
-                        "Remove Member",
-                        style: TextStyle(
+                      child: Text(
+                        AppLocalizations.of(
+                              context,
+                            )?.translate('circle.remove_member') ??
+                            "Remove Member",
+                        style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                         ),
@@ -847,9 +997,10 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
-                    child: const Text(
-                      "Close",
-                      style: TextStyle(
+                    child: Text(
+                      AppLocalizations.of(context)?.translate('common.close') ??
+                          "Close",
+                      style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                       ),
@@ -926,11 +1077,14 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  const Align(
+                  Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      "Delegation Mode",
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                      AppLocalizations.of(
+                            context,
+                          )?.translate('circle.delegation_mode') ??
+                          "Delegation Mode",
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -946,22 +1100,40 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                       child: Column(
                         children: [
                           RadioListTile<String>.adaptive(
-                            title: const Text(
-                              "Full (Auto-pay)",
-                              style: TextStyle(fontWeight: FontWeight.bold),
+                            title: Text(
+                              AppLocalizations.of(
+                                    context,
+                                  )?.translate('circle.auto_pay') ??
+                                  "Full (Auto-pay)",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                            subtitle: const Text(
-                              "Member spends directly within limits",
+                            subtitle: Text(
+                              AppLocalizations.of(
+                                    context,
+                                  )?.translate('circle.full_auto_desc') ??
+                                  "Member spends directly within limits",
                             ),
                             value: "FULL",
                           ),
                           const Divider(height: 1),
                           RadioListTile<String>.adaptive(
-                            title: const Text(
-                              "Partial (Approve)",
-                              style: TextStyle(fontWeight: FontWeight.bold),
+                            title: Text(
+                              AppLocalizations.of(context)?.translate(
+                                    'circle.partial_approve_title',
+                                  ) ??
+                                  "Partial (Approve)",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                            subtitle: const Text("You approve every payment"),
+                            subtitle: Text(
+                              AppLocalizations.of(
+                                    context,
+                                  )?.translate('circle.partial_approve_desc') ??
+                                  "You approve every payment",
+                            ),
                             value: "PARTIAL",
                           ),
                         ],
@@ -971,11 +1143,14 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                   // Only show Funding Account for parent
                   if (isPrimary) ...[
                     const SizedBox(height: 24),
-                    const Align(
+                    Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        "Funding Account",
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                        AppLocalizations.of(
+                              context,
+                            )?.translate('circle.funding_account') ??
+                            "Funding Account",
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -1029,9 +1204,12 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                         ),
                       )
                     else
-                      const Text(
-                        "Using current account",
-                        style: TextStyle(color: Colors.grey),
+                      Text(
+                        AppLocalizations.of(
+                              context,
+                            )?.translate('circle.using_current_account') ??
+                            "Using current account",
+                        style: const TextStyle(color: Colors.grey),
                       ),
                   ],
                 ],
@@ -1040,7 +1218,10 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text("Cancel"),
+                child: Text(
+                  AppLocalizations.of(context)?.translate('common.cancel') ??
+                      "Cancel",
+                ),
               ),
               ElevatedButton(
                 onPressed: () async {
@@ -1096,8 +1277,18 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                             message.isNotEmpty
                                 ? message
                                 : (success
-                                      ? "Circle Updated!"
-                                      : "Failed to update circle"),
+                                      ? (AppLocalizations.of(
+                                              context,
+                                            )?.translate(
+                                              'circle.update_success',
+                                            ) ??
+                                            "Circle Updated!")
+                                      : (AppLocalizations.of(
+                                              context,
+                                            )?.translate(
+                                              'circle.update_failed',
+                                            ) ??
+                                            "Failed to update circle")),
                           ),
                         ],
                       ),
@@ -1114,7 +1305,10 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text("Update"),
+                child: Text(
+                  AppLocalizations.of(context)?.translate('common.update') ??
+                      "Update",
+                ),
               ),
             ],
           );
@@ -1127,14 +1321,26 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Remove Member"),
+        title: Text(
+          AppLocalizations.of(
+                context,
+              )?.translate('circle.remove_member_title') ??
+              "Remove Member",
+        ),
         content: Text(
-          "Are you sure you want to remove ${circle['secondary_user_name']} from your UPI Circle? They will immediately lose access to spend from your account.",
+          AppLocalizations.of(context)?.translate(
+                'circle.remove_confirm_desc',
+                arguments: {'name': circle['secondary_user_name']},
+              ) ??
+              "Are you sure you want to remove ${circle['secondary_user_name']} from your UPI Circle? They will immediately lose access to spend from your account.",
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
+            child: Text(
+              AppLocalizations.of(context)?.translate('common.cancel') ??
+                  "Cancel",
+            ),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -1179,8 +1385,14 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                         message.isNotEmpty
                             ? message
                             : (success
-                                  ? "Member Removed!"
-                                  : "Failed to remove member"),
+                                  ? (AppLocalizations.of(
+                                          context,
+                                        )?.translate('circle.member_removed') ??
+                                        "Member Removed!")
+                                  : (AppLocalizations.of(
+                                          context,
+                                        )?.translate('circle.fail_remove') ??
+                                        "Failed to remove member")),
                       ),
                     ],
                   ),
@@ -1196,7 +1408,10 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
             ),
-            child: const Text("Remove"),
+            child: Text(
+              AppLocalizations.of(context)?.translate('common.remove') ??
+                  "Remove",
+            ),
           ),
         ],
       ),
@@ -1299,7 +1514,7 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
             const SizedBox(width: 12),
             Text(
               title,
-              style: GoogleFonts.outfit(
+              style: GoogleFonts.notoSans(
                 fontWeight: FontWeight.bold,
                 fontSize: 20,
               ),
@@ -1308,7 +1523,7 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
         ),
         content: Text(
           message,
-          style: GoogleFonts.outfit(fontSize: 16, height: 1.5),
+          style: GoogleFonts.notoSans(fontSize: 16, height: 1.5),
         ),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         actions: [
@@ -1326,8 +1541,9 @@ class _UPICircleScreenState extends State<UPICircleScreen> {
                 elevation: 0,
               ),
               child: Text(
-                "Understood",
-                style: GoogleFonts.outfit(
+                AppLocalizations.of(context)?.translate('common.understood') ??
+                    "Understood",
+                style: GoogleFonts.notoSans(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                 ),

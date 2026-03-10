@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'utils.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'api_service.dart';
@@ -12,6 +13,7 @@ import 'services/user_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'fraud_scanning_animation.dart';
+import 'services/app_localizations.dart';
 
 class AmountScreen extends StatefulWidget {
   const AmountScreen({super.key});
@@ -169,6 +171,7 @@ class _AmountScreenState extends State<AmountScreen> {
     _contactName = args?['name'];
     _category = args?['category'];
     _paymentSource = args?['payment_source'];
+    _rawMcc = args?['mcc'];
 
     // Request payment prefill
     if (args != null && args['isRequestPayment'] == true) {
@@ -376,19 +379,30 @@ class _AmountScreenState extends State<AmountScreen> {
 
   String _spendingLimitMessage() {
     final periodLabel = _spendingLimitPeriod == 1
-        ? 'daily'
+        ? (AppLocalizations.of(context)?.translate('common.daily') ?? 'daily')
         : _spendingLimitPeriod == 7
-        ? 'weekly'
+        ? (AppLocalizations.of(context)?.translate('common.weekly') ?? 'weekly')
         : _spendingLimitPeriod == 14
-        ? 'bi-weekly'
+        ? (AppLocalizations.of(context)?.translate('common.bi_weekly') ??
+              'bi-weekly')
         : _spendingLimitPeriod == 30
-        ? 'monthly'
+        ? (AppLocalizations.of(context)?.translate('common.monthly') ??
+              'monthly')
         : '$_spendingLimitPeriod-day';
     final limit = _spendingLimit ?? 0;
     final remaining = (limit - _spentInPeriod).clamp(0.0, double.infinity);
-    return 'Your $periodLabel limit is ₹${limit.toStringAsFixed(0)}. '
-        'You have already spent ₹${_spentInPeriod.toStringAsFixed(0)}, '
-        'with ₹${remaining.toStringAsFixed(0)} remaining.';
+    return AppLocalizations.of(context)?.translate(
+          'amount.limit_summary_msg',
+          arguments: {
+            'period': periodLabel,
+            'limit': limit.toStringAsFixed(0),
+            'spent': _spentInPeriod.toStringAsFixed(0),
+            'remaining': remaining.toStringAsFixed(0),
+          },
+        ) ??
+        'Your $periodLabel limit is ₹${limit.toStringAsFixed(0)}. '
+            'You have already spent ₹${_spentInPeriod.toStringAsFixed(0)}, '
+            'with ₹${remaining.toStringAsFixed(0)} remaining.';
   }
 
   Future<void> _onPayPressed() async {
@@ -421,9 +435,14 @@ class _AmountScreenState extends State<AmountScreen> {
 
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount < 1) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Minimum amount is ₹1")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context)?.translate('amount.min_amount') ??
+                "Minimum amount is ₹1",
+          ),
+        ),
+      );
       return;
     }
 
@@ -431,7 +450,12 @@ class _AmountScreenState extends State<AmountScreen> {
     if (_selectedCircle == null && _balance != null && amount > _balance!) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Insufficient balance"),
+          content: Text(
+            AppLocalizations.of(
+                  context,
+                )?.translate('amount.insufficient_balance') ??
+                "Insufficient balance",
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -477,7 +501,10 @@ class _AmountScreenState extends State<AmountScreen> {
             'custom_message':
                 result['detail'] != null && result['detail']['message'] != null
                 ? result['detail']['message']
-                : 'Transaction blocked. This account has been flagged for fraudulent activity.',
+                : AppLocalizations.of(
+                        context,
+                      )?.translate('transaction.fraud_blocked_desc') ??
+                      'Transaction blocked. This account has been flagged for fraudulent activity.',
           });
         }
         return;
@@ -522,21 +549,33 @@ class _AmountScreenState extends State<AmountScreen> {
         });
       }
     } catch (e) {
+      // CRITICAL ERROR: Risk analysis failed
+      if (kDebugMode) {
+        print('❌❌❌ CRITICAL: Risk Analysis Failed ❌❌❌');
+        print('Error: $e');
+        print('Stack trace:');
+        print(StackTrace.current);
+      }
+      
       if (mounted) {
+        // SHOW ERROR TO USER - DO NOT AUTO-PROCEED OR SHOW SAFE
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚠️ Cannot connect to server. Please check your internet connection.'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+        
+        // CRITICAL: Reset state to prevent payment
         setState(() {
-          _riskScore = 'SAFE';
-          _isRisk = false;
-          _riskExplanation =
-              'Analysis unavailable - proceeding with standard checks';
           _isAnalyzingRisk = false;
-          _hasAnalyzedRisk = true;
-
-          // AUTO-PROCEED: Proceed if analysis fails (defaults to SAFE)
-          Future.delayed(const Duration(seconds: 1), () {
-            if (mounted && _hasAnalyzedRisk && !_isAnalyzingRisk) {
-              _proceedToPin();
-            }
-          });
+          _hasAnalyzedRisk = false; // Prevent auto-proceed
+          _isRisk = false;
+          _isWarn = false;
+          _isHighRisk = false;
+          _riskScore = 'ERROR'; // Mark as error, not SAFE
+          _riskExplanation = 'Connection failed';
         });
       }
     }
@@ -545,11 +584,14 @@ class _AmountScreenState extends State<AmountScreen> {
   String _getDefaultExplanation() {
     switch (_riskScore) {
       case 'HIGH':
-        return 'High risk transaction detected. Please review carefully.';
+        return AppLocalizations.of(context)?.translate('risk.high_title') ??
+            'High risk transaction detected. Please review carefully.';
       case 'WARN':
-        return 'Unusual pattern detected. Proceed with caution.';
+        return AppLocalizations.of(context)?.translate('risk.warn_title') ??
+            'Unusual pattern detected. Proceed with caution.';
       default:
-        return 'Transaction appears safe.';
+        return AppLocalizations.of(context)?.translate('risk.safe_title') ??
+            'Transaction appears safe.';
     }
   }
 
@@ -557,31 +599,40 @@ class _AmountScreenState extends State<AmountScreen> {
     if (code == null) return null;
 
     if (code.contains("F18_DAILY")) {
-      return "You've exceeded the daily transfer limit for this receiver.";
+      return AppLocalizations.of(context)?.translate('risk.f18_daily') ??
+          "You've exceeded the daily transfer limit for this receiver.";
     }
     if (code.contains("F1_VELOCITY")) {
-      return "Too many transactions in a short time. Please wait a moment.";
+      return AppLocalizations.of(context)?.translate('risk.f1_velocity') ??
+          "Too many transactions in a short time. Please wait a moment.";
     }
     if (code.contains("AI_DETECTED")) {
-      return "Our AI detected a highly unusual pattern compared to your history.";
+      return AppLocalizations.of(context)?.translate('risk.ai_detected') ??
+          "Our AI detected a highly unusual pattern compared to your history.";
     }
     if (code.contains("F29_GEO")) {
-      return "Impossible travel detected. Your location changed too fast.";
+      return AppLocalizations.of(context)?.translate('risk.f29_geo') ??
+          "Impossible travel detected. Your location changed too fast.";
     }
     if (code.contains("F15_RAPID_DRAIN")) {
-      return "Unusual rapid spending detected from your account.";
+      return AppLocalizations.of(context)?.translate('risk.f15_rapid_drain') ??
+          "Unusual rapid spending detected from your account.";
     }
     if (code.contains("NEW_RECEIVER")) {
-      return "You are sending money to a new person for the first time.";
+      return AppLocalizations.of(context)?.translate('risk.new_receiver') ??
+          "You are sending money to a new person for the first time.";
     }
     if (code.contains("SELF_TRANSFER")) {
-      return "You cannot send money to your own UPI ID.";
+      return AppLocalizations.of(context)?.translate('risk.self_transfer') ??
+          "You cannot send money to your own UPI ID.";
     }
     if (code.contains("F52_LAYERING")) {
-      return "Complex money flow pattern detected (Layering Risk).";
+      return AppLocalizations.of(context)?.translate('risk.f52_layering') ??
+          "Complex money flow pattern detected (Layering Risk).";
     }
     if (code.contains("F30_WEEKLY")) {
-      return "Weekly spending limit exceeded for this receiver.";
+      return AppLocalizations.of(context)?.translate('risk.f30_weekly') ??
+          "Weekly spending limit exceeded for this receiver.";
     }
 
     return null;
@@ -601,8 +652,8 @@ class _AmountScreenState extends State<AmountScreen> {
         'category': _category,
         'mcc': _rawMcc,
         'note': _noteController.text.trim(),
-        'skipFraudCheck': _isRisk, // Already checked
-        'acknowledgedRisk': _isRisk ? _riskScore : null,
+        'skipFraudCheck': _hasAnalyzedRisk, // Always true if pre-check finished
+        'acknowledgedRisk': _riskScore, // Pass the score (SAFE/WARN/HIGH)
         'paymentRequestId': _paymentRequestId,
         'paymentSource': _paymentSource,
         'isCirclePayment': _selectedCircle != null,
@@ -649,8 +700,11 @@ class _AmountScreenState extends State<AmountScreen> {
               ),
               const SizedBox(height: 20),
               Text(
-                'Security Block',
-                style: GoogleFonts.outfit(
+                AppLocalizations.of(
+                      context,
+                    )?.translate('amount.security_block') ??
+                    'Security Block',
+                style: GoogleFonts.notoSans(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                   color: isDark ? Colors.white : const Color(0xFF1A1A2E),
@@ -658,9 +712,10 @@ class _AmountScreenState extends State<AmountScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                'For your safety, payments are disabled while you are on an active phone call to prevent potential scams.',
+                AppLocalizations.of(context)?.translate('amount.on_call_msg') ??
+                    'For your safety, payments are disabled while you are on an active phone call to prevent potential scams.',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.outfit(
+                style: GoogleFonts.notoSans(
                   fontSize: 15,
                   color: isDark ? Colors.white70 : Colors.black54,
                   height: 1.5,
@@ -681,8 +736,9 @@ class _AmountScreenState extends State<AmountScreen> {
                     elevation: 0,
                   ),
                   child: Text(
-                    'Got it',
-                    style: GoogleFonts.outfit(
+                    AppLocalizations.of(context)?.translate('common.got_it') ??
+                        'Got it',
+                    style: GoogleFonts.notoSans(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
@@ -723,9 +779,12 @@ class _AmountScreenState extends State<AmountScreen> {
               ),
               const SizedBox(height: 20),
               Text(
-                'Security Permission Required',
+                AppLocalizations.of(
+                      context,
+                    )?.translate('amount.security_permission_title') ??
+                    'Security Permission Required',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.outfit(
+                style: GoogleFonts.notoSans(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: isDark ? Colors.white : Colors.black87,
@@ -733,9 +792,12 @@ class _AmountScreenState extends State<AmountScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                'To protect you from fraudulent calls, Safe Pay needs permission to detect if you are on a call during payments.\n\nPlease grant the Phone permission to proceed.',
+                AppLocalizations.of(
+                      context,
+                    )?.translate('amount.security_permission_desc') ??
+                    'To protect you from fraudulent calls, Safe Pay needs permission to detect if you are on a call during payments.\n\nPlease grant the Phone permission to proceed.',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.outfit(
+                style: GoogleFonts.notoSans(
                   fontSize: 13,
                   color: isDark ? Colors.grey[400] : Colors.grey[600],
                   height: 1.5,
@@ -759,8 +821,11 @@ class _AmountScreenState extends State<AmountScreen> {
                     openAppSettings();
                   },
                   child: Text(
-                    'Open Settings',
-                    style: GoogleFonts.outfit(
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('common.open_settings') ??
+                        'Open Settings',
+                    style: GoogleFonts.notoSans(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
                     ),
@@ -794,8 +859,11 @@ class _AmountScreenState extends State<AmountScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Call security is disabled. Grant Phone permission for safe payments.',
-                style: GoogleFonts.outfit(
+                AppLocalizations.of(
+                      context,
+                    )?.translate('alerts.permission_title') ??
+                    'Call security is disabled. Grant Phone permission for safe payments.',
+                style: GoogleFonts.notoSans(
                   fontSize: 12,
                   color: isDark ? Colors.orange[200] : Colors.orange[800],
                   fontWeight: FontWeight.w500,
@@ -808,8 +876,9 @@ class _AmountScreenState extends State<AmountScreen> {
                 if (mounted) setState(() => _hasPhonePermission = hasPerm);
               },
               child: Text(
-                'Enable',
-                style: GoogleFonts.outfit(
+                AppLocalizations.of(context)?.translate('common.enable') ??
+                    'Enable',
+                style: GoogleFonts.notoSans(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                   color: const Color(0xFF00B9F1),
@@ -837,37 +906,51 @@ class _AmountScreenState extends State<AmountScreen> {
     // Determine color and icon based on status
     Color color = const Color(0xFF4CAF50); // Material Green 500
     IconData icon = Icons.check_circle_rounded;
-    String title = "Payment Successful";
+    String title =
+        AppLocalizations.of(context)?.translate('transaction.success') ??
+        "Payment Successful";
     Color bgColor = isDark ? const Color(0xFF1E2630) : Colors.white;
 
     if (status == "BLOCKED") {
       color = const Color(0xFFE53935); // Red 600
       icon = Icons.block_rounded;
-      title = "Transaction Blocked";
+      title =
+          AppLocalizations.of(context)?.translate('transaction.blocked') ??
+          "Transaction Blocked";
     } else if (status == "FAILED" || status == "CANCELLED") {
       color = const Color(0xFFE53935);
       icon = Icons.error_rounded;
       title = status == "CANCELLED"
-          ? "Transaction Cancelled"
-          : "Payment Failed";
+          ? AppLocalizations.of(context)?.translate('transaction.cancelled') ??
+                "Transaction Cancelled"
+          : AppLocalizations.of(context)?.translate('transaction.failed') ??
+                "Payment Failed";
     } else if (risk == "WARN") {
       color = const Color(0xFFFB8C00); // Orange 600
       icon = Icons.warning_rounded;
-      title = "Warning Detected";
+      title =
+          AppLocalizations.of(context)?.translate('risk.warn_title_short') ??
+          "Warning Detected";
     } else if (status == "SECURITY_RISK") {
       // PHASE 2 ALERT: Integrity/HMAC Failure
       color = const Color(0xFFD32F2F); // Darker Red
       icon = Icons.security_rounded;
-      title = "Security Alert";
+      title =
+          AppLocalizations.of(context)?.translate('alerts.security_block') ??
+          "Security Alert";
     } else if (status == "FRAUD_BLOCKED") {
       // PHASE 1 ALERT: AI Block
       color = const Color(0xFFC62828); // Sharp Red
       icon = Icons.gpp_bad_rounded;
-      title = "Fraud Detected";
+      title =
+          AppLocalizations.of(context)?.translate('transaction.blocked') ??
+          "Fraud Detected";
     } else if (status == "PENDING_APPROVAL") {
       color = const Color(0xFFFB8C00); // Orange 600
       icon = Icons.hourglass_empty_rounded;
-      title = "Approval Required";
+      title =
+          AppLocalizations.of(context)?.translate('transaction.pending') ??
+          "Approval Required";
     }
 
     showDialog(
@@ -913,7 +996,7 @@ class _AmountScreenState extends State<AmountScreen> {
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: GoogleFonts.outfit(
+                style: GoogleFonts.notoSans(
                   color: color,
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
@@ -924,7 +1007,7 @@ class _AmountScreenState extends State<AmountScreen> {
               if (status == "SUCCESS") ...[
                 Text(
                   "₹${formatAmount(result['amount'])}",
-                  style: GoogleFonts.outfit(
+                  style: GoogleFonts.notoSans(
                     fontSize: 32,
                     fontWeight: FontWeight.w900,
                     color: isDark ? Colors.white : Colors.black87,
@@ -946,8 +1029,11 @@ class _AmountScreenState extends State<AmountScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            "To",
-                            style: GoogleFonts.outfit(
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('amount.to_label') ??
+                                "To",
+                            style: GoogleFonts.notoSans(
                               color: isDark ? Colors.grey[400] : Colors.grey,
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
@@ -955,7 +1041,7 @@ class _AmountScreenState extends State<AmountScreen> {
                           ),
                           Text(
                             _contactName ?? _bankingName ?? _receiverUpi,
-                            style: GoogleFonts.outfit(
+                            style: GoogleFonts.notoSans(
                               color: isDark ? Colors.white70 : Colors.black87,
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
@@ -968,8 +1054,11 @@ class _AmountScreenState extends State<AmountScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            "Transaction ID",
-                            style: GoogleFonts.outfit(
+                            AppLocalizations.of(
+                                  context,
+                                )?.translate('amount.tx_id_label') ??
+                                "Transaction ID",
+                            style: GoogleFonts.notoSans(
                               color: isDark ? Colors.grey[400] : Colors.grey,
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
@@ -981,7 +1070,7 @@ class _AmountScreenState extends State<AmountScreen> {
                                   12,
                                 ) ??
                                 "N/A",
-                            style: GoogleFonts.outfit(
+                            style: GoogleFonts.notoSans(
                               color: isDark ? Colors.white70 : Colors.black87,
                               fontWeight: FontWeight.w600,
                               fontSize: 12,
@@ -995,10 +1084,12 @@ class _AmountScreenState extends State<AmountScreen> {
               ] else ...[
                 // Error Case
                 Text(
-                  result['custom_message'] ??
+                  AppLocalizations.of(
+                        context,
+                      )?.translate('transaction.error_generic') ??
                       "Your transaction could not be completed.",
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.outfit(
+                  style: GoogleFonts.notoSans(
                     color: Colors.grey[600],
                     fontSize: 14,
                   ),
@@ -1030,12 +1121,25 @@ class _AmountScreenState extends State<AmountScreen> {
                     ); // Go back to Home / Conversation
                   },
                   child: Text(
-                    "Done",
-                    style: GoogleFonts.outfit(
+                    AppLocalizations.of(
+                          context,
+                        )?.translate('amount.done_btn') ??
+                        "Done",
+                    style: GoogleFonts.notoSans(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                ),
+              ),
+              const SizedBox(height: 12), // Added a SizedBox for spacing
+              Text(
+                AppLocalizations.of(context)?.translate('common.powered_by') ??
+                    'Powered by ZaferPay',
+                style: GoogleFonts.notoSans(
+                  color: Colors.grey.shade400,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
                 ),
               ),
             ],
@@ -1116,19 +1220,37 @@ class _AmountScreenState extends State<AmountScreen> {
                 ),
                 label: Text(
                   _isSelfTransfer
-                      ? "Cannot transfer to self"
+                      ? (AppLocalizations.of(
+                              context,
+                            )?.translate('amount.cannot_transfer_self') ??
+                            "Cannot transfer to self")
                       : _isQrLimitExceeded
-                      ? "Exceeds ₹2,000 Limit"
+                      ? (AppLocalizations.of(context)!
+                                .translate('amount.exceeds_limit')
+                                ?.replaceAll('{amount}', '2,000') ??
+                            "Exceeds limit: ₹2,000")
                       : (_isSpendingLimitExceeded &&
                             _selectedCircle == null &&
                             !_isCirclePaymentApproval)
-                      ? "Spending Limit Exceeded"
+                      ? (AppLocalizations.of(
+                              context,
+                            )?.translate('amount.spending_limit_exceeded') ??
+                            "Spending Limit Exceeded")
                       : (_isCirclePaymentApproval
-                            ? "Approve"
+                            ? (AppLocalizations.of(
+                                    context,
+                                  )?.translate('amount.approve') ??
+                                  "Approve")
                             : (_selectedCircle != null
-                                  ? "Send for Approval"
-                                  : "Proceed")),
-                  style: GoogleFonts.outfit(
+                                  ? (AppLocalizations.of(
+                                          context,
+                                        )?.translate('amount.send_approval') ??
+                                        "Send for Approval")
+                                  : (AppLocalizations.of(
+                                          context,
+                                        )?.translate('amount.proceed') ??
+                                        "Proceed"))),
+                  style: GoogleFonts.notoSans(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color:
@@ -1191,7 +1313,7 @@ class _AmountScreenState extends State<AmountScreen> {
                             alignment: Alignment.center,
                             child: Text(
                               initial,
-                              style: GoogleFonts.outfit(
+                              style: GoogleFonts.notoSans(
                                 fontSize: (_isAnalyzingRisk || _hasAnalyzedRisk)
                                     ? 24
                                     : 32,
@@ -1208,9 +1330,15 @@ class _AmountScreenState extends State<AmountScreen> {
                             children: [
                               Text(
                                 _isRequestPayment
-                                    ? "Paying request to "
-                                    : "Paying ",
-                                style: GoogleFonts.outfit(
+                                    ? (AppLocalizations.of(context)?.translate(
+                                            'amount.paying_request_label',
+                                          ) ??
+                                          "Paying request to ")
+                                    : (AppLocalizations.of(context)?.translate(
+                                            'amount.paying_to_label',
+                                          ) ??
+                                          "Paying "),
+                                style: GoogleFonts.notoSans(
                                   color: textColor,
                                   fontSize: 16,
                                   fontWeight: FontWeight.w500,
@@ -1219,7 +1347,7 @@ class _AmountScreenState extends State<AmountScreen> {
                               Flexible(
                                 child: Text(
                                   displayContactName,
-                                  style: GoogleFonts.outfit(
+                                  style: GoogleFonts.notoSans(
                                     color: textColor,
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -1238,8 +1366,8 @@ class _AmountScreenState extends State<AmountScreen> {
                               if (!_userNotFound) ...[
                                 Flexible(
                                   child: Text(
-                                    "Banking name: ${displayBankingName ?? (_rawMcc != null ? 'Verified Merchant' : 'Verified User')}",
-                                    style: GoogleFonts.outfit(
+                                    "${AppLocalizations.of(context)?.translate('amount.banking_name_label') ?? "Banking name"}: ${displayBankingName ?? (_rawMcc != null ? (AppLocalizations.of(context)?.translate('amount.verified_merchant_label') ?? 'Verified Merchant') : (AppLocalizations.of(context)?.translate('amount.verified_user_label') ?? 'Verified User'))}",
+                                    style: GoogleFonts.notoSans(
                                       color: secondaryTextColor,
                                       fontSize: 13,
                                       fontWeight: FontWeight.w500,
@@ -1257,8 +1385,11 @@ class _AmountScreenState extends State<AmountScreen> {
                                 ),
                               ] else ...[
                                 Text(
-                                  "Banking name: Unknown",
-                                  style: GoogleFonts.outfit(
+                                  AppLocalizations.of(
+                                        context,
+                                      )?.translate('amount.banking_unknown') ??
+                                      "Banking name: Unknown",
+                                  style: GoogleFonts.notoSans(
                                     color: secondaryTextColor,
                                     fontSize: 13,
                                   ),
@@ -1271,7 +1402,7 @@ class _AmountScreenState extends State<AmountScreen> {
                           // Mobile / UPI ID
                           Text(
                             _receiverUpi,
-                            style: GoogleFonts.outfit(
+                            style: GoogleFonts.notoSans(
                               color: secondaryTextColor,
                               fontSize: 13,
                             ),
@@ -1284,8 +1415,11 @@ class _AmountScreenState extends State<AmountScreen> {
                             Padding(
                               padding: const EdgeInsets.only(top: 8.0),
                               child: Text(
-                                "Cannot transfer to self",
-                                style: GoogleFonts.outfit(
+                                AppLocalizations.of(context)?.translate(
+                                      'amount.cannot_transfer_self_msg',
+                                    ) ??
+                                    "Cannot transfer to self",
+                                style: GoogleFonts.notoSans(
                                   color: const Color.fromARGB(255, 248, 5, 5),
                                   fontSize: 15,
                                 ),
@@ -1322,12 +1456,12 @@ class _AmountScreenState extends State<AmountScreen> {
                                     ),
                                     const SizedBox(width: 8),
                                     Text(
-                                      'Payment Request: ${_requestReason != null ? (_requestReason == 'wrongly_sent'
-                                                ? 'Wrongly Sent'
+                                      '${AppLocalizations.of(context)?.translate('amount.payment_request_title') ?? "Payment Request"}: ${_requestReason != null ? (_requestReason == 'wrongly_sent'
+                                                ? (AppLocalizations.of(context)?.translate('amount.wrongly_sent_label') ?? 'Wrongly Sent')
                                                 : _requestReason == 'wrong_amount'
-                                                ? 'Wrong Amount'
-                                                : 'Other') : ''}',
-                                      style: GoogleFonts.outfit(
+                                                ? (AppLocalizations.of(context)?.translate('amount.wrong_amount_label') ?? 'Wrong Amount')
+                                                : (AppLocalizations.of(context)?.translate('amount.other_label') ?? 'Other')) : ''}',
+                                      style: GoogleFonts.notoSans(
                                         color: const Color(0xFF00B9F1),
                                         fontSize: 12,
                                         fontWeight: FontWeight.w600,
@@ -1355,6 +1489,16 @@ class _AmountScreenState extends State<AmountScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          // Merchant Badge (if applicable) - Moved above amount
+                          if (!_isAnalyzingRisk &&
+                              !_hasAnalyzedRisk &&
+                              _rawMcc != null &&
+                              MccHelper.isMerchant(_rawMcc))
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: _buildMerchantBadge(isDark),
+                            ),
+
                           // Amount TextField
                           IntrinsicWidth(
                             child: TextField(
@@ -1386,7 +1530,7 @@ class _AmountScreenState extends State<AmountScreen> {
                                         },
                                       ),
                                     ],
-                              style: GoogleFonts.outfit(
+                              style: GoogleFonts.notoSans(
                                 color: textColor,
                                 fontSize: (_isAnalyzingRisk || _hasAnalyzedRisk)
                                     ? 48
@@ -1396,7 +1540,7 @@ class _AmountScreenState extends State<AmountScreen> {
                               decoration: InputDecoration(
                                 filled: false,
                                 prefixText: "₹ ",
-                                prefixStyle: GoogleFonts.outfit(
+                                prefixStyle: GoogleFonts.notoSans(
                                   color: textColor,
                                   fontSize:
                                       (_isAnalyzingRisk || _hasAnalyzedRisk)
@@ -1405,7 +1549,7 @@ class _AmountScreenState extends State<AmountScreen> {
                                   fontWeight: FontWeight.w500,
                                 ),
                                 hintText: "0",
-                                hintStyle: GoogleFonts.outfit(
+                                hintStyle: GoogleFonts.notoSans(
                                   color: isDark
                                       ? Colors.grey[700]
                                       : Colors.grey[300],
@@ -1428,8 +1572,11 @@ class _AmountScreenState extends State<AmountScreen> {
                             Padding(
                               padding: const EdgeInsets.only(top: 8),
                               child: Text(
-                                "Max limit: ₹5,00,000",
-                                style: GoogleFonts.outfit(
+                                AppLocalizations.of(
+                                      context,
+                                    )?.translate('amount.max_limit_msg') ??
+                                    "Max limit: ₹5,00,000",
+                                style: GoogleFonts.notoSans(
                                   color: Colors.red[300],
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500,
@@ -1464,8 +1611,13 @@ class _AmountScreenState extends State<AmountScreen> {
                                             ),
                                             const SizedBox(width: 8),
                                             Text(
-                                              'Attention!',
-                                              style: GoogleFonts.outfit(
+                                              AppLocalizations.of(
+                                                    context,
+                                                  )?.translate(
+                                                    'amount.attention_label',
+                                                  ) ??
+                                                  'Attention!',
+                                              style: GoogleFonts.notoSans(
                                                 color: Colors.red,
                                                 fontSize: 14,
                                                 fontWeight: FontWeight.bold,
@@ -1475,8 +1627,13 @@ class _AmountScreenState extends State<AmountScreen> {
                                         ),
                                         const SizedBox(height: 6),
                                         Text(
-                                          "QR codes are ONLY for sending money. Never scan a QR code to receive money.",
-                                          style: GoogleFonts.outfit(
+                                          AppLocalizations.of(
+                                                context,
+                                              )?.translate(
+                                                'amount.qr_warning_msg',
+                                              ) ??
+                                              "QR codes are ONLY for sending money. Never scan a QR code to receive money.",
+                                          style: GoogleFonts.notoSans(
                                             color: isDark
                                                 ? Colors.red[300]
                                                 : Colors.red[700],
@@ -1504,8 +1661,13 @@ class _AmountScreenState extends State<AmountScreen> {
                                             ),
                                             const SizedBox(width: 8),
                                             Text(
-                                              'QR Limit Exceeded',
-                                              style: GoogleFonts.outfit(
+                                              AppLocalizations.of(
+                                                    context,
+                                                  )?.translate(
+                                                    'amount.qr_limit_title',
+                                                  ) ??
+                                                  'QR Limit Exceeded',
+                                              style: GoogleFonts.notoSans(
                                                 color: Colors.red,
                                                 fontSize: 14,
                                                 fontWeight: FontWeight.bold,
@@ -1515,8 +1677,13 @@ class _AmountScreenState extends State<AmountScreen> {
                                         ),
                                         const SizedBox(height: 6),
                                         Text(
-                                          "You cannot send more than 2000 rupees by scanning a QR code.",
-                                          style: GoogleFonts.outfit(
+                                          AppLocalizations.of(
+                                                context,
+                                              )?.translate(
+                                                'amount.qr_limit_msg',
+                                              ) ??
+                                              "You cannot send more than 2,000 rupees by scanning a QR code.",
+                                          style: GoogleFonts.notoSans(
                                             color: isDark
                                                 ? Colors.red[300]
                                                 : Colors.red[700],
@@ -1544,8 +1711,13 @@ class _AmountScreenState extends State<AmountScreen> {
                                             ),
                                             const SizedBox(width: 8),
                                             Text(
-                                              'Spending Limit Exceeded',
-                                              style: GoogleFonts.outfit(
+                                              AppLocalizations.of(
+                                                    context,
+                                                  )?.translate(
+                                                    'amount.spending_limit_title',
+                                                  ) ??
+                                                  'Spending Limit Exceeded',
+                                              style: GoogleFonts.notoSans(
                                                 color: Colors.red,
                                                 fontSize: 14,
                                                 fontWeight: FontWeight.bold,
@@ -1556,7 +1728,7 @@ class _AmountScreenState extends State<AmountScreen> {
                                         const SizedBox(height: 6),
                                         Text(
                                           _spendingLimitMessage(),
-                                          style: GoogleFonts.outfit(
+                                          style: GoogleFonts.notoSans(
                                             color: isDark
                                                 ? Colors.red[300]
                                                 : Colors.red[700],
@@ -1623,8 +1795,11 @@ class _AmountScreenState extends State<AmountScreen> {
                           SizedBox(
                             height: (_isAnalyzingRisk || _hasAnalyzedRisk)
                                 ? 12
-                                : 24,
+                                : 8,
                           ),
+
+                          if (!_isAnalyzingRisk && !_hasAnalyzedRisk)
+                            SizedBox(height: 16),
 
                           // "Add note" Pill Button
                           if (!_isAnalyzingRisk && !_hasAnalyzedRisk)
@@ -1651,7 +1826,7 @@ class _AmountScreenState extends State<AmountScreen> {
                                       !_isCirclePaymentApproval &&
                                       !_isAnalyzingRisk &&
                                       !_hasAnalyzedRisk,
-                                  style: GoogleFonts.outfit(
+                                  style: GoogleFonts.notoSans(
                                     color: textColor,
                                     fontSize: 14,
                                     fontWeight: FontWeight.w500,
@@ -1659,8 +1834,12 @@ class _AmountScreenState extends State<AmountScreen> {
                                   decoration: InputDecoration(
                                     filled: false,
                                     isDense: true,
-                                    hintText: "Add note",
-                                    hintStyle: GoogleFonts.outfit(
+                                    hintText:
+                                        AppLocalizations.of(
+                                          context,
+                                        )?.translate('amount.add_note') ??
+                                        "Add note",
+                                    hintStyle: GoogleFonts.notoSans(
                                       color: secondaryTextColor,
                                       fontSize: 14,
                                       fontWeight: FontWeight.w500,
@@ -1676,7 +1855,7 @@ class _AmountScreenState extends State<AmountScreen> {
                               _noteController.text.isNotEmpty)
                             Text(
                               '"${_noteController.text}"',
-                              style: GoogleFonts.outfit(
+                              style: GoogleFonts.notoSans(
                                 color: secondaryTextColor,
                                 fontSize: 14,
                                 fontStyle: FontStyle.italic,
@@ -1709,8 +1888,14 @@ class _AmountScreenState extends State<AmountScreen> {
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              "Powered by ZaferPay",
-                              style: GoogleFonts.outfit(
+                              AppLocalizations.of(
+                                    context,
+                                  )?.translate('details.powered_by') ??
+                                  AppLocalizations.of(
+                                    context,
+                                  )?.translate('details.powered_by') ??
+                                  "Powered by ZaferPay",
+                              style: GoogleFonts.notoSans(
                                 color: Colors.blue[300],
                                 fontSize: 12,
                                 fontWeight: FontWeight.w500,
@@ -1770,6 +1955,40 @@ class _AmountScreenState extends State<AmountScreen> {
     );
   }
 
+  Widget _buildMerchantBadge(bool isDark) {
+    if (_rawMcc == null || !MccHelper.isMerchant(_rawMcc)) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF00B9F1).withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFF00B9F1).withValues(alpha: 0.3),
+          width: 1.2,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.store_rounded, size: 14, color: Color(0xFF00B9F1)),
+          const SizedBox(width: 8),
+          Text(
+            "Merchant",
+            style: GoogleFonts.notoSans(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF00B9F1),
+              letterSpacing: 0.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildScanningState(Color textColor) {
     final screenHeight = MediaQuery.of(context).size.height;
     final animSize = (screenHeight * 0.3).clamp(180.0, 280.0);
@@ -1777,6 +1996,7 @@ class _AmountScreenState extends State<AmountScreen> {
     return SingleChildScrollView(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           const SizedBox(height: 40),
           FraudScanningAnimation(
@@ -1784,18 +2004,30 @@ class _AmountScreenState extends State<AmountScreen> {
             size: animSize,
           ),
           const SizedBox(height: 24),
-          Text(
-            "Analyzing Transaction...",
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: textColor,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              AppLocalizations.of(context)?.translate('risk.analyzing') ??
+                  "Analyzing Transaction...",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: textColor,
+              ),
             ),
           ),
           const SizedBox(height: 12),
-          Text(
-            "Checking recipient pattern...",
-            style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              AppLocalizations.of(
+                    context,
+                  )?.translate('risk.checking_pattern') ??
+                  "Checking recipient pattern...",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+            ),
           ),
           const SizedBox(height: 40),
         ],
@@ -1850,10 +2082,19 @@ class _AmountScreenState extends State<AmountScreen> {
             // Title
             Text(
               _isHighRisk
-                  ? "Critical Fraud Risk!"
+                  ? (AppLocalizations.of(
+                          context,
+                        )?.translate('risk.critical_fraud_risk') ??
+                        "Critical Fraud Risk!")
                   : (_isWarn
-                        ? "Security Warning"
-                        : "Transaction Verified Safe"),
+                        ? (AppLocalizations.of(
+                                context,
+                              )?.translate('risk.security_warning') ??
+                              "Security Warning")
+                        : (AppLocalizations.of(
+                                context,
+                              )?.translate('risk.verified_safe') ??
+                              "Transaction Verified Safe")),
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 20,
@@ -1898,12 +2139,24 @@ class _AmountScreenState extends State<AmountScreen> {
                   ),
                   child: Text(
                     _isRisk
-                        ? "Proceed with Caution"
+                        ? (AppLocalizations.of(
+                                context,
+                              )?.translate('risk.proceed_caution') ??
+                              "Proceed with Caution")
                         : (_isCirclePaymentApproval
-                              ? "Approve"
+                              ? (AppLocalizations.of(
+                                      context,
+                                    )?.translate('risk.approve') ??
+                                    "Approve")
                               : (_selectedCircle != null
-                                    ? "Send for Approval"
-                                    : "Proceed")),
+                                    ? (AppLocalizations.of(
+                                            context,
+                                          )?.translate('risk.send_approval') ??
+                                          "Send for Approval")
+                                    : (AppLocalizations.of(
+                                            context,
+                                          )?.translate('risk.proceed') ??
+                                          "Proceed"))),
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -1924,8 +2177,9 @@ class _AmountScreenState extends State<AmountScreen> {
                     ),
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
-                  child: const Text(
-                    "Go Back",
+                  child: Text(
+                    AppLocalizations.of(context)?.translate('risk.go_back') ??
+                        "Go Back",
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -1946,7 +2200,8 @@ class _AmountScreenState extends State<AmountScreen> {
                 });
               },
               child: Text(
-                'Cancel',
+                AppLocalizations.of(context)?.translate('details.cancel') ??
+                    'Cancel',
                 style: TextStyle(color: secondaryTextColor),
               ),
             ),
@@ -1975,8 +2230,11 @@ class _AmountScreenState extends State<AmountScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            "CHOOSE PAYMENT SOURCE",
-            style: GoogleFonts.outfit(
+            AppLocalizations.of(
+                  context,
+                )?.translate('amount.choose_payment_source') ??
+                "CHOOSE PAYMENT SOURCE",
+            style: GoogleFonts.notoSans(
               fontSize: 10,
               fontWeight: FontWeight.bold,
               color: Colors.blue,
@@ -2005,11 +2263,14 @@ class _AmountScreenState extends State<AmountScreen> {
                         color: Colors.blue,
                       ),
                       const SizedBox(width: 12),
-                      Text(
-                        "Personal Balance (₹${_balance?.toStringAsFixed(2) ?? '0.00'})",
-                        style: GoogleFonts.outfit(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
+                      Expanded(
+                        child: Text(
+                          "${AppLocalizations.of(context)?.translate('common.personal_account') ?? "Personal Balance"} (₹${_balance?.toStringAsFixed(2) ?? '0.00'})",
+                          style: GoogleFonts.notoSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -2029,16 +2290,25 @@ class _AmountScreenState extends State<AmountScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              "${circle['primary_user_name']}'s Circle",
-                              style: GoogleFonts.outfit(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
+                            Expanded(
+                              child: Text(
+                                AppLocalizations.of(context)?.translate(
+                                      'amount.primary_circle_label',
+                                      arguments: {
+                                        'name': circle['primary_user_name'],
+                                      },
+                                    ) ??
+                                    "${circle['primary_user_name']}'s Circle",
+                                style: GoogleFonts.notoSans(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             Text(
-                              "Limit Left: ₹${remaining.toStringAsFixed(0)}",
-                              style: GoogleFonts.outfit(
+                              "${AppLocalizations.of(context)?.translate('amount.limit_left_label', arguments: {'amount': remaining.toStringAsFixed(0)}) ?? "Limit Left"}: ₹${remaining.toStringAsFixed(0)}",
+                              style: GoogleFonts.notoSans(
                                 fontSize: 11,
                                 color: Colors.grey,
                               ),
@@ -2065,7 +2335,8 @@ class _AmountScreenState extends State<AmountScreen> {
       } else {
         return [
           _buildRiskItem(
-            "Unusual activity detected.",
+            AppLocalizations.of(context)?.translate('risk.unusual_activity') ??
+                "Unusual activity detected.",
             Icons.warning_amber_rounded,
             false,
             textColor,
@@ -2074,7 +2345,10 @@ class _AmountScreenState extends State<AmountScreen> {
           _buildRiskItem(
             _riskExplanation.isNotEmpty
                 ? _riskExplanation
-                : "Please review before proceeding.",
+                : (AppLocalizations.of(
+                        context,
+                      )?.translate('risk.review_before') ??
+                      "Please review before proceeding."),
             Icons.shield_outlined,
             false,
             textColor,
@@ -2084,14 +2358,16 @@ class _AmountScreenState extends State<AmountScreen> {
     } else {
       return [
         _buildRiskItem(
-          "Receiver identity has been successfully verified by ZaferPay.",
+          AppLocalizations.of(context)?.translate('risk.identity_verified') ??
+              "Receiver identity has been successfully verified by ZaferPay.",
           Icons.verified_rounded,
           true,
           textColor,
         ),
         const SizedBox(height: 16),
         _buildRiskItem(
-          "Transaction amount is within your normal spending patterns.",
+          AppLocalizations.of(context)?.translate('risk.within_patterns') ??
+              "Transaction amount is within your normal spending patterns.",
           Icons.check_circle_outline_rounded,
           true,
           textColor,
@@ -2100,87 +2376,272 @@ class _AmountScreenState extends State<AmountScreen> {
     }
   }
 
-  List<Widget> _buildDynamicRiskList(String code, Color textColor) {
-    List<Widget> items = [];
-    int itemsCount = 0;
+  String _getRiskMessage(String code) {
+    // Map fraud codes to translation keys
+    final Map<String, String> codeToKey = {
+      'F1_VELOCITY': 'risk.f1_velocity_msg',
+      'F19_SESSION': 'risk.f19_session_msg',
+      'F25_CONSECUTIVE': 'risk.f25_consecutive_msg',
+      'F39_NIGHT': 'risk.f39_night_msg',
+      'F41_FREQUENCY': 'risk.f41_frequency_msg',
+      'F48_CONCURRENT': 'risk.f48_concurrent_msg',
+      'F49_FAILED': 'risk.f49_failed_msg',
+      'F2_CIRCULAR': 'risk.f2_circular_msg',
+      'F54_ROUND_TRIP': 'risk.f54_round_trip_msg',
+      'F4_FIRST_TX': 'risk.f4_first_tx_msg',
+      'F22_DORMANT': 'risk.f22_dormant_msg',
+      'F40_NEW_RECEIVER': 'risk.f40_new_receiver_msg',
+      'F5_EXTREME': 'risk.f5_extreme_msg',
+      'F5_VERY_HIGH': 'risk.f5_very_high_msg',
+      'F5_HIGH': 'risk.f5_high_msg',
+      'F5_MEDIUM': 'risk.f5_high_msg',
+      'F5_SPIKE': 'risk.f5_high_msg',
+      'F8_STRANGER': 'risk.f8_stranger_msg',
+      'F21_DRIFT': 'risk.f21_drift_msg',
+      'F6': 'risk.f6_merchant_msg',
+      'F7': 'risk.f7_unverified_msg',
+      'F30_MERCHANT_LOCATION': 'risk.f30_merchant_location_msg',
+      'F47_MCC_SWITCHING': 'risk.f47_mcc_switching_msg',
+      'F56_FAKE_MERCHANT': 'risk.f56_fake_merchant_msg',
+      'F57_MCC_MISMATCH': 'risk.f57_mcc_mismatch_msg',
+      'F9_UNUSUAL_TIME': 'risk.f9_unusual_time_msg',
+      'F20_TIME_PATTERN': 'risk.f20_time_pattern_msg',
+      'F33_HOLIDAY': 'risk.f33_holiday_msg',
+      'F10_SPLIT': 'risk.f10_split_msg',
+      'F31_MICRO_BURST': 'risk.f31_micro_burst_msg',
+      'F35_SAME_AMOUNT': 'risk.f35_same_amount_msg',
+      'F53_SMURFING': 'risk.f53_smurfing_msg',
+      'F11_EXTREME_DAILY': 'risk.f11_extreme_daily_msg',
+      'F11_HIGH_DAILY': 'risk.f11_high_daily_msg',
+      'F11_DAILY': 'risk.f11_daily_msg',
+      'F18_DAILY_LIMIT': 'risk.f18_daily_limit_msg',
+      'F30_EXTREME_WEEKLY': 'risk.f30_extreme_weekly_msg',
+      'F30_HIGH_WEEKLY': 'risk.f30_high_weekly_msg',
+      'F30_WEEKLY': 'risk.f30_weekly_msg',
+      'F12_STRANGER': 'risk.f12_stranger_msg',
+      'F13_NEW_RECEIVER_BURST': 'risk.f13_new_receiver_burst_msg',
+      'F23_BURST_TO_NEW': 'risk.f23_burst_to_new_msg',
+      'F14_ROUND_AMOUNT': 'risk.f14_round_amount_msg',
+      'F28_FIRST_TIME_AMOUNT': 'risk.f28_first_time_amount_msg',
+      'F36_PROGRESSIVE': 'risk.f36_progressive_msg',
+      'F37_COUNTDOWN': 'risk.f37_countdown_msg',
+      'F38_EVEN_AMOUNT': 'risk.f38_even_amount_msg',
+      'F46_WHOLE_NUMBER': 'risk.f46_whole_number_msg',
+      'F15_EXTREME': 'risk.f15_extreme_drain_msg',
+      'F15_RAPID': 'risk.f15_drain_msg',
+      'F15_MODERATE': 'risk.f15_drain_msg',
+      'F15_DRAIN': 'risk.f15_drain_msg',
+      'F26_BALANCE_DRAIN': 'risk.f26_balance_drain_msg',
+      'F42_SPENDING_EXCEEDS': 'risk.f42_spending_exceeds_msg',
+      'F16_DEVICE_CHANGE': 'risk.f16_device_change_msg',
+      'F43_NEW_DEVICE': 'risk.f43_new_device_msg',
+      'F44_MULTIPLE_IPS': 'risk.f44_multiple_ips_msg',
+      'F45_INSTANT': 'risk.f45_instant_msg',
+      'F17_RECEIVER_HIGH_INFLOW': 'risk.f17_receiver_inflow_msg',
+      'F27_RECIPIENT_CLUSTER': 'risk.f27_recipient_cluster_msg',
+      'F34_TOO_MANY_UNIQUE': 'risk.f34_too_many_unique_msg',
+      'F24_CHAIN': 'risk.f24_chain_msg',
+      'F50_STAR_PATTERN': 'risk.f50_star_pattern_msg',
+      'F51_FUNNEL_PATTERN': 'risk.f51_funnel_pattern_msg',
+      'F52_LAYERING': 'risk.f52_layering_msg',
+      'F29_GEO_VELOCITY': 'risk.f29_geo_velocity_msg',
+      'F29_LOCATION_CHANGE': 'risk.f29_location_change_msg',
+      'F32_WEEKEND': 'risk.f32_weekend_msg',
+      'F55_SCREEN_SHARING': 'risk.f55_screen_sharing_msg',
+      'F58_QR_PERSONAL': 'risk.f58_qr_personal_msg',
+      'F59_DEEP_LINK': 'risk.f59_deep_link_msg',
+      'F60_PANIC': 'risk.f60_panic_msg',
+      'F61_INVESTMENT_SCAM': 'risk.f61_investment_scam_msg',
+      'AI_DETECTED': 'risk.ai_detected_msg',
+      'SELF_TRANSFER': 'risk.self_transfer_msg',
+    };
 
-    String desc = "Potentially unsafe transaction.";
-    IconData icon = Icons.warning_amber_rounded;
-
-    if (code.contains("F18") || code.contains("DAILY_LIMIT")) {
-      desc = "Daily limit exceeded for this receiver type.";
-      icon = Icons.block_flipped;
-    } else if (code.contains("F1") || code.contains("VELOCITY")) {
-      desc = "Sending too frequently. Please slow down.";
-      icon = Icons.speed_rounded;
-    } else if (code.contains("AI_DETECTED")) {
-      desc = "AI Brain detected highly unusual behavior.";
-      icon = Icons.psychology_rounded;
-    } else if (code.contains("GEO") || code.contains("LOCATION")) {
-      desc = "Impossible travel detected. Location mismatch.";
-      icon = Icons.location_off_rounded;
-    } else if (code.contains("F40") || code.contains("NEW_RECEIVER")) {
-      desc = "High value transfer to a brand new receiver.";
-      icon = Icons.person_add_disabled_rounded;
-    } else if (code.contains("F52") || code.contains("LAYERING")) {
-      desc = "Complex money flow pattern detected (Layering Risk).";
-      icon = Icons.account_tree_rounded;
-    } else if (code.contains("F5") || code.contains("SPIKE")) {
-      desc = "This payment is significantly higher than your usual spending.";
-      icon = Icons.trending_up_rounded;
-    } else if (code.contains("SELF_TRANSFER")) {
-      desc = "Self-transfer is not allowed.";
-      icon = Icons.loop_rounded;
-    } else {
-      desc = _riskExplanation;
+    // Find matching key
+    for (var entry in codeToKey.entries) {
+      if (code.contains(entry.key)) {
+        return AppLocalizations.of(context)?.translate(entry.value) ?? "";
+      }
     }
 
-    items.add(_buildRiskItem(desc, icon, false, textColor));
-    itemsCount++;
+    // Default fallback
+    return AppLocalizations.of(context)?.translate('risk.spike_risk') ?? 
+           "This payment is significantly higher than your usual spending.";
+  }
 
-    if (_fraudFeatures != null) {
-      if (itemsCount < 3 &&
-          (_fraudFeatures!['trust_score'] ?? 0) < 50 &&
-          !code.contains("F18")) {
-        items.add(const SizedBox(height: 16));
-        items.add(
-          _buildRiskItem(
-            "Low trust score with this receiver.",
-            Icons.handshake_outlined,
-            false,
-            textColor,
-          ),
-        );
-        itemsCount++;
-      }
+  List<Widget> _buildDynamicRiskList(String code, Color textColor) {
+    List<Widget> items = [];
+    List<Map<String, dynamic>> allReasons = [];
 
-      if (itemsCount < 3 &&
-          (_fraudFeatures!['is_new_receiver'] ?? 0) == 1 &&
-          !code.contains("NEW_RECEIVER")) {
-        items.add(const SizedBox(height: 16));
-        items.add(
-          _buildRiskItem(
-            "You have never paid this person before.",
-            Icons.person_outline_rounded,
-            false,
-            textColor,
-          ),
-        );
-        itemsCount++;
-      }
+    // Extract behavioral metrics from fraud features
+    final trustDepth = _fraudFeatures?['trust_depth'] ?? 0;
 
-      if (itemsCount < 3 && (_fraudFeatures!['amount_percentile'] ?? 0) > 90) {
-        items.add(const SizedBox(height: 16));
-        items.add(
-          _buildRiskItem(
-            "Amount is much higher than your average.",
-            Icons.show_chart_rounded,
-            false,
-            textColor,
-          ),
-        );
-        itemsCount++;
+    // ═══════════════════════════════════════════════════════════════════════
+    // GET PRIMARY REASON WITH TRANSLATION
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    String primaryReason = _getRiskMessage(code);
+    IconData primaryIcon = Icons.warning_amber_rounded;
+    int primaryPriority = 2; // Default priority
+    
+    // Determine icon and priority based on code patterns
+    if (code.contains("F1") || code.contains("F48") || code.contains("F49") || 
+        code.contains("F2") || code.contains("F54") || code.contains("F4") ||
+        code.contains("F40") || code.contains("F5") || code.contains("F8") ||
+        code.contains("F21") || code.contains("F7") || code.contains("F30_MERCHANT") ||
+        code.contains("F56") || code.contains("F57") || code.contains("F10") ||
+        code.contains("F31") || code.contains("F53") || code.contains("F11_EXTREME") ||
+        code.contains("F11_HIGH") || code.contains("F18") || code.contains("F30_EXTREME") ||
+        code.contains("F30_HIGH") || code.contains("F13") || code.contains("F23") ||
+        code.contains("F36") || code.contains("F15") || code.contains("F26") ||
+        code.contains("F42") || code.contains("F16") || code.contains("F44") ||
+        code.contains("F24") || code.contains("F50") || code.contains("F51") ||
+        code.contains("F52") || code.contains("F29_GEO") || code.contains("F55") ||
+        code.contains("F60") || code.contains("F61") || code.contains("AI_DETECTED") ||
+        code.contains("SELF_TRANSFER")) {
+      primaryPriority = 1; // Critical
+    } else if (code.contains("F19") || code.contains("F25") || code.contains("F39") ||
+               code.contains("F41") || code.contains("F22") || code.contains("F6") ||
+               code.contains("F47") || code.contains("F9") || code.contains("F35") ||
+               code.contains("F11_DAILY") || code.contains("F30_WEEKLY") || code.contains("F12") ||
+               code.contains("F37") || code.contains("F43") || code.contains("F45") ||
+               code.contains("F17") || code.contains("F27") || code.contains("F34") ||
+               code.contains("F29_LOCATION") || code.contains("F58") || code.contains("F59")) {
+      primaryPriority = 2; // High
+    } else {
+      primaryPriority = 3; // Medium
+    }
+
+    // Set icon based on code type
+    if (code.contains("VELOCITY") || code.contains("F1")) primaryIcon = Icons.speed_rounded;
+    else if (code.contains("SESSION") || code.contains("F19")) primaryIcon = Icons.access_time_rounded;
+    else if (code.contains("CONSECUTIVE") || code.contains("F25")) primaryIcon = Icons.repeat_rounded;
+    else if (code.contains("NIGHT") || code.contains("F39")) primaryIcon = Icons.nightlight_round;
+    else if (code.contains("FREQUENCY") || code.contains("F41")) primaryIcon = Icons.repeat_rounded;
+    else if (code.contains("CONCURRENT") || code.contains("F48")) primaryIcon = Icons.warning_rounded;
+    else if (code.contains("FAILED") || code.contains("F49")) primaryIcon = Icons.error_outline_rounded;
+    else if (code.contains("CIRCULAR") || code.contains("F2")) primaryIcon = Icons.loop_rounded;
+    else if (code.contains("ROUND_TRIP") || code.contains("F54")) primaryIcon = Icons.swap_horiz_rounded;
+    else if (code.contains("FIRST_TX") || code.contains("F4")) primaryIcon = Icons.new_releases_rounded;
+    else if (code.contains("DORMANT") || code.contains("F22")) primaryIcon = Icons.person_off_rounded;
+    else if (code.contains("NEW_RECEIVER") || code.contains("F40")) primaryIcon = Icons.person_add_rounded;
+    else if (code.contains("SPIKE") || code.contains("F5") || code.contains("F8") || code.contains("F21")) primaryIcon = Icons.trending_up_rounded;
+    else if (code.contains("MERCHANT") && code.contains("F6")) primaryIcon = Icons.store_rounded;
+    else if (code.contains("F7")) primaryIcon = Icons.store_mall_directory_rounded;
+    else if (code.contains("MERCHANT_LOCATION") || code.contains("F30_MERCHANT")) primaryIcon = Icons.location_off_rounded;
+    else if (code.contains("MCC_SWITCHING") || code.contains("F47")) primaryIcon = Icons.category_rounded;
+    else if (code.contains("FAKE_MERCHANT") || code.contains("F56")) primaryIcon = Icons.report_problem_rounded;
+    else if (code.contains("MCC_MISMATCH") || code.contains("F57")) primaryIcon = Icons.qr_code_scanner_rounded;
+    else if (code.contains("UNUSUAL_TIME") || code.contains("F9")) primaryIcon = Icons.access_time_rounded;
+    else if (code.contains("TIME_PATTERN") || code.contains("F20")) primaryIcon = Icons.schedule_rounded;
+    else if (code.contains("HOLIDAY") || code.contains("F33")) primaryIcon = Icons.celebration_rounded;
+    else if (code.contains("SPLIT") || code.contains("F10")) primaryIcon = Icons.call_split_rounded;
+    else if (code.contains("MICRO_BURST") || code.contains("F31")) primaryIcon = Icons.grain_rounded;
+    else if (code.contains("SAME_AMOUNT") || code.contains("F35")) primaryIcon = Icons.content_copy_rounded;
+    else if (code.contains("SMURFING") || code.contains("F53")) primaryIcon = Icons.scatter_plot_rounded;
+    else if (code.contains("DAILY") && (code.contains("F11") || code.contains("F18"))) primaryIcon = code.contains("F18") ? Icons.block_rounded : Icons.calendar_today_rounded;
+    else if (code.contains("WEEKLY") || code.contains("F30")) primaryIcon = Icons.date_range_rounded;
+    else if (code.contains("STRANGER") || code.contains("F12")) primaryIcon = Icons.handshake_outlined;
+    else if (code.contains("BURST") && (code.contains("F13") || code.contains("F23"))) primaryIcon = code.contains("F13") ? Icons.people_outline_rounded : Icons.person_add_alt_rounded;
+    else if (code.contains("ROUND_AMOUNT") || code.contains("F14")) primaryIcon = Icons.looks_rounded;
+    else if (code.contains("FIRST_TIME_AMOUNT") || code.contains("F28")) primaryIcon = Icons.fiber_new_rounded;
+    else if (code.contains("PROGRESSIVE") || code.contains("F36")) primaryIcon = Icons.trending_up_rounded;
+    else if (code.contains("COUNTDOWN") || code.contains("F37")) primaryIcon = Icons.trending_down_rounded;
+    else if (code.contains("EVEN_AMOUNT") || code.contains("F38")) primaryIcon = Icons.filter_9_plus_rounded;
+    else if (code.contains("WHOLE_NUMBER") || code.contains("F46")) primaryIcon = Icons.calculate_rounded;
+    else if (code.contains("DRAIN") || code.contains("F15") || code.contains("F26")) primaryIcon = code.contains("F26") ? Icons.account_balance_wallet_rounded : Icons.trending_down_rounded;
+    else if (code.contains("SPENDING_EXCEEDS") || code.contains("F42")) primaryIcon = Icons.speed_rounded;
+    else if (code.contains("DEVICE_CHANGE") || code.contains("F16")) primaryIcon = Icons.phonelink_off_rounded;
+    else if (code.contains("NEW_DEVICE") || code.contains("F43")) primaryIcon = Icons.phone_android_rounded;
+    else if (code.contains("MULTIPLE_IPS") || code.contains("F44")) primaryIcon = Icons.location_searching_rounded;
+    else if (code.contains("INSTANT") || code.contains("F45")) primaryIcon = Icons.flash_on_rounded;
+    else if (code.contains("RECEIVER_HIGH_INFLOW") || code.contains("F17")) primaryIcon = Icons.call_received_rounded;
+    else if (code.contains("RECIPIENT_CLUSTER") || code.contains("F27")) primaryIcon = Icons.hub_rounded;
+    else if (code.contains("TOO_MANY_UNIQUE") || code.contains("F34")) primaryIcon = Icons.groups_rounded;
+    else if (code.contains("CHAIN") || code.contains("F24")) primaryIcon = Icons.link_rounded;
+    else if (code.contains("STAR_PATTERN") || code.contains("F50")) primaryIcon = Icons.star_border_rounded;
+    else if (code.contains("FUNNEL_PATTERN") || code.contains("F51")) primaryIcon = Icons.filter_alt_rounded;
+    else if (code.contains("LAYERING") || code.contains("F52")) primaryIcon = Icons.account_tree_rounded;
+    else if (code.contains("GEO") || code.contains("F29")) primaryIcon = code.contains("GEO_VELOCITY") ? Icons.location_off_rounded : Icons.my_location_rounded;
+    else if (code.contains("WEEKEND") || code.contains("F32")) primaryIcon = Icons.weekend_rounded;
+    else if (code.contains("SCREEN_SHARING") || code.contains("F55")) primaryIcon = Icons.screen_share_rounded;
+    else if (code.contains("QR_PERSONAL") || code.contains("F58")) primaryIcon = Icons.qr_code_2_rounded;
+    else if (code.contains("DEEP_LINK") || code.contains("F59")) primaryIcon = Icons.link_rounded;
+    else if (code.contains("PANIC") || code.contains("F60")) primaryIcon = Icons.timer_rounded;
+    else if (code.contains("INVESTMENT_SCAM") || code.contains("F61")) primaryIcon = Icons.report_rounded;
+    else if (code.contains("AI_DETECTED")) primaryIcon = Icons.psychology_rounded;
+    else if (code.contains("SELF_TRANSFER")) primaryIcon = Icons.loop_rounded;
+
+    // Add primary reason to list
+    allReasons.add({
+      'reason': primaryReason,
+      'icon': primaryIcon,
+      'priority': primaryPriority,
+    });
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // ADD SECONDARY REASONS (from fraud features)
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    // Low trust score / Stranger
+    if (_fraudFeatures != null && trustDepth == 0) {
+      allReasons.add({
+        'reason': AppLocalizations.of(context)?.translate('risk.low_trust') ?? "Low trust score with this receiver.",
+        'icon': Icons.handshake_outlined,
+        'priority': 2,
+      });
+    }
+
+    // First time payment
+    if (_fraudFeatures != null && (_fraudFeatures!['is_new_receiver'] ?? 0) == 1) {
+      allReasons.add({
+        'reason': AppLocalizations.of(context)?.translate('risk.never_paid_before') ?? "You have never paid this person before.",
+        'icon': Icons.person_outline_rounded,
+        'priority': 2,
+      });
+    }
+
+    // Add generic secondary reasons if we don't have enough specific ones
+    if (allReasons.length < 2) {
+      // Add amount-related reason if it's a spike
+      if (code.contains("F5") || code.contains("SPIKE") || code.contains("F8")) {
+        allReasons.add({
+          'reason': AppLocalizations.of(context)?.translate('risk.amount_higher_avg') ?? "Amount is much higher than your average.",
+          'icon': Icons.trending_up_rounded,
+          'priority': 2,
+        });
       }
+      
+      // Add verification reminder
+      if (allReasons.length < 3) {
+        allReasons.add({
+          'reason': AppLocalizations.of(context)?.translate('risk.rec_call_confirm') ?? "Call the person and confirm their identity before proceeding.",
+          'icon': Icons.phone_rounded,
+          'priority': 3,
+        });
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // SORT BY PRIORITY AND TAKE TOP 3
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    // Sort by priority (1 = highest priority)
+    allReasons.sort((a, b) => a['priority'].compareTo(b['priority']));
+    
+    // Take only top 3 reasons
+    final top3Reasons = allReasons.take(3).toList();
+    
+    // Build widgets for top 3 reasons
+    for (int i = 0; i < top3Reasons.length; i++) {
+      if (i > 0) {
+        items.add(const SizedBox(height: 16));
+      }
+      items.add(_buildRiskItem(
+        top3Reasons[i]['reason'],
+        top3Reasons[i]['icon'],
+        false,
+        textColor,
+      ));
     }
 
     return items;

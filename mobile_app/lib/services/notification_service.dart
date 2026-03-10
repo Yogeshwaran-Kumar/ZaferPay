@@ -32,30 +32,46 @@ class NotificationService {
 
   String? _fcmToken;
   bool _isInitialized = false;
+  AndroidNotificationChannel? _currentChannel;
 
   // Stream for UI to listen for reset events
   final _resetController = StreamController<void>.broadcast();
   Stream<void> get onReset => _resetController.stream;
 
   // Android Notification Channel
-  static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
-    'high_importance_channel_v2', // id - Changed to force update
-    'Important Notifications', // title
-    description:
-        'This channel is used for important notifications.', // description
-    importance: Importance.max, // Changed from high to max
-    playSound: true,
-  );
+  static const String _channelId = 'high_importance_channel_v2';
 
-  Future<void> initialize({bool askPermission = false}) async {
+  AndroidNotificationChannel _getChannel({String? name, String? description}) {
+    return AndroidNotificationChannel(
+      _channelId,
+      name ?? 'Important Notifications',
+      description:
+          description ?? 'This channel is used for important notifications.',
+      importance: Importance.max,
+      playSound: true,
+    );
+  }
+
+  Future<void> initialize({
+    bool askPermission = false,
+    String? channelName,
+    String? channelDescription,
+  }) async {
     if (_isInitialized) {
       if (askPermission) {
-        // Only request if asked, after already initialized
         await _fcm.requestPermission(alert: true, badge: true, sound: true);
+      }
+      if (channelName != null) {
+        await _updateChannel(channelName, channelDescription);
       }
       return;
     }
     _isInitialized = true;
+
+    _currentChannel = _getChannel(
+      name: channelName,
+      description: channelDescription,
+    );
 
     // 0. Initialize Firebase Core
     await Firebase.initializeApp();
@@ -104,11 +120,13 @@ class NotificationService {
     await _localNotifications.initialize(initializationSettings);
 
     // Create Channel (Android)
-    await _localNotifications
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.createNotificationChannel(_channel);
+    if (_currentChannel != null) {
+      await _localNotifications
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.createNotificationChannel(_currentChannel!);
+    }
 
     // 3. Set Background Handler
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
@@ -157,16 +175,16 @@ class NotificationService {
       }
 
       // Show Local Notification
-      if (notification != null) {
+      if (notification != null && _currentChannel != null) {
         _localNotifications.show(
           DateTime.now().millisecondsSinceEpoch.remainder(100000),
           notification.title,
           notification.body,
           NotificationDetails(
             android: AndroidNotificationDetails(
-              _channel.id,
-              _channel.name,
-              channelDescription: _channel.description,
+              _currentChannel!.id,
+              _currentChannel!.name,
+              channelDescription: _currentChannel!.description,
               icon: 'ic_launcher',
               importance: Importance.max,
               priority: Priority.max,
@@ -183,6 +201,20 @@ class NotificationService {
         );
       }
     });
+  }
+
+  Future<void> _updateChannel(String name, String? description) async {
+    final newChannel = _getChannel(name: name, description: description);
+    if (_currentChannel?.name == newChannel.name &&
+        _currentChannel?.description == newChannel.description) {
+      return;
+    }
+    _currentChannel = newChannel;
+    await _localNotifications
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.createNotificationChannel(_currentChannel!);
   }
 
   Future<void> _sendTokenToBackend(String token) async {

@@ -4,12 +4,26 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart' as io;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
-  // Default URLs
+  // Default URLs 
   static String get _defaultBaseUrl {
     if (kIsWeb) return 'http://127.0.0.1:8000';
-    return 'https://hampshire-now-secretariat-strategic.trycloudflare.com';
+    
+    // FOR DEMO: Update this URL when you start Cloudflare tunnel
+    // Then rebuild APK and distribute to all phones
+    // No need to configure each phone individually!
+    return 'https://phones-longitude-list-powers.trycloudflare.com';
+    
+    // INSTRUCTIONS:
+    // 1. Start backend: uvicorn main:app --reload --host 0.0.0.0 --port 8000
+    // 2. Start tunnel: cloudflared tunnel --url http://localhost:8000
+    // 3. Copy tunnel URL from terminal
+    // 4. Paste URL above (replace the existing URL)
+    // 5. Build APK: flutter build apk --release
+    // 6. Distribute APK to all phones
+    // 7. Done! All phones will use the same URL
   }
 
   static const Duration _timeout = Duration(seconds: 30);
@@ -19,6 +33,49 @@ class ApiClient {
 
   ApiClient() {
     _client = _createHttpClient();
+  }
+
+  // Allow runtime URL override for demos
+  static String? _customBaseUrl;
+  
+  static void setCustomBaseUrl(String url) {
+    _customBaseUrl = url;
+  }
+  
+  static void clearCustomBaseUrl() {
+    _customBaseUrl = null;
+  }
+
+  Future<String> get baseUrl async {
+    // Check for saved custom URL first
+    if (_customBaseUrl != null) return _customBaseUrl!;
+    
+    // Check SharedPreferences for saved URL
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedUrl = prefs.getString('custom_backend_url');
+      if (savedUrl != null && savedUrl.isNotEmpty) {
+        return savedUrl;
+      }
+    } catch (_) {}
+    
+    return _defaultBaseUrl;
+  }
+  
+  static Future<void> saveCustomBaseUrl(String url) async {
+    _customBaseUrl = url;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('custom_backend_url', url);
+    } catch (_) {}
+  }
+  
+  static Future<void> clearSavedBaseUrl() async {
+    _customBaseUrl = null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('custom_backend_url');
+    } catch (_) {}
   }
 
   // SECURITY: Certificate Pinning
@@ -58,8 +115,6 @@ class ApiClient {
     _client = _createHttpClient();
   }
 
-  Future<String> get baseUrl async => _defaultBaseUrl;
-
   Future<http.Response> post(
     String endpoint, {
     Map<String, dynamic>? body,
@@ -68,8 +123,11 @@ class ApiClient {
     return _retryRequest(() async {
       final url = await baseUrl;
       final token = await _storage.read(key: 'token');
+      final prefs = await SharedPreferences.getInstance();
+      final lang = prefs.getString('language') ?? 'en';
       final combinedHeaders = {
         'Content-Type': 'application/json',
+        'Accept-Language': lang,
         if (token != null) 'Authorization': 'Bearer $token',
         ...?headers,
       };
@@ -93,8 +151,11 @@ class ApiClient {
     return _retryRequest(() async {
       final url = await baseUrl;
       final token = await _storage.read(key: 'token');
+      final prefs = await SharedPreferences.getInstance();
+      final lang = prefs.getString('language') ?? 'en';
       final combinedHeaders = {
         'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept-Language': lang,
         if (token != null) 'Authorization': 'Bearer $token',
         ...?headers,
       };
@@ -116,7 +177,10 @@ class ApiClient {
     return _retryRequest(() async {
       final url = await baseUrl;
       final token = await _storage.read(key: 'token');
+      final prefs = await SharedPreferences.getInstance();
+      final lang = prefs.getString('language') ?? 'en';
       final combinedHeaders = {
+        'Accept-Language': lang,
         if (token != null) 'Authorization': 'Bearer $token',
         ...?headers,
       };
@@ -135,8 +199,11 @@ class ApiClient {
     return _retryRequest(() async {
       final url = await baseUrl;
       final token = await _storage.read(key: 'token');
+      final prefs = await SharedPreferences.getInstance();
+      final lang = prefs.getString('language') ?? 'en';
       final combinedHeaders = {
         'Content-Type': 'application/json',
+        'Accept-Language': lang,
         if (token != null) 'Authorization': 'Bearer $token',
         ...?headers,
       };
@@ -159,8 +226,11 @@ class ApiClient {
     return _retryRequest(() async {
       final url = await baseUrl;
       final token = await _storage.read(key: 'token');
+      final prefs = await SharedPreferences.getInstance();
+      final lang = prefs.getString('language') ?? 'en';
       final combinedHeaders = {
         'Content-Type': 'application/json',
+        'Accept-Language': lang,
         if (token != null) 'Authorization': 'Bearer $token',
         ...?headers,
       };
@@ -182,7 +252,10 @@ class ApiClient {
     return _retryRequest(() async {
       final url = await baseUrl;
       final token = await _storage.read(key: 'token');
+      final prefs = await SharedPreferences.getInstance();
+      final lang = prefs.getString('language') ?? 'en';
       final combinedHeaders = {
+        'Accept-Language': lang,
         if (token != null) 'Authorization': 'Bearer $token',
         ...?headers,
       };

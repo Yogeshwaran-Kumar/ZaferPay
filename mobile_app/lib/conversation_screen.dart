@@ -8,6 +8,7 @@ import 'services/auth_service.dart';
 import 'services/transaction_service.dart';
 import 'services/user_service.dart';
 import 'utils.dart';
+import 'services/app_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class ConversationScreen extends StatefulWidget {
@@ -128,8 +129,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Failed to load conversation"),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(
+                    context,
+                  )?.translate('conversation.load_failed') ??
+                  "Failed to load conversation",
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -259,7 +265,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
               child: Center(
                 child: Text(
                   initial,
-                  style: GoogleFonts.outfit(
+                  style: GoogleFonts.notoSans(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
                     color: Colors.white,
@@ -274,7 +280,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 children: [
                   Text(
                     name,
-                    style: GoogleFonts.outfit(
+                    style: GoogleFonts.notoSans(
                       color: Theme.of(context).textTheme.bodyLarge?.color,
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -284,7 +290,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   if (widget.args['isMerchant'] != true)
                     Text(
                       widget.args['mobile'] ?? upiId,
-                      style: GoogleFonts.outfit(
+                      style: GoogleFonts.notoSans(
                         color: isDark
                             ? Colors.grey.shade400
                             : Colors.grey.shade600,
@@ -421,7 +427,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
           ),
           child: Text(
             label,
-            style: GoogleFonts.outfit(
+            style: GoogleFonts.notoSans(
               color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
               fontSize: 11,
               fontWeight: FontWeight.w500,
@@ -450,7 +456,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 child: Center(
                   child: Text(
                     initial,
-                    style: GoogleFonts.outfit(
+                    style: GoogleFonts.notoSans(
                       fontSize: 32,
                       fontWeight: FontWeight.w600,
                       color: Colors.white,
@@ -461,7 +467,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
               const SizedBox(height: 24),
               Text(
                 "Start a conversation with $name",
-                style: GoogleFonts.outfit(
+                style: GoogleFonts.notoSans(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: Theme.of(context).textTheme.bodyLarge?.color,
@@ -471,7 +477,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
               const SizedBox(height: 8),
               Text(
                 widget.args['upi'] ?? "",
-                style: GoogleFonts.outfit(
+                style: GoogleFonts.notoSans(
                   color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                   fontSize: 14,
                 ),
@@ -492,7 +498,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 icon: const Icon(Icons.currency_rupee_rounded, size: 18),
                 label: Text(
                   "Make a payment",
-                  style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+                  style: GoogleFonts.notoSans(fontWeight: FontWeight.w600),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF00B9F1),
@@ -629,7 +635,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 isSender
                     ? "Payment to ${widget.args['name']}"
                     : "Payment to you",
-                style: GoogleFonts.outfit(
+                style: GoogleFonts.notoSans(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                   color: textColor,
@@ -640,7 +646,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
               // 2. Amount
               Text(
                 "₹${formatAmount(amount)}",
-                style: GoogleFonts.outfit(
+                style: GoogleFonts.notoSans(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
                   color: amountColor,
@@ -656,7 +662,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                     const SizedBox(width: 6),
                     Text(
                       "Failed",
-                      style: GoogleFonts.outfit(
+                      style: GoogleFonts.notoSans(
                         color: Colors.redAccent,
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
@@ -675,7 +681,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                     const SizedBox(width: 8),
                     Text(
                       "Paid • $timeStr",
-                      style: GoogleFonts.outfit(
+                      style: GoogleFonts.notoSans(
                         color: isDark ? Colors.white38 : Colors.grey.shade500,
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
@@ -695,7 +701,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 const SizedBox(height: 12),
                 Text(
                   tx['note'].toString(),
-                  style: GoogleFonts.outfit(
+                  style: GoogleFonts.notoSans(
                     fontSize: 14,
                     color: isDark ? Colors.white60 : Colors.grey.shade700,
                     fontStyle: FontStyle.italic,
@@ -736,7 +742,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       Flexible(
                         child: Text(
                           'UPI Circle by ${tx['initiated_by_name']}',
-                          style: GoogleFonts.outfit(
+                          style: GoogleFonts.notoSans(
                             fontSize: 11,
                             fontWeight: FontWeight.w500,
                             color: isDark
@@ -774,7 +780,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
             ? Center(
                 child: Text(
                   "This user is not on ZaferPay",
-                  style: GoogleFonts.outfit(
+                  style: GoogleFonts.notoSans(
                     color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
                   ),
                 ),
@@ -810,8 +816,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       ),
                     ),
                     child: Text(
-                      "Pay",
-                      style: GoogleFonts.outfit(
+                      AppLocalizations.of(context)?.translate('pin.pay') ??
+                          "Pay",
+                      style: GoogleFonts.notoSans(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
@@ -835,13 +842,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
                           Expanded(
                             child: TextField(
                               controller: _msgController,
-                              style: GoogleFonts.outfit(
+                              style: GoogleFonts.notoSans(
                                 color: isDark ? Colors.white : Colors.black87,
                                 fontSize: 15,
                               ),
                               decoration: InputDecoration(
                                 hintText: "Message...",
-                                hintStyle: GoogleFonts.outfit(
+                                hintStyle: GoogleFonts.notoSans(
                                   color: isDark
                                       ? Colors.grey.shade500
                                       : Colors.grey.shade500,
@@ -929,7 +936,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
           children: [
             Text(
               content,
-              style: GoogleFonts.outfit(
+              style: GoogleFonts.notoSans(
                 color: isSender
                     ? const Color(0xFF0D47A1) // Dark Blue Text
                     : (isDark ? Colors.white : Colors.black87),
@@ -943,7 +950,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
               children: [
                 Text(
                   timeStr,
-                  style: GoogleFonts.outfit(
+                  style: GoogleFonts.notoSans(
                     color: isSender
                         ? Colors.blue.shade900.withValues(alpha: 0.5)
                         : (isDark
@@ -1001,8 +1008,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
           }
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Failed to send message"),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(
+                    context,
+                  )?.translate('conversation.send_failed') ??
+                  "Failed to send message",
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -1084,7 +1096,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                     isRequester
                         ? 'You requested'
                         : '${req['requester_name'] ?? 'Someone'} requested',
-                    style: GoogleFonts.outfit(
+                    style: GoogleFonts.notoSans(
                       color: isDark
                           ? Colors.grey.shade400
                           : Colors.grey.shade600,
@@ -1104,7 +1116,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   ),
                   child: Text(
                     statusLabel,
-                    style: GoogleFonts.outfit(
+                    style: GoogleFonts.notoSans(
                       color: statusColor,
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -1116,7 +1128,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
             const SizedBox(height: 8),
             Text(
               '₹${formatAmount(amount)}',
-              style: GoogleFonts.outfit(
+              style: GoogleFonts.notoSans(
                 color: isDark ? Colors.white : Colors.black87,
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
@@ -1126,7 +1138,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
               const SizedBox(height: 8),
               Text(
                 description,
-                style: GoogleFonts.outfit(
+                style: GoogleFonts.notoSans(
                   color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
                   fontSize: 14,
                 ),
@@ -1160,7 +1172,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       ),
                       child: Text(
                         isRequester ? 'Withdraw' : 'Decline',
-                        style: GoogleFonts.outfit(
+                        style: GoogleFonts.notoSans(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
@@ -1185,7 +1197,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                         ),
                         child: Text(
                           'Pay',
-                          style: GoogleFonts.outfit(
+                          style: GoogleFonts.notoSans(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1201,7 +1213,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 status == 'paid'
                     ? "Request paid on $timeStr"
                     : "Request $status on $timeStr",
-                style: GoogleFonts.outfit(
+                style: GoogleFonts.notoSans(
                   color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
                   fontSize: 12,
                   fontStyle: FontStyle.italic,
@@ -1219,27 +1231,47 @@ class _ConversationScreenState extends State<ConversationScreen> {
     if (requestId == null) return;
 
     final isRequester = req['requester_upi_id'] == _myUpi;
-    final actionLabel = isRequester ? 'withdraw' : 'decline';
+
+    final requestTitle = isRequester
+        ? (AppLocalizations.of(context)?.translate('requests.withdraw_title') ??
+              'Withdraw Request')
+        : (AppLocalizations.of(context)?.translate('requests.decline_title') ??
+              'Decline Request');
+
+    final requestContent = isRequester
+        ? (AppLocalizations.of(
+                context,
+              )?.translate('requests.withdraw_confirm') ??
+              'Are you sure you want to withdraw this payment request?')
+        : (AppLocalizations.of(
+                context,
+              )?.translate('requests.decline_confirm') ??
+              'Are you sure you want to decline this payment request?');
+
+    final yesLabel = isRequester
+        ? (AppLocalizations.of(context)?.translate('requests.yes_withdraw') ??
+              'Yes, Withdraw')
+        : (AppLocalizations.of(context)?.translate('requests.yes_decline') ??
+              'Yes, Decline');
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(
-          '${isRequester ? 'Withdraw' : 'Decline'} Request',
-          style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+          requestTitle,
+          style: GoogleFonts.notoSans(fontWeight: FontWeight.bold),
         ),
-        content: Text(
-          'Are you sure you want to $actionLabel this payment request?',
-          style: GoogleFonts.outfit(),
-        ),
+        content: Text(requestContent, style: GoogleFonts.notoSans()),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('No'),
+            child: Text(
+              AppLocalizations.of(context)?.translate('common.no') ?? 'No',
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Yes, ${isRequester ? 'Withdraw' : 'Decline'}'),
+            child: Text(yesLabel),
           ),
         ],
       ),
@@ -1254,14 +1286,27 @@ class _ConversationScreenState extends State<ConversationScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              isRequester ? 'Request withdrawn' : 'Request declined',
+              isRequester
+                  ? (AppLocalizations.of(
+                          context,
+                        )?.translate('requests.withdrawn_success') ??
+                        'Request withdrawn')
+                  : (AppLocalizations.of(
+                          context,
+                        )?.translate('requests.declined_success') ??
+                        'Request declined'),
             ),
           ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to process request'),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(
+                    context,
+                  )?.translate('requests.process_failed') ??
+                  'Failed to process request',
+            ),
             backgroundColor: Colors.red,
           ),
         );

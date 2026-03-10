@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'api_service.dart';
 import 'utils.dart';
+import 'services/app_localizations.dart';
 
 /// A full-screen PIN entry screen used when setting or updating the spending limit.
 /// Navigates here instead of showing an AlertDialog popup.
@@ -102,9 +103,13 @@ class _SpendingLimitPinScreenState extends State<SpendingLimitPinScreen> {
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('PIN Expired'),
-          content: const Text(
-            'Your UPI PIN has expired. Please update it to continue.',
+          title: Text(
+            AppLocalizations.of(context)?.translate('pin.expired') ??
+                'PIN Expired',
+          ),
+          content: Text(
+            AppLocalizations.of(context)?.translate('pin.expired_desc') ??
+                'Your UPI PIN has expired. Please update it to continue.',
           ),
           actions: [
             TextButton(
@@ -112,7 +117,10 @@ class _SpendingLimitPinScreenState extends State<SpendingLimitPinScreen> {
                 Navigator.pop(context);
                 Navigator.pushNamed(context, '/change-upi-pin');
               },
-              child: const Text('Update PIN'),
+              child: Text(
+                AppLocalizations.of(context)?.translate('pin.update') ??
+                    'Update PIN',
+              ),
             ),
           ],
         ),
@@ -124,7 +132,11 @@ class _SpendingLimitPinScreenState extends State<SpendingLimitPinScreen> {
         _enteredPin = '';
         _isVerifying = false;
         _errorMessage =
-            'Incorrect PIN. $remaining attempt${remaining == 1 ? '' : 's'} remaining.';
+            (AppLocalizations.of(
+                      context,
+                    )?.translate('pin.incorrect_with_count') ??
+                    'Incorrect PIN. {count} attempts remaining.')
+                .replaceAll('{count}', remaining.toString());
       });
     }
   }
@@ -135,8 +147,9 @@ class _SpendingLimitPinScreenState extends State<SpendingLimitPinScreen> {
 
     // Format the limit card summary
     final String limitSummary = widget.isEnabled && widget.amount != null
-        ? '₹${formatAmount(widget.amount!)} limit'
-        : 'Remove spending limit';
+        ? '₹${formatAmount(widget.amount!)} ${AppLocalizations.of(context)?.translate('spending_limit.limit') ?? 'limit'}'
+        : (AppLocalizations.of(context)?.translate('pin.remove_limit') ??
+              'Remove spending limit');
 
     final String periodLabel = widget.isEnabled
         ? _periodLabel(widget.period)
@@ -184,8 +197,14 @@ class _SpendingLimitPinScreenState extends State<SpendingLimitPinScreen> {
                               children: [
                                 Text(
                                   widget.isEnabled
-                                      ? 'Set spending limit'
-                                      : 'Remove spending limit',
+                                      ? (AppLocalizations.of(
+                                              context,
+                                            )?.translate('pin.set_limit') ??
+                                            'Set spending limit')
+                                      : (AppLocalizations.of(
+                                              context,
+                                            )?.translate('pin.remove_limit') ??
+                                            'Remove spending limit'),
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
@@ -242,7 +261,10 @@ class _SpendingLimitPinScreenState extends State<SpendingLimitPinScreen> {
 
                       // ── PIN prompt ────────────────────────────────────────
                       Text(
-                        'Enter your UPI PIN',
+                        AppLocalizations.of(
+                              context,
+                            )?.translate('circle.enter_pin') ??
+                            'Enter your UPI PIN',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w600,
@@ -251,7 +273,10 @@ class _SpendingLimitPinScreenState extends State<SpendingLimitPinScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Confirm to update your spending limit',
+                        AppLocalizations.of(
+                              context,
+                            )?.translate('pin.confirm_limit_update') ??
+                            'Confirm to update your spending limit',
                         style: TextStyle(
                           fontSize: 13,
                           color: isDark
@@ -323,7 +348,10 @@ class _SpendingLimitPinScreenState extends State<SpendingLimitPinScreen> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              'Never share your UPI PIN with anyone',
+                              AppLocalizations.of(
+                                    context,
+                                  )?.translate('pin.never_share') ??
+                                  'Never share your UPI PIN with anyone',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.grey[600],
@@ -418,10 +446,13 @@ class _SpendingLimitPinScreenState extends State<SpendingLimitPinScreen> {
                                             : Colors.grey.shade400,
                                         borderRadius: BorderRadius.circular(24),
                                       ),
-                                      child: const Center(
+                                      child: Center(
                                         child: Text(
-                                          'Confirm',
-                                          style: TextStyle(
+                                          AppLocalizations.of(
+                                                context,
+                                              )?.translate('pin.confirm') ??
+                                              'Confirm',
+                                          style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 15,
                                             fontWeight: FontWeight.bold,
@@ -477,10 +508,24 @@ class _SpendingLimitPinScreenState extends State<SpendingLimitPinScreen> {
   }
 
   String _periodLabel(int p) {
-    if (p == 1) return 'Per day';
-    if (p == 7) return 'Per week';
-    if (p == 14) return 'Every 2 weeks';
-    if (p == 30) return 'Per month';
-    return 'Every $p days';
+    if (p == 1) {
+      return AppLocalizations.of(context)?.translate('pin.per_day') ??
+          'Per day';
+    }
+    if (p == 7) {
+      return AppLocalizations.of(context)?.translate('pin.per_week') ??
+          'Per week';
+    }
+    if (p == 14) {
+      return AppLocalizations.of(context)?.translate('pin.every_2_weeks') ??
+          'Every 2 weeks';
+    }
+    if (p == 30) {
+      return AppLocalizations.of(context)?.translate('pin.per_month') ??
+          'Per month';
+    }
+    return (AppLocalizations.of(context)?.translate('pin.every_days') ??
+            'Every {days} days')
+        .replaceAll('{days}', p.toString());
   }
 }

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'services/app_language_provider.dart';
+import 'services/app_localizations.dart';
 
 class LanguageSelectionScreen extends StatefulWidget {
   const LanguageSelectionScreen({super.key});
@@ -11,166 +14,138 @@ class LanguageSelectionScreen extends StatefulWidget {
 }
 
 class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
-  // Hardcoded selected language per requirement (English default)
-  String _selectedLanguage = 'English';
-
   final List<Map<String, String>> _languages = [
-    {'native': 'English', 'english': ''},
-    {'native': 'हिन्दी', 'english': '(Hindi)'},
-    {'native': 'हिंग्लिश', 'english': '(Hinglish)'},
-    {'native': 'বাংলা', 'english': '(Bengali)'},
-    {'native': 'ગુજરાતી', 'english': '(Gujarati)'},
-    {'native': 'ಕನ್ನಡ', 'english': '(Kannada)'},
-    {'native': 'മലയാളം', 'english': '(Malayalam)'},
-    {'native': 'मराठी', 'english': '(Marathi)'},
-    {'native': 'தமிழ்', 'english': '(Tamil)'},
-    {'native': 'తెలుగు', 'english': '(Telugu)'},
+    {'name': 'English', 'localName': 'English', 'code': 'en'},
+    {'name': 'Hindi', 'localName': 'हिन्दी', 'code': 'hi'},
   ];
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF111318) : const Color(0xFFF7F9FC);
-    final textColor = isDark ? Colors.white : const Color(0xFF1F1F1F);
+    final languageProvider = Provider.of<AppLanguageProvider>(context);
+    final locale = languageProvider.appLocale;
 
     return Scaffold(
-      backgroundColor: bgColor,
+      backgroundColor: isDark ? const Color(0xFF111318) : Colors.white,
       appBar: AppBar(
-        backgroundColor: bgColor,
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        systemOverlayStyle: isDark
-            ? SystemUiOverlayStyle.light
-            : SystemUiOverlayStyle.dark,
+        systemOverlayStyle: SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+          statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+        ),
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: textColor),
+          icon: Icon(
+            Icons.arrow_back,
+            color: isDark ? Colors.white : Colors.black87,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Select language',
-          style: GoogleFonts.outfit(
-            color: textColor,
+          AppLocalizations.of(context)?.translate('select_language') ??
+              'Select language',
+          style: GoogleFonts.notoSans(
+            color: isDark ? Colors.white : Colors.black87,
+            fontWeight: FontWeight.w600,
             fontSize: 20,
-            fontWeight: FontWeight.w400,
           ),
         ),
-        centerTitle: false,
-        actions: const [], // explicitly ensuring no 3-dot menu
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                itemCount: _languages.length,
-                itemBuilder: (context, index) {
-                  final lang = _languages[index];
-                  final isSelected = _selectedLanguage == lang['native'];
-
-                  return InkWell(
-                    onTap: () {
-                      setState(() {
-                        _selectedLanguage = lang['native']!;
-                      });
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 20,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          RichText(
-                            text: TextSpan(
-                              children: [
-                                TextSpan(
-                                  text: lang['native'],
-                                  style: GoogleFonts.outfit(
-                                    color: textColor,
-                                    fontSize: 16,
-                                    fontWeight: isSelected
-                                        ? FontWeight.w500
-                                        : FontWeight.w400,
-                                  ),
-                                ),
-                                if (lang['english']!.isNotEmpty)
-                                  TextSpan(
-                                    text: ' ${lang['english']}',
-                                    style: GoogleFonts.outfit(
-                                      color: textColor,
-                                      fontSize: 16,
-                                      fontWeight: isSelected
-                                          ? FontWeight.w500
-                                          : FontWeight.w400,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          if (isSelected)
-                            Container(
-                              width: 24,
-                              height: 24,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Color(
-                                  0xFFA8C7FA,
-                                ), // Light blue from reference
-                              ),
-                              child: const Center(
-                                child: Icon(
-                                  Icons.check,
-                                  size: 16,
-                                  color: Color(
-                                    0xFF041E49,
-                                  ), // Dark blue check icon
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              itemCount: _languages.length,
+              separatorBuilder: (context, index) => Divider(
+                color: isDark
+                    ? Colors.white10
+                    : Colors.grey.withValues(alpha: 0.1),
+                height: 1,
               ),
-            ),
+              itemBuilder: (context, index) {
+                final lang = _languages[index];
+                final isSelected =
+                    locale.languageCode == lang['code'] &&
+                    (lang['country'] == null ||
+                        locale.countryCode == lang['country']);
 
-            // Done Button pinned to bottom
-            Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: () {
-                    // Navigate back with selected language if needed
-                    Navigator.pop(context, _selectedLanguage);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isDark
-                        ? const Color(0xFFA8C7FA)
-                        : const Color(0xFF0b57d0),
-                    foregroundColor: isDark
-                        ? const Color(0xFF041E49)
-                        : Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(26),
+                final displayText = lang['name'] == lang['localName']
+                    ? lang['name']!
+                    : "${lang['localName']} (${lang['name']})";
+
+                return ListTile(
+                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                  title: Text(
+                    displayText,
+                    style: GoogleFonts.notoSans(
+                      fontSize: 17,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.w500,
+                      color: isDark ? Colors.white : Colors.black87,
                     ),
                   ),
-                  child: Text(
-                    'Done',
-                    style: GoogleFonts.outfit(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  trailing: isSelected
+                      ? Container(
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF0553CF),
+                            shape: BoxShape.circle,
+                          ),
+                          padding: const EdgeInsets.all(4),
+                          child: const Icon(
+                            Icons.check,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                        )
+                      : null,
+                  onTap: () {
+                    languageProvider.changeLanguage(
+                      Locale(lang['code']!, lang['country'] ?? ''),
+                    );
+                    // Show a snackbar to indicate the change
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          AppLocalizations.of(context)?.translate('language_changed') ??
+                              'Language changed',
+                        ),
+                        duration: const Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0553CF),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 56),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(28),
+                  ),
+                  elevation: 0,
+                ),
+                child: Text(
+                  AppLocalizations.of(context)?.translate('done') ?? 'Done',
+                  style: GoogleFonts.notoSans(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
